@@ -1,0 +1,15 @@
+
+* Fon: SPY
+
+* Dataset yapısı:
+    - Verinin kendisi		15-30-50-100-200
+    - 5 x RSI 			15-30-50-100-200
+    - 5 x SMA			15-30-50-100-200
+    - 5 x W%R			15-30-50-100-200
+    - 5 x KD			15-30-50-100-200
+    - 5 x MACD			15-30-50-100-200
+    - Interest Rate		
+    - Inflation Data	
+    - Google Search		
+    - Google Search News	
+    - Ülke bonosu		
