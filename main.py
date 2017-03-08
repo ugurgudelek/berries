@@ -1,21 +1,7 @@
-# * Fon: SPY
-#
-# * Dataset yapısı:
-#     - Verinin kendisi		15-30-50-100-200
-#     - DONE : 5 x RSI 			15-30-50-100-200
-#     - DONE : 5 x SMA			15-30-50-100-200
-#     - DONE : 5 x W%R			15-30-50-100-200
-#     - DONE : 5 x KD			15-30-50-100-200
-#     - DONE : 5 x MACD	(moving average convergence divergence)		15-30-50-100-200
-#     - Interest Rate
-#     - Inflation Data
-#     - Google Search
-#     - Google Search News
-#     - Ülke bonosu
-
 import numpy as np
 import csv
 import pandas as pd
+import matplotlib.pyplot as plt
 
 
 # exponentially smoothing moving average
@@ -40,12 +26,20 @@ def macd(data, period_long, period_short):
 
     return np.subtract(ema_short, ema_long)
 
+
 # macd trigger custom
 # http://stockcharts.com/school/doku.php?id=chart_school:technical_indicators:moving_average_convergence_divergence_macd
-def macd_trigger(data,period_signal, period_long, period_short):
-    macd_line = macd(data,period_long,period_short)
-    signal_line = ema(data, period_signal)
-    macd_histogram = np.subtract(macd_line - signal_line)
+def macd_trigger(data, period_signal, period_long, period_short):
+    macd_line = macd(data, period_long, period_short)
+    signal_line = ema(macd_line, period_signal)
+    macd_histogram = np.subtract(macd_line[period_signal-1:], signal_line)
+
+    plt.plot(macd_line[period_signal-1:100], c='b')
+    plt.plot(signal_line[0:100], c='r')
+    plt.bar(left=list(range(100)),height=macd_histogram[0:100], color='g')
+    plt.show()
+
+
 
     return macd_histogram
 
@@ -79,30 +73,27 @@ def rsi(data, period):
         p_n_list.append(today_price - yesterday_price)
         yesterday_price = today_price
 
-    RSs = []
+    gain = []
+    loss = []
 
-    U = 0.0
-    D = 0.0
-
-    # first calculation
-    for datum in p_n_list[0:period]:
+    for datum in p_n_list:
         if datum >= 0:
-            U += datum / period
+            gain.append(datum)
+            loss.append(0)
         else:
-            D -= datum / period
-    RSs.append(U / D)
+            loss.append(-datum)
+            gain.append(0)
 
-    cnt = 1
-    for datum in p_n_list[period:]:
-        RSs.append((RSs[cnt - 1] * (period - 1) + datum) / period)
-        cnt += 1
+    # first period's data
+    gain_ema = ema(gain, period)
+    loss_ema = ema(loss, period)
 
-    RSI = []
-    # calculate RSI
-    for rs in RSs:
-        RSI.append(100 - (100 / (1 + rs)))
+    RS = np.divide(gain_ema, loss_ema)
 
-    return RSIDONE
+    RSI = np.subtract(100, np.divide(100, np.add(1, RS)))
+    # RSI = 100 - (100 / (1 + RS))
+
+    return RSI
 
 
 def load_spy_data():
@@ -123,13 +114,18 @@ def main():
 
     data['Adj Close'] = pd.DataFrame((data['Adj Close'].values).astype(float))
 
-    print(data.head())
-
     rsi_15_data = rsi(data['Adj Close'].values, 15)
-    print(rsi_15_data)
     sma_15_data = sma(data['Adj Close'].values, 15)
 
-    macd(data['Adj Close'].values, 15, 5)
+    macd_15_5_data = macd(data['Adj Close'].values, 15, 5)
+
+    macd_trigger_9_15_5 = macd_trigger(data['Adj Close'].values, 9,15,5)
+
+    # plt.plot(sma_15_data, color='r')
+    # plt.bar(left=list(range(len(macd_trigger_9_15_5))),height=-200 - macd_trigger_9_15_5, color='b')
+    # plt.scatter(x=list(range(len(macd_trigger_9_15_5))), y=macd_trigger_9_15_5, color='r', s=1)
+    # plt.show()
+
 
 if __name__ == "__main__":
     main()
