@@ -37,6 +37,7 @@ def macd_trigger(data, period_signal, period_long, period_short):
     plt.plot(macd_line[period_signal-1:100], c='b')
     plt.plot(signal_line[0:100], c='r')
     plt.bar(left=list(range(100)),height=macd_histogram[0:100], color='g')
+
     plt.show()
 
 
@@ -117,9 +118,9 @@ def main():
     rsi_15_data = rsi(data['Adj Close'].values, 15)
     sma_15_data = sma(data['Adj Close'].values, 15)
 
-    macd_15_5_data = macd(data['Adj Close'].values, 15, 5)
+    macd_15_5_data = macd(data['Adj Close'].values, 26, 12)
 
-    macd_trigger_9_15_5 = macd_trigger(data['Adj Close'].values, 9,15,5)
+    macd_trigger_9_15_5 = macd_trigger(data['Adj Close'].values, 9, 26, 12)
 
     # plt.plot(sma_15_data, color='r')
     # plt.bar(left=list(range(len(macd_trigger_9_15_5))),height=-200 - macd_trigger_9_15_5, color='b')
