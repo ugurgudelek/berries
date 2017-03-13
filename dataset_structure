@@ -15,13 +15,14 @@
     TODO : Smart money index (SMI) 
     TODO : Trend line Trix Vortex Indicator (VI)
     DONE : SMA
-    DONE : KD
     
     Momentum indicators
     TODO : Money flow index (MFI) 
     DONE : Relative strength index (RSI) 
-    TODO : Stochastic oscillator True strength index (TSI) 
-    DONE : Ultimate oscillator Williams %R (%R)
+    TODO : Stochastic oscillator True strength index (TSI)
+    DONE : Williams %R
+    DONE : Stochastic Oscillator
+    DONE : Ultimate oscillator
     
     Other indicators
     TODO : Interest Rate		
