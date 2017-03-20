@@ -14,11 +14,7 @@ def ema(data, period):
         EMA.append(curr)
         previous_avg = curr
 
-    # append zeros before the beginning of the period
-    for curInd in range(0, period - 1):
-        EMA.insert(0,0)
-
-    return np.reshape(np.asarray(EMA), (len(EMA), 1))
+    return EMA
 
 
 # moving average convergence divergence
@@ -27,7 +23,7 @@ def macd(data, period_long, period_short):
         raise ValueError("period_long should be bigger than period_short")
 
     ema_long = ema(data, period=period_long)
-    ema_short = ema(data, period=period_short)#[(period_long - period_short):]
+    ema_short = ema(data, period=period_short)[(period_long - period_short):]
 
     return np.subtract(ema_short, ema_long)
 
@@ -37,8 +33,7 @@ def macd(data, period_long, period_short):
 def macd_trigger(data, period_signal, period_long, period_short):
     macd_line = macd(data, period_long, period_short)
     signal_line = ema(macd_line, period_signal)
-    macd_histogram = np.subtract(macd_line, signal_line)
-    #macd_histogram = np.subtract(macd_line[period_signal-1:], signal_line)
+    macd_histogram = np.subtract(macd_line[period_signal-1:], signal_line)
 
 #    plt.plot(macd_line[period_signal-1:100], c='b')
 #    plt.plot(signal_line[0:100], c='r')
@@ -61,11 +56,7 @@ def sma(data, period):
         lower += 1
         upper += 1
 
-    # append zeros before the beginning of the period
-    for curInd in range(0, period - 1):
-        SMA.insert(0,0)
-
-    return np.reshape(np.asarray(SMA), (len(SMA), 1))
+    return np.asarray(SMA)
 
 
 # relative strength index
@@ -98,11 +89,8 @@ def rsi(data, period):
     loss_ema = ema(loss, period)
 
     RS = np.divide(gain_ema, loss_ema)
-    # get rid of nan values resulted from division by 0
-    RS = np.nan_to_num(RS)
 
     RSI = np.subtract(100, np.divide(100, np.add(1, RS)))
-    RSI = np.insert(RSI, 0, 0, axis = 0)
     # RSI = 100 - (100 / (1 + RS))
 
     return RSI
@@ -111,10 +99,6 @@ def williamsR(data, period_in_days = 14):
     "Calculates the Williams %R indicator."
 
     result = []
-
-    # append zeros before the beginning of the period
-    for curInd in range(0, period_in_days - 1):
-        result.append(0)
     
     for curInd in range(period_in_days - 1, data.shape[0]):
 
@@ -129,7 +113,7 @@ def williamsR(data, period_in_days = 14):
         wR = (highestHigh - curClose) / (highestHigh - lowestLow) * (-100)
         result.append(wR)
 
-    return np.reshape(np.asarray(result), (len(result), 1))
+    return np.asarray(result)
 
 def kdDiff(data, period_in_days = 14):
     "Calculates the difference between %K and %D."
@@ -138,11 +122,6 @@ def kdDiff(data, period_in_days = 14):
     Dpc = []
 
     dpcPeriod = 3
-
-    # append zeros before the beginning of the period
-    for curInd in range(0, period_in_days - 1):
-        Kpc.append(0)
-        Dpc.append(0)
 
     # calculate %K
     for curInd in range(period_in_days - 1, data.shape[0]):
@@ -156,20 +135,20 @@ def kdDiff(data, period_in_days = 14):
 
         Kpc.append((highestHigh - curClose) / (highestHigh - lowestLow) * 100)
 
-        if curInd >= period_in_days + dpcPeriod - 2 :
-            Dpc.append(np.mean(Kpc[curInd - dpcPeriod + 1 : curInd + 1]))
-        else:
-            Dpc.append(0)
+
+    # calculate %D
+    for curInd in range(dpcPeriod - 1, len(Kpc)):
+        Dpc.append(np.mean(Kpc[curInd - dpcPeriod + 1 : curInd]))
             
-    return np.reshape(np.asarray(Kpc), (len(Kpc), 1)) - np.reshape(np.asarray(Dpc), (len(Dpc), 1))
+    return np.subtract(Kpc[dpcPeriod - 1 : len(Kpc)], Dpc)
 
 
 def ulOs(data, period1 = 7, period2 = 14, period3 = 28):
     "Calculates the ultimate oscillator. Periods should be from low to high."
 
-    bp = [0]     # buying pressure
-    tr = [0]     # true range
-    uos = [0]    # ultimate oscillator
+    bp = []     # buying pressure
+    tr = []     # true range
+    uos = []    # ultimate oscillator
     weight1 = period3 / period1
     weight2 = period3 / period2
     weight3 = period3 / period3
@@ -207,17 +186,16 @@ def ulOs(data, period1 = 7, period2 = 14, period3 = 28):
 
             avg3value = np.sum(bp[curInd - period3 + 1 : curInd + 1]) / np.sum(tr[curInd - period3 + 1 : curInd + 1])
             uosvalue = 100 * ((weight1 * avg1value) + (weight2 * avg2value) + (weight3 * avg3value)) / (weight1 + weight2 + weight3)
+            uos.append(uosvalue)
 
-        uos.append(uosvalue)
-
-    return np.reshape(np.asarray(uos), (len(uos), 1))
+    return np.asarray(uos)
 
 def mfi(data, period_in_days = 14):
     "Calculates the money flow index for the given period."
 
     prmf = [0]    # positive raw money flow
     nrmf = [0]    # negative raw money flow 
-    mfr = [0]     # money flow ratio
+    mfr = []     # money flow ratio
     
     # calculate raw money flow
     for curInd in range(1, data.shape[0]):
@@ -232,10 +210,6 @@ def mfi(data, period_in_days = 14):
             prmf.append(curTypicalPrice * data[curInd, 5])
             nrmf.append(0)
 
-    # append zeros to money flow ratio
-    for curInd in range(1, period_in_days):
-        mfr.append(0)
-
     # calculate money flow ratio
     for curInd in range(period_in_days, data.shape[0]):
 
@@ -243,11 +217,8 @@ def mfi(data, period_in_days = 14):
         sumNegFlow = np.sum(nrmf[curInd - period_in_days + 1 : curInd + 1])
         mfr.append(sumPosFlow / sumNegFlow)
 
-    # reshape money flow ratio
-    mfr = np.reshape(mfr, (len(mfr), 1))
-
     # calculate and return money flow index
-    return 100 - 100 / (1 + mfr)
+    return np.subtract(100, np.divide(100, np.add(1, mfr)))
 
 
 def main():
@@ -269,6 +240,28 @@ def main():
     kdHist = kdDiff(spy_data)
     ultimateOs = ulOs(spy_data)
     mfIndex = mfi(spy_data)
+
+    # append zeros at the beginning of the results to make them of uniform size
+    total_length = spy_data.shape[0]
+
+    rsi_15_data = np.insert(rsi_15_data, 0, np.zeros(total_length - rsi_15_data.shape[0]))
+    sma_15_data = np.insert(sma_15_data, 0, np.zeros(total_length - sma_15_data.shape[0]))
+    macd_15_5_data = np.insert(macd_15_5_data, 0, np.zeros(total_length - macd_15_5_data.shape[0]))
+    macd_trigger_9_15_5 = np.insert(macd_trigger_9_15_5, 0, np.zeros(total_length - macd_trigger_9_15_5.shape[0]))
+    willR = np.insert(willR, 0, np.zeros(total_length - willR.shape[0]))
+    kdHist = np.insert(kdHist, 0, np.zeros(total_length - kdHist.shape[0]))
+    ultimateOs = np.insert(ultimateOs, 0, np.zeros(total_length - ultimateOs.shape[0]))
+    mfIndex = np.insert(mfIndex, 0, np.zeros(total_length - mfIndex.shape[0]))
+
+    # reshape results so that they can be concatenated and written to a file
+    rsi_15_data = np.reshape(rsi_15_data, (rsi_15_data.shape[0], 1))
+    sma_15_data = np.reshape(sma_15_data, (sma_15_data.shape[0], 1))
+    macd_15_5_data = np.reshape(macd_15_5_data, (macd_15_5_data.shape[0], 1))
+    macd_trigger_9_15_5 = np.reshape(macd_trigger_9_15_5, (macd_trigger_9_15_5.shape[0], 1))
+    willR = np.reshape(willR, (willR.shape[0], 1))
+    kdHist = np.reshape(kdHist, (kdHist.shape[0], 1))
+    ultimateOs = np.reshape(ultimateOs, (ultimateOs.shape[0], 1))
+    mfIndex = np.reshape(mfIndex, (mfIndex.shape[0], 1))
 
     result = np.concatenate((rsi_15_data, sma_15_data, macd_15_5_data, macd_trigger_9_15_5, willR, kdHist, ultimateOs, mfIndex), axis = 1)
 
