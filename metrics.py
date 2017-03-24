@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 def ema(data, period):
     """exponentially smoothing moving average"""
+    # data needs to be just one column not whole data
     EMA = []
 
     previous_avg = np.mean(data[0:period])
@@ -18,20 +19,22 @@ def ema(data, period):
     return EMA
 
 
-def macd(data, period_long, period_short):
+def macd(data, period_long=26, period_short=12):
     """moving average convergence divergence"""
+
     if period_long <= period_short:
         raise ValueError("period_long should be bigger than period_short")
 
-    ema_long = ema(data, period=period_long)
-    ema_short = ema(data, period=period_short)[(period_long - period_short):]
+    ema_long = ema(data['adjusted_close'], period=period_long)
+    ema_short = ema(data['adjusted_close'], period=period_short)[(period_long - period_short):]
 
     return np.subtract(ema_short, ema_long)
 
 
 # macd trigger custom
 # http://stockcharts.com/school/doku.php?id=chart_school:technical_indicators:moving_average_convergence_divergence_macd
-def macd_trigger(data, period_signal, period_long, period_short):
+def macd_trigger(data, period_signal=9, period_long=26, period_short=12):
+
     macd_line = macd(data, period_long, period_short)
     signal_line = ema(macd_line, period_signal)
     macd_histogram = np.subtract(macd_line[period_signal - 1:], signal_line)
@@ -45,8 +48,9 @@ def macd_trigger(data, period_signal, period_long, period_short):
     return macd_histogram
 
 
-def sma(data, period):
+def sma(data, period=15):
     """simple moving average"""
+    data = data['adjusted_close']
     lower = 0
     upper = period
 
@@ -60,8 +64,15 @@ def sma(data, period):
     return np.asarray(SMA)
 
 
-def rsi(data, period):
-    """relative strength index"""
+def rsi(data, period=15):
+    """relative strength index
+    :param data: adjusted_close
+    :type data: np.array
+    :param period: period_in_days
+    :type period: int
+    :rtype: np.array
+    """
+    data = data['adjusted_close']
     # period kadar data kaybedeceğiz cünkü;
     # yesterday_price hesaplanırken 1 tane gidiyor.
     # rsi hesaplanırken de period - 1 tane gidiyor.
@@ -102,13 +113,13 @@ def williamsR(data, period_in_days=14):
 
     result = []
 
-    for curInd in range(period_in_days - 1, data.shape[0]):
+    for curInd in range(period_in_days - 1, data['adjusted_close'].shape[0]):
         # current close
-        curClose = data[curInd, 4]
+        curClose = data['close'][curInd]
 
         # find the highest high and the lowest low in the period
-        highestHigh = np.amax(data[curInd - period_in_days + 1: curInd + 1, 2])
-        lowestLow = np.amin(data[curInd - period_in_days + 1: curInd + 1, 3])
+        highestHigh = np.amax(data['high'][curInd - period_in_days + 1: curInd + 1])
+        lowestLow = np.amin(data['low'][curInd - period_in_days + 1: curInd + 1])
 
         # calculate %R
         wR = (highestHigh - curClose) / (highestHigh - lowestLow) * (-100)
@@ -126,13 +137,13 @@ def kdDiff(data, period_in_days=14):
     dpcPeriod = 3
 
     # calculate %K
-    for curInd in range(period_in_days - 1, data.shape[0]):
+    for curInd in range(period_in_days - 1, data['adjusted_close'].shape[0]):
         # current close
-        curClose = data[curInd, 4]
+        curClose = data['close'][curInd]
 
         # find the highest high and the lowest low in the period
-        highestHigh = np.amax(data[curInd - period_in_days + 1: curInd + 1, 2])
-        lowestLow = np.amin(data[curInd - period_in_days + 1: curInd + 1, 3])
+        highestHigh = np.amax(data['high'][curInd - period_in_days + 1: curInd + 1])
+        lowestLow = np.amin(data['low'][curInd - period_in_days + 1: curInd + 1])
 
         Kpc.append((highestHigh - curClose) / (highestHigh - lowestLow) * 100)
 
@@ -154,17 +165,17 @@ def ulOs(data, period1=7, period2=14, period3=28):
     weight3 = period3 / period3
 
     # calculate buying pressure and true range
-    for curInd in range(1, data.shape[0]):
-        curClose = data[curInd, 4]
-        prClose = data[curInd - 1, 4]
-        curLow = data[curInd, 3]
-        curHigh = data[curInd, 2]
+    for curInd in range(1, data['adjusted_close'].shape[0]):
+        curClose = data['close'][curInd]
+        prClose = data['close'][curInd - 1]
+        curLow = data['low'][curInd]
+        curHigh = data['high'][curInd]
 
         bp.append(curClose - np.amin([curLow, prClose]))
         tr.append(np.amax([curHigh, prClose]) - np.amin([curLow, prClose]))
 
         # calculate the averages and the ultimate oscillator
-    for curInd in range(1, data.shape[0]):
+    for curInd in range(1, data['adjusted_close'].shape[0]):
 
         avg1value = 0
         avg2value = 0
@@ -189,29 +200,31 @@ def ulOs(data, period1=7, period2=14, period3=28):
 
 
 def mfi(data, period_in_days=14):
-    "Calculates the money flow index for the given period."
+    """Calculates the money flow index for the given period."""
+
 
     prmf = [0]  # positive raw money flow
     nrmf = [0]  # negative raw money flow
     mfr = []  # money flow ratio
 
     # calculate raw money flow
-    for curInd in range(1, data.shape[0]):
+    for curInd in range(1, data['adjusted_close'].shape[0]):
 
-        prTypicalPrice = (data[curInd - 1, 2] + data[curInd - 1, 3] + data[curInd - 1, 4]) / 3
-        curTypicalPrice = (data[curInd, 2] + data[curInd, 3] + data[curInd, 4]) / 3
+        prTypicalPrice = (data['high'][curInd - 1] + data['low'][curInd - 1] + data['close'][curInd - 1]) / 3
+        curTypicalPrice = (data['high'][curInd] + data['low'][curInd] + data['close'][curInd]) / 3
 
         if curTypicalPrice < prTypicalPrice:
-            nrmf.append(curTypicalPrice * data[curInd, 5])
+            nrmf.append(curTypicalPrice * data['volume'][curInd])
             prmf.append(0)
         else:
-            prmf.append(curTypicalPrice * data[curInd, 5])
+            prmf.append(curTypicalPrice * data['volume'][curInd])
             nrmf.append(0)
 
     # calculate money flow ratio
-    for curInd in range(period_in_days, data.shape[0]):
+    for curInd in range(period_in_days, data['adjusted_close'].shape[0]):
         sumPosFlow = np.sum(prmf[curInd - period_in_days + 1: curInd + 1])
         sumNegFlow = np.sum(nrmf[curInd - period_in_days + 1: curInd + 1])
+        " TODO:  finance-cnn\metrics.py:226: RuntimeWarning: divide by zero encountered in double_scalars    mfr.append(sumPosFlow / sumNegFlow)"
         mfr.append(sumPosFlow / sumNegFlow)
 
     # calculate and return money flow index

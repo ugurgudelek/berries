@@ -3,6 +3,9 @@ import csv
 import pandas as pd
 import matplotlib.pyplot as plt
 import metrics as mt
+import yahoo_finance_io
+import datetime
+
 
 def crop_data(arr):
     """crop the non-adjusted data starting from the beginning"""
@@ -12,69 +15,120 @@ def crop_data(arr):
 
     for i in range(len(arr)):
         # crop beginning of data
-        arr[i] = arr[i][len(arr[i]) - min_len :]
+        arr[i] = arr[i][len(arr[i]) - min_len:]
 
     return arr
 
 
-def main():
-    # Date Open High Low Close Volume Adj Close
-    spy_data = pd.read_csv("spy.csv").as_matrix()[:, :][::-1]
+def assign_null_into_data(arr, length):
+    for i, data in enumerate(arr):
+        null_len = length - len(data)
+        null_part = np.zeros(null_len)
+        null_part.fill(np.nan)
 
+        arr[i] = np.hstack((null_part, data))
+    return arr
+
+
+def adjusted_data(data):
     # adjust the prices according to adjusted close
-    adj_ratio = spy_data[:, 6] / spy_data[:, 4]
-    spy_data[:, 1] = adj_ratio * spy_data[:, 1]  # open
-    spy_data[:, 2] = adj_ratio * spy_data[:, 2]  # high
-    spy_data[:, 3] = adj_ratio * spy_data[:, 3]  # low
-    spy_data[:, 4] = spy_data[:, 6]  # close is adjusted
+    adj_ratio = data['adjusted_close'] / data['close']
+    data['open'] = adj_ratio * data['open']  # open
+    data['high'] = adj_ratio * data['high']  # high
+    data['low'] = adj_ratio * data['low']  # low
+    data['close'] = data['adjusted_close']  # close is adjusted
 
-    # lets get some data over dataset
-    rsi_15_data = mt.rsi(spy_data[:, 6], 15)
-    sma_15_data = mt.sma(spy_data[:, 6], 15)
-    macd_15_5_data = mt.macd(spy_data[:, 6], 26, 12)
-    macd_trigger_9_15_5 = mt.macd_trigger(spy_data[:, 6], 9, 26, 12)
-    willR = mt.williamsR(spy_data)
-    kdHist = mt.kdDiff(spy_data)
-    ultimateOs = mt.ulOs(spy_data)
-    mfIndex = mt.mfi(spy_data)
-
-    # created data arr to hold all info
-    data_arr = [rsi_15_data,sma_15_data,macd_15_5_data,macd_trigger_9_15_5,willR,kdHist,ultimateOs,mfIndex]
-
-    data_arr = crop_data(arr= data_arr)
+    return data
 
 
-    # # append zeros at the beginning of the results to make them of uniform size
-    # total_length = spy_data.shape[0]
+def calculate_metrics(data, metric_functions):
+    # lets calculate some metric over dataset
+    ret = []
+    for func in metric_functions:
+        ret.append(func(data))
+
+    # rsi_15_data = mt.rsi(data)
+    # sma_15_data = mt.sma(data)
+    # macd_15_5_data = mt.macd(data)
+    # macd_trigger_9_15_5 = mt.macd_trigger(data)
+    # willR = mt.williamsR(data)
+    # kdHist = mt.kdDiff(data)
+    # ultimateOs = mt.ulOs(data)
+    # mfIndex = mt.mfi(data)
+
+    return np.asarray(ret)
+
+
+def stack_data_and_metrics(data, metrics, metric_functions):
+    for i, metric_data in enumerate(metrics):
+        data[metric_functions[i].__name__] = metric_data
+    return data
+
+def tranform_to_dict(data):
+    # create a dict for easy use
+    data_dict = {'open': data[:, 0],
+                 'high': data[:, 1],
+                 'low': data[:, 2],
+                 'close': data[:, 3],
+                 'volume': data[:, 4],
+                 'adjusted_close': data[:, 5]}
+    return data_dict
+
+def data_handler(which_stock, start_date, end_date, metric_functions, is_save_csv=True):
+    # Open High Low Close Volume Adj Close
+    stock = yahoo_finance_io.data_getter(which_stock, start_date, end_date).as_matrix()[:, :][::-1]
+
+    # Tranform array to dict for easy use
+    stock = tranform_to_dict(stock)
+
+    # Adjust data according to adjusted close
+    stock = adjusted_data(stock)
+
+    # create data arr to hold all metric info
+    metrics = calculate_metrics(stock, metric_functions)
+
+    # assign nan value beginning of the data
+    metrics = assign_null_into_data(arr=metrics, length=len(stock['adjusted_close']))
+
+    # append data and metrics column-wise
+    stock = stack_data_and_metrics(stock, metrics, metric_functions)
+
+    df = pd.DataFrame(stock)
+    
+    if is_save_csv:
+        df.to_csv("data/"+which_stock+".csv")
+        
+    return df
+
+
+
+
+def main():
+    
+    # functions to pass other methods
+    metric_functions = [mt.rsi, mt.sma, mt.macd, mt.macd_trigger, mt.williamsR, mt.kdDiff, mt.ulOs, mt.mfi]
+
+    # example of yahoo finance data getter function
+    start_date = datetime.datetime(2000, 1, 3)
+    end_date = datetime.datetime(2016, 12, 30)
+    
+    stock_names = ['spy', 'msft', 'aapl']
+
+    for stock in stock_names:
+        df = data_handler(stock, start_date, end_date, metric_functions, is_save_csv=True)
+        print(df.tail())
+
+
+
+    df = pd.read_csv("data/spy.csv")
+    print(df.head())
+    print(df.tail())
+
     #
-    # rsi_15_data = np.insert(rsi_15_data, 0, np.zeros(total_length - rsi_15_data.shape[0]))
-    # sma_15_data = np.insert(sma_15_data, 0, np.zeros(total_length - sma_15_data.shape[0]))
-    # macd_15_5_data = np.insert(macd_15_5_data, 0, np.zeros(total_length - macd_15_5_data.shape[0]))
-    # macd_trigger_9_15_5 = np.insert(macd_trigger_9_15_5, 0, np.zeros(total_length - macd_trigger_9_15_5.shape[0]))
-    # willR = np.insert(willR, 0, np.zeros(total_length - willR.shape[0]))
-    # kdHist = np.insert(kdHist, 0, np.zeros(total_length - kdHist.shape[0]))
-    # ultimateOs = np.insert(ultimateOs, 0, np.zeros(total_length - ultimateOs.shape[0]))
-    # mfIndex = np.insert(mfIndex, 0, np.zeros(total_length - mfIndex.shape[0]))
-
-    # # reshape results so that they can be concatenated and written to a file
-    # rsi_15_data = np.reshape(rsi_15_data, (rsi_15_data.shape[0], 1))
-    # sma_15_data = np.reshape(sma_15_data, (sma_15_data.shape[0], 1))
-    # macd_15_5_data = np.reshape(macd_15_5_data, (macd_15_5_data.shape[0], 1))
-    # macd_trigger_9_15_5 = np.reshape(macd_trigger_9_15_5, (macd_trigger_9_15_5.shape[0], 1))
-    # willR = np.reshape(willR, (willR.shape[0], 1))
-    # kdHist = np.reshape(kdHist, (kdHist.shape[0], 1))
-    # ultimateOs = np.reshape(ultimateOs, (ultimateOs.shape[0], 1))
-    # mfIndex = np.reshape(mfIndex, (mfIndex.shape[0], 1))
-    #
-    # result = np.concatenate(
-    #     (rsi_15_data, sma_15_data, macd_15_5_data, macd_trigger_9_15_5, willR, kdHist, ultimateOs, mfIndex), axis=1)
-    #
-    # np.savetxt('foo.csv', result, delimiter=',')
-
-    # plt.plot(sma_15_data, color='r')
-    # plt.bar(left=list(range(len(macd_trigger_9_15_5))),height=-200 - macd_trigger_9_15_5, color='b')
-    # plt.scatter(x=list(range(len(macd_trigger_9_15_5))), y=macd_trigger_9_15_5, color='r', s=1)
-    # plt.show()
+    # # plt.plot(sma_15_data, color='r')
+    # # plt.bar(left=list(range(len(macd_trigger_9_15_5))),height=-200 - macd_trigger_9_15_5, color='b')
+    # # plt.scatter(x=list(range(len(macd_trigger_9_15_5))), y=macd_trigger_9_15_5, color='r', s=1)
+    # # plt.show()
 
 
 if __name__ == "__main__":
