@@ -1,5 +1,7 @@
 
-* Fon: SPY
+TODO : 1. Fon isimlerini çıkartmamız lazım. Ya da hisselerin.
+TODO : 2. Yahoo api denemesi yapmak lazım
+DONE : 3. Quandly api denemesi
 
 * Dataset yapısı:
 
