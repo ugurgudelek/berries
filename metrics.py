@@ -222,10 +222,13 @@ def mfi(data, period_in_days=14):
 
     # calculate money flow ratio
     for curInd in range(period_in_days, data['adjusted_close'].shape[0]):
-        sumPosFlow = np.sum(prmf[curInd - period_in_days + 1: curInd + 1])
-        sumNegFlow = np.sum(nrmf[curInd - period_in_days + 1: curInd + 1])
-        " TODO:  finance-cnn\metrics.py:226: RuntimeWarning: divide by zero encountered in double_scalars    mfr.append(sumPosFlow / sumNegFlow)"
-        mfr.append(sumPosFlow / sumNegFlow)
+        sumPosFlow = np.sum(prmf[curInd - period_in_days + 1 : curInd + 1])
+        sumNegFlow = np.sum(nrmf[curInd - period_in_days + 1 : curInd + 1])
+        if sumNegFlow == 0:
+            mfr.append(float("Inf"))
+        else:
+            mfr.append(sumPosFlow / sumNegFlow)
+        
 
     # calculate and return money flow index
     return np.subtract(100, np.divide(100, np.add(1, mfr)))

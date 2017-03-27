@@ -47,14 +47,14 @@ def calculate_metrics(data, metric_functions):
     for func in metric_functions:
         ret.append(func(data))
 
-    # rsi_15_data = mt.rsi(data)
-    # sma_15_data = mt.sma(data)
-    # macd_15_5_data = mt.macd(data)
-    # macd_trigger_9_15_5 = mt.macd_trigger(data)
-    # willR = mt.williamsR(data)
-    # kdHist = mt.kdDiff(data)
-    # ultimateOs = mt.ulOs(data)
-    # mfIndex = mt.mfi(data)
+    rsi_15_data = mt.rsi(data)
+    sma_15_data = mt.sma(data)
+    macd_15_5_data = mt.macd(data)
+    macd_trigger_9_15_5 = mt.macd_trigger(data)
+    willR = mt.williamsR(data)
+    kdHist = mt.kdDiff(data)
+    ultimateOs = mt.ulOs(data)
+    mfIndex = mt.mfi(data)
 
     return np.asarray(ret)
 
@@ -64,7 +64,7 @@ def stack_data_and_metrics(data, metrics, metric_functions):
         data[metric_functions[i].__name__] = metric_data
     return data
 
-def tranform_to_dict(data):
+def transform_to_dict(data):
     # create a dict for easy use
     data_dict = {'open': data[:, 0],
                  'high': data[:, 1],
@@ -79,7 +79,7 @@ def data_handler(which_stock, start_date, end_date, metric_functions, is_save_cs
     stock = yahoo_finance_io.data_getter(which_stock, start_date, end_date).as_matrix()[:, :][::-1]
 
     # Tranform array to dict for easy use
-    stock = tranform_to_dict(stock)
+    stock = transform_to_dict(stock)
 
     # Adjust data according to adjusted close
     stock = adjusted_data(stock)
@@ -96,7 +96,7 @@ def data_handler(which_stock, start_date, end_date, metric_functions, is_save_cs
     df = pd.DataFrame(stock)
     
     if is_save_csv:
-        df.to_csv("data/"+which_stock+".csv")
+        df.to_csv("./data/"+which_stock+".csv")
         
     return df
 
@@ -117,12 +117,7 @@ def main():
     for stock in stock_names:
         df = data_handler(stock, start_date, end_date, metric_functions, is_save_csv=True)
         print(df.tail())
-
-
-
-    df = pd.read_csv("data/spy.csv")
-    print(df.head())
-    print(df.tail())
+        print("---------------------------------------------------------------------")
 
     #
     # # plt.plot(sma_15_data, color='r')

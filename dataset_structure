@@ -1,7 +1,9 @@
 
-TODO : 1. Fon isimlerini çıkartmamız lazım. Ya da hisselerin.
-DONE : 2. Yahoo api denemesi yapmak lazım
-DONE : 3. Quandly api denemesi
+TODO : Fon isimlerini çıkartmamız lazım. Ya da hisselerin.
+DONE : Yahoo api denemesi yapmak lazım
+DONE : Quandly api denemesi
+TODO : Sınıfların çıkarılması
+TODO : Feature'ların correlation'a göre kümelenmesi
 
 * Dataset yapısı:
 
@@ -19,7 +21,7 @@ DONE : 3. Quandly api denemesi
     DONE : SMA
     
     Momentum indicators
-    TODO : Money flow index (MFI) 
+    DONE : Money flow index (MFI) 
     DONE : Relative strength index (RSI)
     TODO : True strength index (TSI)
     DONE : Williams %R
