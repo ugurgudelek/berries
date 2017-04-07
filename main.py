@@ -58,6 +58,38 @@ def calculate_metrics(data, metric_functions):
 
     return np.asarray(ret)
 
+def calculate_metrics_manual(data, metric_functions):
+
+    ret = []
+    for func in metric_functions:
+        ret.append(func(data))
+
+    rsi_15_data = mt.rsi(data, 15); rsi_20_data = mt.rsi(data, 20); rsi_25_data = mt.rsi(data, 25); rsi_30_data = mt.rsi(data, 30)
+    rsi_35_data = mt.rsi(data, 35); rsi_40_data = mt.rsi(data, 40); rsi_45_data = mt.rsi(data, 45); rsi_50_data = mt.rsi(data, 50)
+    
+    sma_15_data = mt.sma(data, 15); sma_20_data = mt.sma(data, 20); sma_25_data = mt.sma(data, 25); sma_30_data = mt.sma(data, 30)
+    sma_35_data = mt.sma(data, 35); sma_40_data = mt.sma(data, 40); sma_45_data = mt.sma(data, 45); sma_50_data = mt.sma(data, 50)
+    
+    macd_26_12_data = mt.macd(data, 26, 12); macd_28_14_data = mt.macd(data, 28, 14); macd_30_16_data = mt.macd(data, 30, 16); macd_32_18_data = mt.macd(data, 32, 18)
+    macd_32_20_data = mt.macd(data, 32, 20); macd_34_22_data = mt.macd(data, 34, 22); macd_36_24_data = mt.macd(data, 36, 24); macd_38_26_data = mt.macd(data, 38, 26)
+    
+    macd_trigger_9_26_12 = mt.macd_trigger(data, 9, 26, 12); macd_trigger_10_28_14 = mt.macd_trigger(data, 10, 28, 14); macd_trigger_11_30_16 = mt.macd_trigger(data, 11, 30, 16); macd_trigger_12_32_18 = mt.macd_trigger(data, 12, 32, 18)
+    macd_trigger_13_34_20 = mt.macd_trigger(data, 13, 34, 20); macd_trigger_14_36_22 = mt.macd_trigger(data, 14, 36, 22); macd_trigger_15_38_24 = mt.macd_trigger(data, 15, 38, 24); macd_trigger_16_40_26 = mt.macd_trigger(data, 16, 40, 26)
+    
+    willR_14 = mt.williamsR(data, 14); willR_18 = mt.williamsR(data, 18); willR_22 = mt.williamsR(data, 22); willR_26 = mt.williamsR(data, 26)
+    willR_30 = mt.williamsR(data, 30); willR_34 = mt.williamsR(data, 34); willR_38 = mt.williamsR(data, 38); willR_42 = mt.williamsR(data, 42)
+    
+    kdHist_14 = mt.kdDiff(data, 14); kdHist_18 = mt.kdDiff(data, 18); kdHist_22 = mt.kdDiff(data, 22); kdHist_26 = mt.kdDiff(data, 26)
+    kdHist_30 = mt.kdDiff(data, 30); kdHist_34 = mt.kdDiff(data, 34); kdHist_38 = mt.kdDiff(data, 38); kdHist_42 = mt.kdDiff(data, 42)
+    
+    ultimateOs_7_14_28 = mt.ulOs(data, 7, 14, 28); ultimateOs_8_16_32 = mt.ulOs(data, 8, 16, 32); ultimateOs_9_18_36 = mt.ulOs(data, 9, 18, 36); ultimateOs_10_20_40 = mt.ulOs(data, 10, 20, 40)
+    ultimateOs_11_22_44 = mt.ulOs(data, 11, 22, 44); ultimateOs_12_24_48 = mt.ulOs(data, 12, 24, 48); ultimateOs_13_26_52 = mt.ulOs(data, 13, 26, 52); ultimateOs_14_28_56 = mt.ulOs(data, 14, 28, 56)
+    
+    mfIndex_14 = mt.mfi(data, 14); mfIndex_18 = mt.mfi(data, 18); mfIndex_22 = mt.mfi(data, 22); mfIndex_26 = mt.mfi(data, 26)
+    mfIndex_30 = mt.mfi(data, 30); mfIndex_34 = mt.mfi(data, 34); mfIndex_38 = mt.mfi(data, 38); mfIndex_40 = mt.mfi(data, 40)
+
+    return np.asarray(ret)    
+
 
 def stack_data_and_metrics(data, metrics, metric_functions):
     for i, metric_data in enumerate(metrics):
@@ -85,7 +117,8 @@ def data_handler(which_stock, start_date, end_date, metric_functions, is_save_cs
     stock = adjusted_data(stock)
 
     # create data arr to hold all metric info
-    metrics = calculate_metrics(stock, metric_functions)
+    #metrics = calculate_metrics(stock, metric_functions)
+    metrics = calculate_metrics_manual(stock)
 
     # assign nan value beginning of the data
     metrics = assign_null_into_data(arr=metrics, length=len(stock['adjusted_close']))
