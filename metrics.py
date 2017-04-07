@@ -50,6 +50,7 @@ def macd_trigger(data, period_signal=9, period_long=26, period_short=12):
 
 def sma(data, period=15):
     """simple moving average"""
+
     data = data['adjusted_close']
     lower = 0
     upper = period

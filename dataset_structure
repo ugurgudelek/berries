@@ -1,9 +1,10 @@
 
-TODO : Fon isimlerini çıkartmamız lazım. Ya da hisselerin.
+DONE : Fon isimlerini çıkartmamız lazım. Ya da hisselerin.
 DONE : Yahoo api denemesi yapmak lazım
 DONE : Quandly api denemesi
-TODO : Sınıfların çıkarılması
-TODO : Feature'ların correlation'a göre kümelenmesi
+DONE : Sınıfların çıkarılması
+DONE : Feature'ların correlation'a göre kümelenmesi
+
 
 * Dataset yapısı:
 
