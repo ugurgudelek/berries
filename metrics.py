@@ -48,8 +48,9 @@ def macd_trigger(data, period_signal=9, period_long=26, period_short=12):
     return macd_histogram
 
 
-def sma(data, period=15):
+def sma(data, period):
     """simple moving average"""
+
     data = data['adjusted_close']
     lower = 0
     upper = period
