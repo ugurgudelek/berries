@@ -13,6 +13,8 @@ def data_getter(which_stock, start, end):
 
     last_date = df.Date.iloc[0]
     first_date = df.Date.iloc[-1]
+
+    df.columns = ['date', 'open', 'high', 'low', 'close', 'volume', 'adjusted_close']
     if  first_date > str(lower_bound_date) or last_date < str(upper_bound_date):
         return None
     return df
