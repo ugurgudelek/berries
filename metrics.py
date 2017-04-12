@@ -51,7 +51,7 @@ def macd_trigger(data, period_signal=9, period_long=26, period_short=12):
 def sma(data, period=15):
     """simple moving average"""
 
-    data = data['adjusted_close']
+    data = data['adjusted_close'].values
     lower = 0
     upper = period
 
@@ -73,7 +73,7 @@ def rsi(data, period=15):
     :type period: int
     :rtype: np.array
     """
-    data = data['adjusted_close']
+    data = data['adjusted_close'].values
     # period kadar data kaybedeceğiz cünkü;
     # yesterday_price hesaplanırken 1 tane gidiyor.
     # rsi hesaplanırken de period - 1 tane gidiyor.
@@ -116,11 +116,11 @@ def williamsR(data, period_in_days=14):
 
     for curInd in range(period_in_days - 1, data['adjusted_close'].shape[0]):
         # current close
-        curClose = data['close'][curInd]
+        curClose = data['close'].values[curInd]
 
         # find the highest high and the lowest low in the period
-        highestHigh = np.amax(data['high'][curInd - period_in_days + 1: curInd + 1])
-        lowestLow = np.amin(data['low'][curInd - period_in_days + 1: curInd + 1])
+        highestHigh = np.amax(data['high'].values[curInd - period_in_days + 1: curInd + 1])
+        lowestLow = np.amin(data['low'].values[curInd - period_in_days + 1: curInd + 1])
 
         # calculate %R
         wR = (highestHigh - curClose) / (highestHigh - lowestLow) * (-100)
@@ -140,11 +140,11 @@ def kdDiff(data, period_in_days=14):
     # calculate %K
     for curInd in range(period_in_days - 1, data['adjusted_close'].shape[0]):
         # current close
-        curClose = data['close'][curInd]
+        curClose = data['close'].values[curInd]
 
         # find the highest high and the lowest low in the period
-        highestHigh = np.amax(data['high'][curInd - period_in_days + 1: curInd + 1])
-        lowestLow = np.amin(data['low'][curInd - period_in_days + 1: curInd + 1])
+        highestHigh = np.amax(data['high'].values[curInd - period_in_days + 1: curInd + 1])
+        lowestLow = np.amin(data['low'].values[curInd - period_in_days + 1: curInd + 1])
 
         Kpc.append((highestHigh - curClose) / (highestHigh - lowestLow) * 100)
 
@@ -167,10 +167,10 @@ def ulOs(data, period1=7, period2=14, period3=28):
 
     # calculate buying pressure and true range
     for curInd in range(1, data['adjusted_close'].shape[0]):
-        curClose = data['close'][curInd]
-        prClose = data['close'][curInd - 1]
-        curLow = data['low'][curInd]
-        curHigh = data['high'][curInd]
+        curClose = data['close'].values[curInd]
+        prClose = data['close'].values[curInd - 1]
+        curLow = data['low'].values[curInd]
+        curHigh = data['high'].values[curInd]
 
         bp.append(curClose - np.amin([curLow, prClose]))
         tr.append(np.amax([curHigh, prClose]) - np.amin([curLow, prClose]))
@@ -211,14 +211,14 @@ def mfi(data, period_in_days=14):
     # calculate raw money flow
     for curInd in range(1, data['adjusted_close'].shape[0]):
 
-        prTypicalPrice = (data['high'][curInd - 1] + data['low'][curInd - 1] + data['close'][curInd - 1]) / 3
-        curTypicalPrice = (data['high'][curInd] + data['low'][curInd] + data['close'][curInd]) / 3
+        prTypicalPrice = (data['high'].values[curInd - 1] + data['low'].values[curInd - 1] + data['close'].values[curInd - 1]) / 3
+        curTypicalPrice = (data['high'].values[curInd] + data['low'].values[curInd] + data['close'].values[curInd]) / 3
 
         if curTypicalPrice < prTypicalPrice:
-            nrmf.append(curTypicalPrice * data['volume'][curInd])
+            nrmf.append(curTypicalPrice * data['volume'].values[curInd])
             prmf.append(0)
         else:
-            prmf.append(curTypicalPrice * data['volume'][curInd])
+            prmf.append(curTypicalPrice * data['volume'].values[curInd])
             nrmf.append(0)
 
     # calculate money flow ratio
