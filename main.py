@@ -273,40 +273,57 @@ def main():
     stock_names = ['spy', 'xlf', 'qqq', 'xlu' , 'xle' , 'xlp' , 'xli' , 'xlv' , 'xlk' , 'ewj' , 'xlb', 'xly', 'eww',
                    'dia', 'ewg', 'ewh', 'ewc', 'ewu','ewa']
 
-    # CALCULATE METRICS, CREATE DATASET CSVs
-    # example of yahoo finance data getter function
-    start_date = datetime.date(2000, 1, 3)
-    end_date = datetime.date(2017, 1, 1)
-
-    gaugeCounter = 1
-    available_etfs = []
-    for stock in stock_names:
-        print(gaugeCounter)
-        df = data_handler(stock, start_date, end_date, is_save_csv=True)
-        if df is not None:
-            available_etfs.append(stock)
-            print(stock)
-        gaugeCounter += 1
-
-    # save available etfs for later use
-    pd.DataFrame(available_etfs).to_csv("available_etfs.csv", header=False, index=False)
-
-
-
-    # # READ FILES, CREATE IMAGES AND LABELS FOR CNN
-
-    # read available etfs
-    available_etfs = pd.read_csv("available_etfs.csv", header=None, squeeze=True).values.tolist()
-
-    # get all flatten images and labels for cnn
-    for etf in available_etfs:
-        images, labels, (image_row_size, image_col_size) = get_data(etf, cluster=False)
-
-        data_df = pd.concat([pd.DataFrame(images), pd.DataFrame(labels)],axis=1)
-
-        data_df.to_csv("images/{}_images_labels.csv".format(etf), index=False)
+    # # CALCULATE METRICS, CREATE DATASET CSVs
+    # # example of yahoo finance data getter function
+    # start_date = datetime.date(2000, 1, 3)
+    # end_date = datetime.date(2017, 1, 1)
+    #
+    # gaugeCounter = 1
+    # available_etfs = []
+    # for stock in stock_names:
+    #     print(gaugeCounter)
+    #     df = data_handler(stock, start_date, end_date, is_save_csv=True)
+    #     if df is not None:
+    #         available_etfs.append(stock)
+    #         print(stock)
+    #     gaugeCounter += 1
+    #
+    # # save available etfs for later use
+    # pd.DataFrame(available_etfs).to_csv("available_etfs.csv", header=False, index=False)
 
 
+
+    # # # READ FILES, CREATE IMAGES AND LABELS FOR CNN
+    #
+    # # read available etfs
+    # available_etfs = pd.read_csv("available_etfs.csv", header=None, squeeze=True).values.tolist()
+    #
+    # # get all flatten images and labels for cnn
+    # for etf in available_etfs:
+    #     images, labels, (image_row_size, image_col_size) = get_data(etf, cluster=False)
+    #
+    #     data_df = pd.concat([pd.DataFrame(images), pd.DataFrame(labels)],axis=1)
+    #
+    #     data_df.to_csv("images/{}_images_labels.csv".format(etf), index=False)
+
+
+    # READ IMAGES DIRECTLY
+
+    data_df = pd.read_csv("images/{}_images_labels.csv".format("spy"))
+
+    data_dict = {'images':data_df.iloc[:,:-5], 'labels':data_df.iloc[:,-5:]}
+
+    # data_dict['images'].apply(lambda x: x.reshape((28,66))[:,34:62].flatten()  ,axis=1,reduce=True)
+    new_images = []
+    for i,image in enumerate(data_dict['images'].values):
+        new_image = image.reshape((28,66))[:,34:62].flatten()
+        new_images.append(new_image)
+    data_dict['images'] = pd.DataFrame(new_images)
+
+
+    import cnn_handler as ch
+
+    ch.launch_cnn(data_dict)
 
 
 
