@@ -277,7 +277,7 @@ def get_data(which_stock, split_period=56, label_names=['label_df_is_less', 'lab
 
 def prepare_images():
     """Stock names are determined and funtions that calculate metrics and prepare images are called.
-Images are saved to separate .csv files for each ETF"""
+    Images are saved to separate .csv files for each ETF"""
 
     # stock_names = ['spy', 'gdx', 'xlf', 'jnug', 'eem', 'nugt', 'vxx', 'iwm', 'gdxj', 'uso', 'efa', 'uvxy', 'qqq', 'fxi',
     #                'jdst', 'ewz', 'xlu', 'xle', 'ung', 'xiv', 'xop', 'vwo', 'xlp', 'hyg', 'jnk', 'xli', 'tlt', 'tza',
@@ -288,9 +288,8 @@ Images are saved to separate .csv files for each ETF"""
     #                'tbt', 'sqqq', 'itb', 'tqqq', 'ewu', 'bnd', 'ewa', 'vti', 'voo', 'fez', 'emb', 'iwd', 'uup', 'ewy',
     #                'fxn', 'xlre']
 
-#    stock_names = ['spy', 'xlf', 'qqq', 'xlu' , 'xle' , 'xlp' , 'xli' , 'xlv' , 'xlk' , 'ewj' , 'xlb', 'xly', 'eww',
-#                   'dia', 'ewg', 'ewh', 'ewc', 'ewu','ewa']
-    stock_names = ['spy']
+    stock_names = ['spy', 'xlf', 'qqq', 'xlu' , 'xle' , 'xlp' , 'xli' , 'xlv' , 'xlk' , 'ewj' , 'xlb', 'xly', 'eww',
+                   'dia', 'ewg', 'ewh', 'ewc', 'ewu','ewa']
 
     # CALCULATE METRICS, CREATE DATASET CSVs
     # example of yahoo finance data getter function
