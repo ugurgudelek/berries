@@ -8,6 +8,7 @@ import datetime
 from dateutil import parser
 import clustering
 import classes
+import cnn_handler as ch
 
 
 def crop_data(arr):
@@ -83,7 +84,7 @@ def calculate_metrics(data):
     rsi_35 = mt.rsi(data, 35); metric_function_data.append(rsi_35)
     rsi_40 = mt.rsi(data, 40); metric_function_data.append(rsi_40)
     rsi_45 = mt.rsi(data, 45); metric_function_data.append(rsi_45)
-    rsi_50 = mt.rsi(data, 50); metric_function_data.append(rsi_50)
+#    rsi_50 = mt.rsi(data, 50); metric_function_data.append(rsi_50)
 
     sma_15 = mt.sma(data, 15); metric_function_data.append(sma_15)
     sma_20 = mt.sma(data, 20); metric_function_data.append(sma_20)
@@ -92,7 +93,7 @@ def calculate_metrics(data):
     sma_35 = mt.sma(data, 35); metric_function_data.append(sma_35)
     sma_40 = mt.sma(data, 40); metric_function_data.append(sma_40)
     sma_45 = mt.sma(data, 45); metric_function_data.append(sma_45)
-    sma_50 = mt.sma(data, 50); metric_function_data.append(sma_50)
+#    sma_50 = mt.sma(data, 50); metric_function_data.append(sma_50)
 
     macd_26_12 = mt.macd(data, 26, 12); metric_function_data.append(macd_26_12)
     macd_28_14 = mt.macd(data, 28, 14); metric_function_data.append(macd_28_14)
@@ -101,7 +102,7 @@ def calculate_metrics(data):
     macd_32_20 = mt.macd(data, 32, 20); metric_function_data.append(macd_32_20)
     macd_34_22 = mt.macd(data, 34, 22); metric_function_data.append(macd_34_22)
     macd_36_24 = mt.macd(data, 36, 24); metric_function_data.append(macd_36_24)
-    macd_38_26 = mt.macd(data, 38, 26); metric_function_data.append(macd_38_26)
+#    macd_38_26 = mt.macd(data, 38, 26); metric_function_data.append(macd_38_26)
 
     macd_trigger_9_26_12  = mt.macd_trigger(data, 9, 26, 12) ; metric_function_data.append(macd_trigger_9_26_12 )
     macd_trigger_10_28_14 = mt.macd_trigger(data, 10, 28, 14); metric_function_data.append(macd_trigger_10_28_14)
@@ -110,7 +111,7 @@ def calculate_metrics(data):
     macd_trigger_13_34_20 = mt.macd_trigger(data, 13, 34, 20); metric_function_data.append(macd_trigger_13_34_20)
     macd_trigger_14_36_22 = mt.macd_trigger(data, 14, 36, 22); metric_function_data.append(macd_trigger_14_36_22)
     macd_trigger_15_38_24 = mt.macd_trigger(data, 15, 38, 24); metric_function_data.append(macd_trigger_15_38_24)
-    macd_trigger_16_40_26 = mt.macd_trigger(data, 16, 40, 26); metric_function_data.append(macd_trigger_16_40_26)
+#    macd_trigger_16_40_26 = mt.macd_trigger(data, 16, 40, 26); metric_function_data.append(macd_trigger_16_40_26)
 
     willR_14 = mt.williamsR(data, 14); metric_function_data.append(willR_14)
     willR_18 = mt.williamsR(data, 18); metric_function_data.append(willR_18)
@@ -119,7 +120,7 @@ def calculate_metrics(data):
     willR_30 = mt.williamsR(data, 30); metric_function_data.append(willR_30)
     willR_34 = mt.williamsR(data, 34); metric_function_data.append(willR_34)
     willR_38 = mt.williamsR(data, 38); metric_function_data.append(willR_38)
-    willR_42 = mt.williamsR(data, 42); metric_function_data.append(willR_42)
+#    willR_42 = mt.williamsR(data, 42); metric_function_data.append(willR_42)
 
     kdHist_14 = mt.kdDiff(data, 14); metric_function_data.append(kdHist_14)
     kdHist_18 = mt.kdDiff(data, 18); metric_function_data.append(kdHist_18)
@@ -128,7 +129,7 @@ def calculate_metrics(data):
     kdHist_30 = mt.kdDiff(data, 30); metric_function_data.append(kdHist_30)
     kdHist_34 = mt.kdDiff(data, 34); metric_function_data.append(kdHist_34)
     kdHist_38 = mt.kdDiff(data, 38); metric_function_data.append(kdHist_38)
-    kdHist_42 = mt.kdDiff(data, 42); metric_function_data.append(kdHist_42)
+#    kdHist_42 = mt.kdDiff(data, 42); metric_function_data.append(kdHist_42)
 
     ultimateOs_7_14_28 = mt.ulOs(data, 7, 14, 28); metric_function_data.append(ultimateOs_7_14_28 )
     ultimateOs_8_16_32 = mt.ulOs(data, 8, 16, 32); metric_function_data.append(ultimateOs_8_16_32 )
@@ -137,26 +138,39 @@ def calculate_metrics(data):
     ultimateOs_11_22_44 = mt.ulOs(data, 11, 22, 44); metric_function_data.append(ultimateOs_11_22_44)
     ultimateOs_12_24_48 = mt.ulOs(data, 12, 24, 48); metric_function_data.append(ultimateOs_12_24_48)
     ultimateOs_13_26_52 = mt.ulOs(data, 13, 26, 52); metric_function_data.append(ultimateOs_13_26_52)
-    ultimateOs_14_28_56 = mt.ulOs(data, 14, 28, 56); metric_function_data.append(ultimateOs_14_28_56)
+#    ultimateOs_14_28_56 = mt.ulOs(data, 14, 28, 56); metric_function_data.append(ultimateOs_14_28_56)
 
     mfIndex_14 = mt.mfi(data, 14); metric_function_data.append(mfIndex_14)
     mfIndex_18 = mt.mfi(data, 18); metric_function_data.append(mfIndex_18)
     mfIndex_22 = mt.mfi(data, 22); metric_function_data.append(mfIndex_22)
     mfIndex_26 = mt.mfi(data, 26); metric_function_data.append(mfIndex_26)
     mfIndex_30 = mt.mfi(data, 30); metric_function_data.append(mfIndex_30)
-    mfIndex_34 = mt.mfi(data, 34); metric_function_data.append(mfIndex_34)
-    mfIndex_38 = mt.mfi(data, 38); metric_function_data.append(mfIndex_38)
-    mfIndex_40 = mt.mfi(data, 40); metric_function_data.append(mfIndex_40)
+#    mfIndex_34 = mt.mfi(data, 34); metric_function_data.append(mfIndex_34)
+#    mfIndex_38 = mt.mfi(data, 38); metric_function_data.append(mfIndex_38)
+#    mfIndex_40 = mt.mfi(data, 40); metric_function_data.append(mfIndex_40)
 
-    metric_function_names = ["rsi_15","rsi_20","rsi_25","rsi_30","rsi_35","rsi_40","rsi_45","rsi_50",
-                            "sma_15","sma_20","sma_25","sma_30","sma_35","sma_40","sma_45","sma_50",
-                            "macd_26_12","macd_28_14","macd_30_16","macd_32_18","macd_32_20","macd_34_22","macd_36_24","macd_38_26",
-                            "macd_trigger_9_26_12","macd_trigger_10_28_14","macd_trigger_11_30_16","macd_trigger_12_32_18","macd_trigger_13_34_20","macd_trigger_14_36_22","macd_trigger_15_38_24","macd_trigger_16_40_26",
-                            "willR_14","willR_18","willR_22","willR_26","willR_30","willR_34","willR_38","willR_42",
-                            "kdHist_14","kdHist_18","kdHist_22","kdHist_26","kdHist_30","kdHist_34","kdHist_38","kdHist_42",
-                            "ultimateOs_7_14_28","ultimateOs_8_16_32","ultimateOs_9_18_36","ultimateOs_10_20_40","ultimateOs_11_22_44","ultimateOs_12_24_48","ultimateOs_13_26_52","ultimateOs_14_28_56",
-                            "mfIndex_14","mfIndex_18","mfIndex_22","mfIndex_26","mfIndex_30","mfIndex_34","mfIndex_38","mfIndex_40"]
+    # metric_function_names = ["rsi_15","rsi_20","rsi_25","rsi_30","rsi_35","rsi_40","rsi_45","rsi_50",
+    #                         "sma_15","sma_20","sma_25","sma_30","sma_35","sma_40","sma_45","sma_50",
+    #                         "macd_26_12","macd_28_14","macd_30_16","macd_32_18","macd_32_20","macd_34_22","macd_36_24","macd_38_26",
+    #                         "macd_trigger_9_26_12","macd_trigger_10_28_14","macd_trigger_11_30_16","macd_trigger_12_32_18","macd_trigger_13_34_20",
+    #                          "macd_trigger_14_36_22","macd_trigger_15_38_24","macd_trigger_16_40_26",
+    #                         "willR_14","willR_18","willR_22","willR_26","willR_30","willR_34","willR_38","willR_42",
+    #                         "kdHist_14","kdHist_18","kdHist_22","kdHist_26","kdHist_30","kdHist_34","kdHist_38","kdHist_42",
+    #                         "ultimateOs_7_14_28","ultimateOs_8_16_32","ultimateOs_9_18_36","ultimateOs_10_20_40","ultimateOs_11_22_44","ultimateOs_12_24_48",
+    #                          "ultimateOs_13_26_52","ultimateOs_14_28_56", "mfIndex_14","mfIndex_18","mfIndex_22","mfIndex_26","mfIndex_30","mfIndex_34","mfIndex_38","mfIndex_40"]
 
+    metric_function_names = ["rsi_15","rsi_20","rsi_25","rsi_30","rsi_35","rsi_40","rsi_45",
+                            "sma_15","sma_20","sma_25","sma_30","sma_35","sma_40","sma_45",
+                            "macd_26_12","macd_28_14","macd_30_16","macd_32_18","macd_32_20","macd_34_22","macd_36_24",
+                            "macd_trigger_9_26_12","macd_trigger_10_28_14","macd_trigger_11_30_16","macd_trigger_12_32_18","macd_trigger_13_34_20",
+                             "macd_trigger_14_36_22","macd_trigger_15_38_24",
+                            "willR_14","willR_18","willR_22","willR_26","willR_30","willR_34","willR_38",
+                            "kdHist_14","kdHist_18","kdHist_22","kdHist_26","kdHist_30","kdHist_34","kdHist_38",
+                            "ultimateOs_7_14_28","ultimateOs_8_16_32","ultimateOs_9_18_36","ultimateOs_10_20_40","ultimateOs_11_22_44","ultimateOs_12_24_48",
+                             "ultimateOs_13_26_52", "mfIndex_14","mfIndex_18","mfIndex_22","mfIndex_26","mfIndex_30"]
+
+    
+    
     return np.asarray(metric_function_data),metric_function_names
 
 
@@ -167,6 +181,7 @@ def stack_data_and_metrics(data, metric_data, metric_function_names):
 
 
 def data_handler(which_stock, start_date, end_date, is_save_csv=True):
+    """Downloads data, calculates metrics and save results to separate .csv files for each ETF."""
     # Open High Low Close Volume Adj Close
     stock = yahoo_finance_io.data_getter(which_stock, start_date, end_date)
     if stock is not None:
@@ -204,9 +219,12 @@ def data_handler(which_stock, start_date, end_date, is_save_csv=True):
         return stock
 
 
-def get_data(which_stock, split_period=28, label_names=['label_df_is_less', 'label_df_is_same', 'label_df_is_more', 'label_lr_is_less','label_lr_is_more'],
+def get_data(which_stock, split_period=56, label_names=['label_df_is_less', 'label_df_is_same', 'label_df_is_more', 'label_lr_is_less','label_lr_is_more'],
              cluster=False):
     """
+    Reads metric data, clusters features, prepares and returns images together with labels.
+    Images are flattened before returned.
+
     :param :type str which_stock: takes stock names
 
     :param :type int split_period=28 determines chuck size wrt date
@@ -233,7 +251,7 @@ def get_data(which_stock, split_period=28, label_names=['label_df_is_less', 'lab
 
     if cluster:
         # sort features according to pearson correlation coefficient
-        sorted_cluster_names = clustering.hierarchical_clustering(data[predictor_names], no_plot=False)
+        sorted_cluster_names = clustering.hierarchical_clustering(data[predictor_names], no_plot=True)
         pd.Series(sorted_cluster_names).to_csv("clustered_names.csv", header=False, index=False)
     else:
         sorted_cluster_names = pd.read_csv("clustered_names.csv", header=None, squeeze=True).values.tolist()
@@ -257,10 +275,10 @@ def get_data(which_stock, split_period=28, label_names=['label_df_is_less', 'lab
 
     return images, labels, (image_row_size, image_col_size)
 
+def prepare_images():
+    """Stock names are determined and funtions that calculate metrics and prepare images are called.
+Images are saved to separate .csv files for each ETF"""
 
-
-
-def main():
     # stock_names = ['spy', 'gdx', 'xlf', 'jnug', 'eem', 'nugt', 'vxx', 'iwm', 'gdxj', 'uso', 'efa', 'uvxy', 'qqq', 'fxi',
     #                'jdst', 'ewz', 'xlu', 'xle', 'ung', 'xiv', 'xop', 'vwo', 'xlp', 'hyg', 'jnk', 'xli', 'tlt', 'tza',
     #                'xlv', 'rsx', 'ugaz', 'amlp', 'dust', 'vea', 'iemg', 'uco', 'xlk', 'iau', 'gld', 'kre', 'sds', 'iyr',
@@ -270,69 +288,67 @@ def main():
     #                'tbt', 'sqqq', 'itb', 'tqqq', 'ewu', 'bnd', 'ewa', 'vti', 'voo', 'fez', 'emb', 'iwd', 'uup', 'ewy',
     #                'fxn', 'xlre']
 
-    stock_names = ['spy', 'xlf', 'qqq', 'xlu' , 'xle' , 'xlp' , 'xli' , 'xlv' , 'xlk' , 'ewj' , 'xlb', 'xly', 'eww',
-                   'dia', 'ewg', 'ewh', 'ewc', 'ewu','ewa']
+#    stock_names = ['spy', 'xlf', 'qqq', 'xlu' , 'xle' , 'xlp' , 'xli' , 'xlv' , 'xlk' , 'ewj' , 'xlb', 'xly', 'eww',
+#                   'dia', 'ewg', 'ewh', 'ewc', 'ewu','ewa']
+    stock_names = ['spy']
 
-    # # CALCULATE METRICS, CREATE DATASET CSVs
-    # # example of yahoo finance data getter function
-    # start_date = datetime.date(2000, 1, 3)
-    # end_date = datetime.date(2017, 1, 1)
-    #
-    # gaugeCounter = 1
-    # available_etfs = []
-    # for stock in stock_names:
-    #     print(gaugeCounter)
-    #     df = data_handler(stock, start_date, end_date, is_save_csv=True)
-    #     if df is not None:
-    #         available_etfs.append(stock)
-    #         print(stock)
-    #     gaugeCounter += 1
-    #
-    # # save available etfs for later use
-    # pd.DataFrame(available_etfs).to_csv("available_etfs.csv", header=False, index=False)
+    # CALCULATE METRICS, CREATE DATASET CSVs
+    # example of yahoo finance data getter function
+    start_date = datetime.date(2000, 1, 3)
+    end_date = datetime.date(2017, 1, 1)
+
+    # get available ETFs (some ETFs lack sufficient data)
+    gaugeCounter = 1
+    available_etfs = []
+    for stock in stock_names:
+        print(gaugeCounter)
+        df = data_handler(stock, start_date, end_date, is_save_csv=True)
+        if df is not None:
+            available_etfs.append(stock)
+            print(stock)
+        gaugeCounter += 1
+    
+    # save available etfs for later use
+#    pd.DataFrame(available_etfs).to_csv("available_etfs.csv", header=False, index=False)
+
+    # # READ FILES, CREATE IMAGES AND LABELS FOR CNN
+    
+    # read available etfs
+#    available_etfs = pd.read_csv("available_etfs.csv", header=None, squeeze=True).values.tolist()
+    
+    # get all flatten images and labels for cnn
+    for etf in available_etfs:
+        images, labels, (image_row_size, image_col_size) = get_data(etf, cluster=True)
+    
+        data_df = pd.concat([pd.DataFrame(images), pd.DataFrame(labels)],axis=1)
+    
+        data_df.to_csv("images/{}_images_labels.csv".format(etf), index=False)
 
 
+def main():
 
-    # # # READ FILES, CREATE IMAGES AND LABELS FOR CNN
-    #
-    # # read available etfs
-    # available_etfs = pd.read_csv("available_etfs.csv", header=None, squeeze=True).values.tolist()
-    #
-    # # get all flatten images and labels for cnn
-    # for etf in available_etfs:
-    #     images, labels, (image_row_size, image_col_size) = get_data(etf, cluster=False)
-    #
-    #     data_df = pd.concat([pd.DataFrame(images), pd.DataFrame(labels)],axis=1)
-    #
-    #     data_df.to_csv("images/{}_images_labels.csv".format(etf), index=False)
+    # prepare the images
+    prepare_images()
 
-
-    # READ IMAGES DIRECTLY
-
+    # read the images
     data_df = pd.read_csv("images/{}_images_labels.csv".format("spy"))
-
     data_dict = {'images':data_df.iloc[:,:-5], 'labels':data_df.iloc[:,-5:]}
 
     # data_dict['images'].apply(lambda x: x.reshape((28,66))[:,34:62].flatten()  ,axis=1,reduce=True)
-    new_images = []
-    for i,image in enumerate(data_dict['images'].values):
-        new_image = image.reshape((28,66))[:,34:62].flatten()
-        new_images.append(new_image)
-    data_dict['images'] = pd.DataFrame(new_images)
+    # new_images = []
+    # for i,image in enumerate(data_dict['images'].values):
+    #     #new_image = image.reshape((28,66))[:,34:62].flatten()
+    #     new_image = image.reshape((56,56)).flatten()
+    #     new_images.append(new_image)
+    # data_dict['images'] = pd.DataFrame(new_images)
 
-
-    import cnn_handler as ch
-
+    # call CNN
     ch.launch_cnn(data_dict)
-
-
-
 
     # plt.plot(sma_15_data, color='r')
     # plt.bar(left=list(range(len(macd_trigger_9_15_5))),height=-200 - macd_trigger_9_15_5, color='b')
     # plt.scatter(x=list(range(len(macd_trigger_9_15_5))), y=macd_trigger_9_15_5, color='r', s=1)
     # plt.show()
-
 
 if __name__ == "__main__":
     main()
