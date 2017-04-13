@@ -180,7 +180,7 @@ def stack_data_and_metrics(data, metric_data, metric_function_names):
     return data
 
 
-def data_handler(which_stock, start_date, end_date, is_save_csv=True):
+def data_handler(which_stock, start_date, end_date, period = 56, is_save_csv=True):
     """Downloads data, calculates metrics and save results to separate .csv files for each ETF."""
     # Open High Low Close Volume Adj Close
     stock = yahoo_finance_io.data_getter(which_stock, start_date, end_date)
@@ -203,13 +203,13 @@ def data_handler(which_stock, start_date, end_date, is_save_csv=True):
         stock = stack_data_and_metrics(stock, metric_data, metric_function_names)
 
         # assign df targets
-        target_df = classes.df_classes(stock['adjusted_close'].values, period=28, diff_thr=0.5)
+        target_df = classes.df_classes(stock['adjusted_close'].values, period=period, diff_thr=0.5)
         stock['label_df_is_less'] = target_df[:, 0]
         stock['label_df_is_same'] = target_df[:, 1]
         stock['label_df_is_more'] = target_df[:, 2]
 
         # assign lr targets
-        target_lr = classes.lr_classes(stock['adjusted_close'].values, period=28, slope_quant=2)
+        target_lr = classes.lr_classes(stock['adjusted_close'].values, period=period, slope_quant=2)
         stock['label_lr_is_less'] = target_lr[:, 0]
         stock['label_lr_is_more'] = target_lr[:, 1]
 
@@ -275,7 +275,7 @@ def get_data(which_stock, split_period=56, label_names=['label_df_is_less', 'lab
 
     return images, labels, (image_row_size, image_col_size)
 
-def prepare_images():
+def prepare_images(save_etf=False):
     """Stock names are determined and funtions that calculate metrics and prepare images are called.
     Images are saved to separate .csv files for each ETF"""
 
@@ -308,12 +308,12 @@ def prepare_images():
         gaugeCounter += 1
 
     # save available etfs for later use
-#    pd.DataFrame(available_etfs).to_csv("available_etfs.csv", header=False, index=False)
+    if save_etf:
+        pd.DataFrame(available_etfs).to_csv("available_etfs.csv", header=False, index=False)
 
     # # READ FILES, CREATE IMAGES AND LABELS FOR CNN
 
-    # read available etfs
-#    available_etfs = pd.read_csv("available_etfs.csv", header=None, squeeze=True).values.tolist()
+
 
     # get all flatten images and labels for cnn
     for etf in available_etfs:
@@ -325,6 +325,13 @@ def prepare_images():
 
 
 def main():
+
+    # prepare_images(save_etf=True)
+
+    # read available etfs
+    # available_etfs = pd.read_csv("available_etfs.csv", header=None, squeeze=True).values.tolist()
+
+    available_etfs = ['spy']
     # READ IMAGES DIRECTLY
     all_images = []
     all_labels = []
@@ -333,26 +340,20 @@ def main():
         images = data_df.iloc[:,:-5]
         labels = data_df.iloc[:,-5:]
 
-
-        fixed_images = []
-        for i,image in enumerate(images.values):
-            new_image = image.reshape((28,66))[:,34:62].flatten()
-            fixed_images.append(new_image)
-
         if len(all_images) == 0:
-            all_images = np.array(fixed_images)
+            all_images = np.array(images)
             all_labels = labels.values
         else:
-            all_images = np.append(all_images, fixed_images, axis=0)
+            all_images = np.append(all_images, images, axis=0)
             all_labels = np.append(all_labels, labels.values, axis=0)
 
         print(pd.DataFrame(all_images).shape)
+
+
     data = {'images':pd.DataFrame(all_images), 'labels':pd.DataFrame(all_labels)}
 
-
-
     # call CNN
-    ch.launch_cnn(data_dict)
+    ch.launch_cnn(data)
 
 
 

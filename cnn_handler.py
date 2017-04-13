@@ -40,7 +40,7 @@ def maxpool2d(x, k=2):
 # Create model
 def conv_net(x, weights, biases, dropout):
     # Reshape input picture
-    x = tf.reshape(x, shape=[-1, 28, 28, 1])
+    x = tf.reshape(x, shape=[-1, 56, 56, 1])
 
     # Convolution Layer
     conv1 = conv2d(x, weights['wc1'], biases['bc1'])
@@ -67,7 +67,7 @@ def conv_net(x, weights, biases, dropout):
 
 def launch_cnn(data):
 
-    train_size = 3000
+    train_size = int(data['images'].shape[0]*0.8)
     train_images = data['images'].iloc[:train_size]
     train_labels = data['labels'].iloc[:train_size, :3]
 
@@ -77,7 +77,7 @@ def launch_cnn(data):
 
 
     # Network Parameters
-    n_input = data['images'].shape[1]  #  data input (img shape: 28*28)
+    n_input = data['images'].shape[1]  #  data input (img shape: 56*56)
     n_classes = 3  #  total classes (less,same,more)
 
 
@@ -101,7 +101,7 @@ def launch_cnn(data):
         # 5x5 conv, 32 inputs, 64 outputs
         'wc2': tf.Variable(tf.random_normal([5, 5, 32, 64])),
         # fully connected, 7*7*64 inputs, 1024 outputs
-        'wd1': tf.Variable(tf.random_normal([7 * 7 * 64, 1024])),
+        'wd1': tf.Variable(tf.random_normal([14 * 14 * 64, 1024])),
         # 1024 inputs, 10 outputs (class prediction)
         'out': tf.Variable(tf.random_normal([1024, n_classes]))
     }
