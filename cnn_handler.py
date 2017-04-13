@@ -10,6 +10,17 @@ Project: https://github.com/aymericdamien/TensorFlow-Examples/
 from __future__ import print_function
 
 import tensorflow as tf
+import numpy as np
+
+def next_batch(data, lower, upper):
+    data_size = data.shape[0]
+    lower %= data_size
+    upper %= data_size
+
+    if lower > upper:
+        return np.vstack((data[lower:],data[:upper]))
+
+    return data[lower:upper]
 
 
 # Create some wrappers for simplicity
@@ -55,11 +66,13 @@ def conv_net(x, weights, biases, dropout):
 
 
 def launch_cnn(data):
-    train_images = data['images'].iloc[:3500]
-    train_labels = data['labels'].iloc[:3500, :3]
 
-    test_images = data['images'].iloc[3500:]
-    test_labels = data['labels'].iloc[3500:, :3]
+    train_size = 3000
+    train_images = data['images'].iloc[:train_size]
+    train_labels = data['labels'].iloc[:train_size, :3]
+
+    test_images = data['images'].iloc[train_size:]
+    test_labels = data['labels'].iloc[train_size:, :3]
 
 
 
@@ -71,7 +84,7 @@ def launch_cnn(data):
 
     # Parameters
     learning_rate = 0.001
-    training_iters = 200000
+    training_iters = 80000
     batch_size = 128
     display_step = 10
     dropout = 0.75  # Dropout, probability to keep units
@@ -115,14 +128,17 @@ def launch_cnn(data):
     init = tf.global_variables_initializer()
 
     # Launch the graph
-    with tf.Session(config=tf.ConfigProto(log_device_placement=True, device_count = {'GPU': 0})) as sess:
+    with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
         sess.run(init)
         step = 1
         # Keep training until reach max iterations
         while step * batch_size < training_iters:
             # batch_x, batch_y = mnist.train.next_batch(batch_size)
-            batch_x = train_images.iloc[((step - 1) * batch_size):(step * batch_size)]
-            batch_y = train_labels.iloc[((step - 1) * batch_size):(step * batch_size)]
+            lower = ((step - 1) * batch_size )
+            upper = (step * batch_size)
+
+            batch_x = next_batch(train_images.values, lower,upper)
+            batch_y = next_batch(train_labels.values, lower, upper)
             # Run optimization op (backprop)
             sess.run(optimizer, feed_dict={x: batch_x, y: batch_y,
                                            keep_prob: dropout})

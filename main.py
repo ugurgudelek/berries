@@ -169,8 +169,8 @@ def calculate_metrics(data):
                             "ultimateOs_7_14_28","ultimateOs_8_16_32","ultimateOs_9_18_36","ultimateOs_10_20_40","ultimateOs_11_22_44","ultimateOs_12_24_48",
                              "ultimateOs_13_26_52", "mfIndex_14","mfIndex_18","mfIndex_22","mfIndex_26","mfIndex_30"]
 
-    
-    
+
+
     return np.asarray(metric_function_data),metric_function_names
 
 
@@ -306,48 +306,62 @@ def prepare_images():
             available_etfs.append(stock)
             print(stock)
         gaugeCounter += 1
-    
+
     # save available etfs for later use
 #    pd.DataFrame(available_etfs).to_csv("available_etfs.csv", header=False, index=False)
 
     # # READ FILES, CREATE IMAGES AND LABELS FOR CNN
-    
+
     # read available etfs
 #    available_etfs = pd.read_csv("available_etfs.csv", header=None, squeeze=True).values.tolist()
-    
+
     # get all flatten images and labels for cnn
     for etf in available_etfs:
         images, labels, (image_row_size, image_col_size) = get_data(etf, cluster=True)
-    
+
         data_df = pd.concat([pd.DataFrame(images), pd.DataFrame(labels)],axis=1)
-    
+
         data_df.to_csv("images/{}_images_labels.csv".format(etf), index=False)
 
 
 def main():
+    # READ IMAGES DIRECTLY
+    all_images = []
+    all_labels = []
+    for etf in available_etfs:
+        data_df = pd.read_csv("images/{}_images_labels.csv".format(etf))
+        images = data_df.iloc[:,:-5]
+        labels = data_df.iloc[:,-5:]
 
-    # prepare the images
-    prepare_images()
 
-    # read the images
-    data_df = pd.read_csv("images/{}_images_labels.csv".format("spy"))
-    data_dict = {'images':data_df.iloc[:,:-5], 'labels':data_df.iloc[:,-5:]}
+        fixed_images = []
+        for i,image in enumerate(images.values):
+            new_image = image.reshape((28,66))[:,34:62].flatten()
+            fixed_images.append(new_image)
 
-    # data_dict['images'].apply(lambda x: x.reshape((28,66))[:,34:62].flatten()  ,axis=1,reduce=True)
-    # new_images = []
-    # for i,image in enumerate(data_dict['images'].values):
-    #     #new_image = image.reshape((28,66))[:,34:62].flatten()
-    #     new_image = image.reshape((56,56)).flatten()
-    #     new_images.append(new_image)
-    # data_dict['images'] = pd.DataFrame(new_images)
+        if len(all_images) == 0:
+            all_images = np.array(fixed_images)
+            all_labels = labels.values
+        else:
+            all_images = np.append(all_images, fixed_images, axis=0)
+            all_labels = np.append(all_labels, labels.values, axis=0)
+
+        print(pd.DataFrame(all_images).shape)
+    data = {'images':pd.DataFrame(all_images), 'labels':pd.DataFrame(all_labels)}
+
+
 
     # call CNN
     ch.launch_cnn(data_dict)
+
+
+
 
     # plt.plot(sma_15_data, color='r')
     # plt.bar(left=list(range(len(macd_trigger_9_15_5))),height=-200 - macd_trigger_9_15_5, color='b')
     # plt.scatter(x=list(range(len(macd_trigger_9_15_5))), y=macd_trigger_9_15_5, color='r', s=1)
     # plt.show()
+
 
 if __name__ == "__main__":
     main()
