@@ -8,6 +8,8 @@ import datetime
 from dateutil import parser
 import clustering
 import classes
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import cnn_handler as ch
 
 
@@ -227,6 +229,8 @@ def data_handler(which_stock, start_date, end_date, period = 28, is_save_csv=Tru
         return stock
 
 
+
+
 def get_data(which_stock, split_period=28, label_names=['label_df_is_less', 'label_df_is_same', 'label_df_is_more', 'label_lr_is_less','label_lr_is_more'],
              cluster=False):
     """
@@ -244,7 +248,9 @@ def get_data(which_stock, split_period=28, label_names=['label_df_is_less', 'lab
     print("get_data called for{}".format(which_stock))
     raw_data = pd.read_csv("data/{}.csv".format(which_stock))
 
+    # drop irrelevant features
     data = raw_data.drop(['date', 'low', 'close', 'high', 'open'], axis=1)
+
 
     # get predictor names for dropping processes
     predictor_names = [name for name in data.columns.values.tolist() if "label" not in name]
@@ -265,6 +271,7 @@ def get_data(which_stock, split_period=28, label_names=['label_df_is_less', 'lab
         sorted_cluster_names = pd.read_csv("clustered_names.csv", header=None, squeeze=True).values.tolist()
 
     data = data[sorted_cluster_names + label_names]
+    predictor_names = sorted_cluster_names
 
     images = []
     labels = []
@@ -274,8 +281,20 @@ def get_data(which_stock, split_period=28, label_names=['label_df_is_less', 'lab
         lower = i - split_period + 1
         upper = lower + split_period
 
-        image = data[predictor_names].iloc[lower:upper].values
-        image_flat = image.flatten()  # image_flat'shape : image_row_size * image_col_size
+        image = data[predictor_names].iloc[lower:upper]
+
+        # change raw data to regular gray scale image
+        image = image.apply(lambda x: (((x - x.min()) / (x.max() - x.min())) * 255).round(), axis=0)
+
+        # # draw image
+        # ax_labels = image.columns.values
+        # plt.xticks(list(range(len(ax_labels))), ax_labels, rotation='vertical')
+        # plt.imshow(image.values)
+        # plt.show()
+
+
+
+        image_flat = image.values.flatten()  # image_flat'shape : image_row_size * image_col_size
         label = data[label_names].iloc[upper - 1].values
 
         images.append(image_flat)
@@ -283,7 +302,7 @@ def get_data(which_stock, split_period=28, label_names=['label_df_is_less', 'lab
 
     return images, labels, (image_row_size, image_col_size)
 
-def prepare_images(save_etf=False):
+def prepare_images(prepare_data=True,save_etf=False):
     """Stock names are determined and funtions that calculate metrics and prepare images are called.
     Images are saved to separate .csv files for each ETF"""
 
@@ -296,36 +315,39 @@ def prepare_images(save_etf=False):
     #                'tbt', 'sqqq', 'itb', 'tqqq', 'ewu', 'bnd', 'ewa', 'vti', 'voo', 'fez', 'emb', 'iwd', 'uup', 'ewy',
     #                'fxn', 'xlre']
 
-    stock_names = ['spy', 'xlf', 'qqq', 'xlu' , 'xle' , 'xlp' , 'xli' , 'xlv' , 'xlk' , 'ewj' , 'xlb', 'xly', 'eww',
-                   'dia', 'ewg', 'ewh', 'ewc', 'ewu','ewa']
+    if prepare_data:
+        stock_names = ['spy', 'xlf', 'qqq', 'xlu' , 'xle' , 'xlp' , 'xli' , 'xlv' , 'xlk' , 'ewj' , 'xlb', 'xly', 'eww',
+                       'dia', 'ewg', 'ewh', 'ewc', 'ewu','ewa']
 
-    # CALCULATE METRICS, CREATE DATASET CSVs
-    # example of yahoo finance data getter function
-    start_date = datetime.date(2000, 1, 3)
-    end_date = datetime.date(2017, 1, 1)
+        # CALCULATE METRICS, CREATE DATASET CSVs
+        # example of yahoo finance data getter function
+        start_date = datetime.date(2000, 1, 3)
+        end_date = datetime.date(2017, 1, 1)
 
-    # get available ETFs (some ETFs lack sufficient data)
-    gaugeCounter = 1
-    available_etfs = []
-    for stock in stock_names:
-        print(gaugeCounter)
-        df = data_handler(stock, start_date, end_date, is_save_csv=True)
-        if df is not None:
-            available_etfs.append(stock)
-            print(stock)
-        gaugeCounter += 1
+        # get available ETFs (some ETFs lack sufficient data)
+        gaugeCounter = 1
+        available_etfs = []
+        for stock in stock_names:
+            print(gaugeCounter)
+            df = data_handler(stock, start_date, end_date, is_save_csv=True)
+            if df is not None:
+                available_etfs.append(stock)
+                print(stock)
+            gaugeCounter += 1
 
-    # save available etfs for later use
-    if save_etf:
-        pd.DataFrame(available_etfs).to_csv("available_etfs.csv", header=False, index=False)
+        # save available etfs for later use
+        if save_etf:
+            pd.DataFrame(available_etfs).to_csv("available_etfs.csv", header=False, index=False)
 
-    # # READ FILES, CREATE IMAGES AND LABELS FOR CNN
+
 
 
 
     # get all flatten images and labels for cnn
+    # read available etfs
+    available_etfs = pd.read_csv("available_etfs.csv", header=None, squeeze=True).values.tolist()
     for etf in available_etfs:
-        images, labels, (image_row_size, image_col_size) = get_data(etf, cluster=True)
+        images, labels, (image_row_size, image_col_size) = get_data(etf, cluster=False)
 
         data_df = pd.concat([pd.DataFrame(images), pd.DataFrame(labels)],axis=1)
 
@@ -354,7 +376,7 @@ def train_test_split(data, train_size):
 
 def main():
 
-    # # prepare_images(save_etf=True)
+    # prepare_images(prepare_data=False, save_etf=True)
     #
     # # read available etfs
     # available_etfs = pd.read_csv("available_etfs.csv", header=None, squeeze=True).values.tolist()
@@ -380,8 +402,8 @@ def main():
     #
     #
     # data = {'images':pd.DataFrame(all_images), 'labels':pd.DataFrame(all_labels)}
-
-    # save to pickle
+    #
+    # # save to pickle
     # pd.to_pickle(data, "data.pickle")
 
     # read from pickle
@@ -391,14 +413,15 @@ def main():
     data = shuffle_data(data)
 
     #train test split
-    train_images, train_labels, test_images, test_labels = train_test_split(data, train_size=int(data['images'].shape[0]*0.4))
+    train_size = int(data['images'].shape[0]*0.9)
+    train_images, train_labels, test_images, test_labels = train_test_split(data, train_size=train_size)
 
 
     # call CNN
-    parameters = {'learning_rate': 0.01, 'training_iters': 120000, 'batch_size': 256, 'dropout': 0.8}
+    parameters = {'learning_rate': 0.001, 'training_iters': train_size*8, 'batch_size': 64, 'dropout': 0.65}
     ch.launch_cnn(train_images,train_labels,test_images,test_labels, image_shape=(28,28), parameters=parameters)
 
-    # todo map all data to 0-255 like regular image
+
 
 
     # plt.plot(sma_15_data, color='r')
