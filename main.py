@@ -411,25 +411,25 @@ def main():
     # read from pickle
     data = pd.read_pickle("data.pickle")
 
-    # plot some samples
-    sorted_cluster_names = pd.read_csv("clustered_names.csv", header=None, squeeze=True).values.tolist()
-    draw_image(data['images'].iloc[0].values.reshape(28,28), sorted_cluster_names)
-    draw_image(data['images'].iloc[5000].values.reshape(28, 28), sorted_cluster_names)
-    draw_image(data['images'].iloc[10000].values.reshape(28, 28), sorted_cluster_names)
-    draw_image(data['images'].iloc[20000].values.reshape(28, 28), sorted_cluster_names)
-    draw_image(data['images'].iloc[30000].values.reshape(28, 28), sorted_cluster_names)
-    plt.show()
+    # # plot some samples
+    # sorted_cluster_names = pd.read_csv("clustered_names.csv", header=None, squeeze=True).values.tolist()
+    # draw_image(data['images'].iloc[0].values.reshape(28,28), sorted_cluster_names)
+    # draw_image(data['images'].iloc[5000].values.reshape(28, 28), sorted_cluster_names)
+    # draw_image(data['images'].iloc[10000].values.reshape(28, 28), sorted_cluster_names)
+    # draw_image(data['images'].iloc[20000].values.reshape(28, 28), sorted_cluster_names)
+    # draw_image(data['images'].iloc[30000].values.reshape(28, 28), sorted_cluster_names)
+    # plt.show()
 
     # shuffle data
     data = shuffle_data(data)
 
     #train test split
-    train_size = int(data['images'].shape[0]*0.9)
+    train_size = int(data['images'].shape[0]*0.95)
     train_images, train_labels, test_images, test_labels = train_test_split(data, train_size=train_size)
 
 
     # call CNN
-    parameters = {'learning_rate': 0.001, 'training_iters': train_size*8, 'batch_size': 64, 'dropout': 0.65}
+    parameters = {'learning_rate': 0.001, 'training_iters': train_size*40, 'batch_size': 64, 'dropout': 0.6}
     ch.launch_cnn(train_images,train_labels,test_images,test_labels, image_shape=(28,28), parameters=parameters)
 
 

@@ -148,8 +148,8 @@ def launch_cnn(train_images, train_labels, test_images, test_labels,image_shape 
 
         # Calculate accuracy for 256 mnist test images
         print("Testing Accuracy:",
-              sess.run(accuracy, feed_dict={x: test_images[:500].values,
-                                            y: test_labels[:500].values,
+              sess.run(accuracy, feed_dict={x: test_images.values,
+                                            y: test_labels.values,
                                             keep_prob: 1.}))
 
 # # Import MNIST data
