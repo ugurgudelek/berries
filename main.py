@@ -286,11 +286,7 @@ def get_data(which_stock, split_period=28, label_names=['label_df_is_less', 'lab
         # change raw data to regular gray scale image
         image = image.apply(lambda x: (((x - x.min()) / (x.max() - x.min())) * 255).round(), axis=0)
 
-        # # draw image
-        # ax_labels = image.columns.values
-        # plt.xticks(list(range(len(ax_labels))), ax_labels, rotation='vertical')
-        # plt.imshow(image.values)
-        # plt.show()
+
 
 
 
@@ -372,6 +368,12 @@ def train_test_split(data, train_size):
 
     return train_images,train_labels,test_images,test_labels
 
+def draw_image(image,xtick_labels, cmap=None):
+    # draw image
+    fig = plt.figure()
+    plt.xticks(list(range(len(xtick_labels))), xtick_labels, rotation='vertical')
+    plt.imshow(image, cmap=cmap)
+
 
 
 def main():
@@ -408,6 +410,15 @@ def main():
 
     # read from pickle
     data = pd.read_pickle("data.pickle")
+
+    # plot some samples
+    sorted_cluster_names = pd.read_csv("clustered_names.csv", header=None, squeeze=True).values.tolist()
+    draw_image(data['images'].iloc[0].values.reshape(28,28), sorted_cluster_names)
+    draw_image(data['images'].iloc[5000].values.reshape(28, 28), sorted_cluster_names)
+    draw_image(data['images'].iloc[10000].values.reshape(28, 28), sorted_cluster_names)
+    draw_image(data['images'].iloc[20000].values.reshape(28, 28), sorted_cluster_names)
+    draw_image(data['images'].iloc[30000].values.reshape(28, 28), sorted_cluster_names)
+    plt.show()
 
     # shuffle data
     data = shuffle_data(data)
