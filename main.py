@@ -228,11 +228,48 @@ def data_handler(which_stock, start_date, end_date, period = 28, is_save_csv=Tru
 
         return stock
 
+def cluster_features(p_stock_names):
+    """Calls the clustering function after calculation of the metrics for all the ETFs.
+    This function should be called after the metrics are calculated and saved to .csv files
+    but before the images are constructed."""
+
+    # read the first csv
+    raw_data = pd.read_csv("data/{}.csv".format(p_stock_names[0]))
+        
+    # drop irrelevant features
+    data = raw_data.drop(['date', 'low', 'close', 'high', 'open'], axis=1)
+        
+    # get predictor names for dropping processes
+    predictor_names = [name for name in data.columns.values.tolist() if "label" not in name]
+    data = data.dropna(subset=predictor_names)  # drop nan values for proper set
+
+    # all data will be appended to this dataframe
+    all_data = data
+    
+    for stock in p_stock_names[1:len(p_stock_names)]:
+        
+        raw_data = pd.read_csv("data/{}.csv".format(stock))
+        
+        # drop irrelevant features
+        data = raw_data.drop(['date', 'low', 'close', 'high', 'open'], axis=1)
+        
+        # get predictor names for dropping processes
+        predictor_names = [name for name in data.columns.values.tolist() if "label" not in name]
+        data = data.dropna(subset=predictor_names)  # drop nan values for proper set
+
+        all_data = all_data.append(data)
+
+    # now, cluster features of the whole data
+    sorted_predictor_names = clustering.hierarchical_clustering(all_data[predictor_names], no_plot=True)
+
+    # save the names of the clustered features to file
+    pd.Series(sorted_predictor_names).to_csv("clustered_names.csv", header=False, index=False)
+
+    # return the names of the clustered features
+    return sorted_predictor_names
 
 
-
-def get_data(which_stock, split_period=28, label_names=['label_df_is_less', 'label_df_is_same', 'label_df_is_more', 'label_lr_is_less','label_lr_is_more'],
-             cluster=False):
+def get_data(which_stock, p_sorted_predictor_names, split_period=28, label_names=['label_df_is_less', 'label_df_is_same', 'label_df_is_more', 'label_lr_is_less','label_lr_is_more']):
     """
     Reads metric data, clusters features, prepares and returns images together with labels.
     Images are flattened before returned.
@@ -245,15 +282,15 @@ def get_data(which_stock, split_period=28, label_names=['label_df_is_less', 'lab
 
     :returns (list)images, (list)labels, (tuple)(image_row_size,image_col_size)
     """
-    print("get_data called for{}".format(which_stock))
+    print("get_data called for {}".format(which_stock))
     raw_data = pd.read_csv("data/{}.csv".format(which_stock))
 
     # drop irrelevant features
     data = raw_data.drop(['date', 'low', 'close', 'high', 'open'], axis=1)
 
-
     # get predictor names for dropping processes
-    predictor_names = [name for name in data.columns.values.tolist() if "label" not in name]
+    # predictor_names = [name for name in data.columns.values.tolist() if "label" not in name]
+    predictor_names = p_sorted_predictor_names
     data = data.dropna(subset=predictor_names)  # drop nan values for proper set
 
     image_col_size = data[predictor_names].shape[1]
@@ -263,15 +300,7 @@ def get_data(which_stock, split_period=28, label_names=['label_df_is_less', 'lab
     # if image_row_size != image_col_size:
     #     raise Exception("image matrix must be square!")
 
-    if cluster:
-        # sort features according to pearson correlation coefficient
-        sorted_cluster_names = clustering.hierarchical_clustering(data[predictor_names], no_plot=True)
-        pd.Series(sorted_cluster_names).to_csv("clustered_names.csv", header=False, index=False)
-    else:
-        sorted_cluster_names = pd.read_csv("clustered_names.csv", header=None, squeeze=True).values.tolist()
-
-    data = data[sorted_cluster_names + label_names]
-    predictor_names = sorted_cluster_names
+    data = data[predictor_names + label_names]
 
     images = []
     labels = []
@@ -286,10 +315,6 @@ def get_data(which_stock, split_period=28, label_names=['label_df_is_less', 'lab
         # change raw data to regular gray scale image
         image = image.apply(lambda x: (((x - x.min()) / (x.max() - x.min())) * 255).round(), axis=0)
 
-
-
-
-
         image_flat = image.values.flatten()  # image_flat'shape : image_row_size * image_col_size
         label = data[label_names].iloc[upper - 1].values
 
@@ -298,7 +323,7 @@ def get_data(which_stock, split_period=28, label_names=['label_df_is_less', 'lab
 
     return images, labels, (image_row_size, image_col_size)
 
-def prepare_images(prepare_data=True,save_etf=False):
+def prepare_images(prepare_data=True, save_etf=False, is_cluster_features=False):
     """Stock names are determined and funtions that calculate metrics and prepare images are called.
     Images are saved to separate .csv files for each ETF"""
 
@@ -312,6 +337,7 @@ def prepare_images(prepare_data=True,save_etf=False):
     #                'fxn', 'xlre']
 
     if prepare_data:
+        
         stock_names = ['spy', 'xlf', 'qqq', 'xlu' , 'xle' , 'xlp' , 'xli' , 'xlv' , 'xlk' , 'ewj' , 'xlb', 'xly', 'eww',
                        'dia', 'ewg', 'ewh', 'ewc', 'ewu','ewa']
 
@@ -335,15 +361,16 @@ def prepare_images(prepare_data=True,save_etf=False):
         if save_etf:
             pd.DataFrame(available_etfs).to_csv("available_etfs.csv", header=False, index=False)
 
-
-
-
+        if is_cluster_features == True:    
+            sorted_predictor_names = cluster_features(stock_names)
+        else:
+            sorted_predictor_names = pd.read_csv("clustered_names.csv", header=None, squeeze=True).values.tolist()
 
     # get all flatten images and labels for cnn
     # read available etfs
     available_etfs = pd.read_csv("available_etfs.csv", header=None, squeeze=True).values.tolist()
     for etf in available_etfs:
-        images, labels, (image_row_size, image_col_size) = get_data(etf, cluster=False)
+        images, labels, (image_row_size, image_col_size) = get_data(etf, p_sorted_predictor_names = sorted_predictor_names)
 
         data_df = pd.concat([pd.DataFrame(images), pd.DataFrame(labels)],axis=1)
 
@@ -375,50 +402,49 @@ def draw_image(image,xtick_labels, cmap=None):
     plt.imshow(image, cmap=cmap)
 
 
-
 def main():
 
-    # prepare_images(prepare_data=False, save_etf=True)
-    #
-    # # read available etfs
-    # available_etfs = pd.read_csv("available_etfs.csv", header=None, squeeze=True).values.tolist()
-    #
-    # # available_etfs = ['spy']
-    # # READ IMAGES DIRECTLY
-    # all_images = []
-    # all_labels = []
-    # for etf in available_etfs:
-    #     data_df = pd.read_csv("images/{}_images_labels.csv".format(etf))
-    #     images = data_df.iloc[:,:-5]
-    #     labels = data_df.iloc[:,-5:]
-    #
-    #     print("images are merging with {}".format(etf))
-    #     if len(all_images) == 0:
-    #         all_images = np.array(images)
-    #         all_labels = labels.values
-    #     else:
-    #         all_images = np.append(all_images, images, axis=0)
-    #         all_labels = np.append(all_labels, labels.values, axis=0)
-    #
-    #     print(pd.DataFrame(all_images).shape)
-    #
-    #
-    # data = {'images':pd.DataFrame(all_images), 'labels':pd.DataFrame(all_labels)}
-    #
-    # # save to pickle
-    # pd.to_pickle(data, "data.pickle")
+    prepare_images(prepare_data=True, save_etf=True, is_cluster_features=True)
+    
+    # read available etfs
+    available_etfs = pd.read_csv("available_etfs.csv", header=None, squeeze=True).values.tolist()
+    
+    # available_etfs = ['spy']
+    # READ IMAGES DIRECTLY
+    all_images = []
+    all_labels = []
+    for etf in available_etfs:
+        data_df = pd.read_csv("images/{}_images_labels.csv".format(etf))
+        images = data_df.iloc[:,:-5]
+        labels = data_df.iloc[:,-5:]
+    
+        print("images are merging with {}".format(etf))
+        if len(all_images) == 0:
+            all_images = np.array(images)
+            all_labels = labels.values
+        else:
+            all_images = np.append(all_images, images, axis=0)
+            all_labels = np.append(all_labels, labels.values, axis=0)
+    
+        print(pd.DataFrame(all_images).shape)
+    
+    
+    data = {'images':pd.DataFrame(all_images), 'labels':pd.DataFrame(all_labels)}
+    
+    # save to pickle
+    pd.to_pickle(data, "data.pickle")
 
     # read from pickle
     data = pd.read_pickle("data.pickle")
 
-    # # plot some samples
-    # sorted_cluster_names = pd.read_csv("clustered_names.csv", header=None, squeeze=True).values.tolist()
-    # draw_image(data['images'].iloc[0].values.reshape(28,28), sorted_cluster_names)
-    # draw_image(data['images'].iloc[5000].values.reshape(28, 28), sorted_cluster_names)
-    # draw_image(data['images'].iloc[10000].values.reshape(28, 28), sorted_cluster_names)
-    # draw_image(data['images'].iloc[20000].values.reshape(28, 28), sorted_cluster_names)
-    # draw_image(data['images'].iloc[30000].values.reshape(28, 28), sorted_cluster_names)
-    # plt.show()
+    # plot some samples
+    sorted_cluster_names = pd.read_csv("clustered_names.csv", header=None, squeeze=True).values.tolist()
+    draw_image(data['images'].iloc[0].values.reshape(28,28), sorted_cluster_names)
+    draw_image(data['images'].iloc[5000].values.reshape(28, 28), sorted_cluster_names)
+    draw_image(data['images'].iloc[10000].values.reshape(28, 28), sorted_cluster_names)
+    draw_image(data['images'].iloc[20000].values.reshape(28, 28), sorted_cluster_names)
+    draw_image(data['images'].iloc[30000].values.reshape(28, 28), sorted_cluster_names)
+    plt.show()
 
     # shuffle data
     data = shuffle_data(data)
@@ -432,13 +458,10 @@ def main():
     parameters = {'learning_rate': 0.001, 'training_iters': train_size*40, 'batch_size': 64, 'dropout': 0.6}
     ch.launch_cnn(train_images,train_labels,test_images,test_labels, image_shape=(28,28), parameters=parameters)
 
-
-
-
-    # plt.plot(sma_15_data, color='r')
-    # plt.bar(left=list(range(len(macd_trigger_9_15_5))),height=-200 - macd_trigger_9_15_5, color='b')
-    # plt.scatter(x=list(range(len(macd_trigger_9_15_5))), y=macd_trigger_9_15_5, color='r', s=1)
-    # plt.show()
+    plt.plot(sma_15_data, color='r')
+    plt.bar(left=list(range(len(macd_trigger_9_15_5))),height=-200 - macd_trigger_9_15_5, color='b')
+    plt.scatter(x=list(range(len(macd_trigger_9_15_5))), y=macd_trigger_9_15_5, color='r', s=1)
+    plt.show()
 
 
 if __name__ == "__main__":
