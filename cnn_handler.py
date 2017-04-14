@@ -12,13 +12,14 @@ from __future__ import print_function
 import tensorflow as tf
 import numpy as np
 
+
 def next_batch(data, lower, upper):
     data_size = data.shape[0]
     lower %= data_size
     upper %= data_size
 
     if lower > upper:
-        return np.vstack((data[lower:],data[:upper]))
+        return np.vstack((data[lower:], data[:upper]))
 
     return data[lower:upper]
 
@@ -38,9 +39,9 @@ def maxpool2d(x, k=2):
 
 
 # Create model
-def conv_net(x, weights, biases, dropout):
+def conv_net(x, weights, biases, dropout, image_shape=(28, 28)):
     # Reshape input picture
-    x = tf.reshape(x, shape=[-1, 56, 56, 1])
+    x = tf.reshape(x, shape=[-1, image_shape[0], image_shape[1], 1])
 
     # Convolution Layer
     conv1 = conv2d(x, weights['wc1'], biases['bc1'])
@@ -65,29 +66,20 @@ def conv_net(x, weights, biases, dropout):
     return out
 
 
-def launch_cnn(data):
-
-    train_size = int(data['images'].shape[0]*0.8)
-    train_images = data['images'].iloc[:train_size]
-    train_labels = data['labels'].iloc[:train_size, :3]
-
-    test_images = data['images'].iloc[train_size:]
-    test_labels = data['labels'].iloc[train_size:, :3]
-
+def launch_cnn(train_images, train_labels, test_images, test_labels,image_shape =(28,28),
+               parameters={'learning_rate': 0.01, 'training_iters': 30000, 'batch_size': 128, 'dropout': 0.9}):
 
 
     # Network Parameters
-    n_input = data['images'].shape[1]  #  data input (img shape: 56*56)
-    n_classes = 3  #  total classes (less,same,more)
-
-
+    n_input = image_shape[0]*image_shape[1]  # data input (img shape: 28*28)
+    n_classes = test_labels.shape[1]  # total classes (less,more)
 
     # Parameters
-    learning_rate = 0.001
-    training_iters = 80000
-    batch_size = 128
+    learning_rate = parameters['learning_rate']
+    training_iters = parameters['training_iters']
+    batch_size = parameters['batch_size']
     display_step = 10
-    dropout = 0.75  # Dropout, probability to keep units
+    dropout = parameters['dropout']  # Dropout, probability to keep units
 
     # tf Graph input
     x = tf.placeholder(tf.float32, [None, n_input])
@@ -101,7 +93,7 @@ def launch_cnn(data):
         # 5x5 conv, 32 inputs, 64 outputs
         'wc2': tf.Variable(tf.random_normal([5, 5, 32, 64])),
         # fully connected, 7*7*64 inputs, 1024 outputs
-        'wd1': tf.Variable(tf.random_normal([14 * 14 * 64, 1024])),
+        'wd1': tf.Variable(tf.random_normal([image_shape[0] // 4 * image_shape[0] // 4 * 64, 1024])),
         # 1024 inputs, 10 outputs (class prediction)
         'out': tf.Variable(tf.random_normal([1024, n_classes]))
     }
@@ -114,7 +106,7 @@ def launch_cnn(data):
     }
 
     # Construct model
-    pred = conv_net(x, weights, biases, keep_prob)
+    pred = conv_net(x, weights, biases, keep_prob, image_shape=image_shape)
 
     # Define loss and optimizer
     cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels=y))
@@ -134,10 +126,10 @@ def launch_cnn(data):
         # Keep training until reach max iterations
         while step * batch_size < training_iters:
             # batch_x, batch_y = mnist.train.next_batch(batch_size)
-            lower = ((step - 1) * batch_size )
+            lower = ((step - 1) * batch_size)
             upper = (step * batch_size)
 
-            batch_x = next_batch(train_images.values, lower,upper)
+            batch_x = next_batch(train_images.values, lower, upper)
             batch_y = next_batch(train_labels.values, lower, upper)
             # Run optimization op (backprop)
             sess.run(optimizer, feed_dict={x: batch_x, y: batch_y,
@@ -149,30 +141,17 @@ def launch_cnn(data):
                                                                   keep_prob: 1.})
                 print("Iter " + str(step * batch_size) + ", Minibatch Loss= " + \
                       "{:.6f}".format(loss) + ", Training Accuracy= " + \
-                      "{:.5f}".format(acc))
+                      "{:.5f}".format(acc), end='')
+                print("\t lower {}, upper {}".format(lower, upper))
             step += 1
         print("Optimization Finished!")
 
         # Calculate accuracy for 256 mnist test images
-        print("Testing Accuracy:", \
-              sess.run(accuracy, feed_dict={x: test_images[:256],
-                                            y: test_labels[:256],
+        print("Testing Accuracy:",
+              sess.run(accuracy, feed_dict={x: test_images[:500].values,
+                                            y: test_labels[:500].values,
                                             keep_prob: 1.}))
 
 # # Import MNIST data
 # from tensorflow.examples.tutorials.mnist import input_data
 # mnist = input_data.read_data_sets("MNIST-data", one_hot=True)
-
-
-
-
-
-
-
-
-
-
-
-
-
-

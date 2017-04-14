@@ -81,70 +81,70 @@ def calculate_metrics(data):
     rsi_20 = mt.rsi(data, 20); metric_function_data.append(rsi_20)
     rsi_25 = mt.rsi(data, 25); metric_function_data.append(rsi_25)
     rsi_30 = mt.rsi(data, 30); metric_function_data.append(rsi_30)
-    rsi_35 = mt.rsi(data, 35); metric_function_data.append(rsi_35)
-    rsi_40 = mt.rsi(data, 40); metric_function_data.append(rsi_40)
-    rsi_45 = mt.rsi(data, 45); metric_function_data.append(rsi_45)
+    # rsi_35 = mt.rsi(data, 35); metric_function_data.append(rsi_35)
+    # rsi_40 = mt.rsi(data, 40); metric_function_data.append(rsi_40)
+    # rsi_45 = mt.rsi(data, 45); metric_function_data.append(rsi_45)
 #    rsi_50 = mt.rsi(data, 50); metric_function_data.append(rsi_50)
 
     sma_15 = mt.sma(data, 15); metric_function_data.append(sma_15)
     sma_20 = mt.sma(data, 20); metric_function_data.append(sma_20)
     sma_25 = mt.sma(data, 25); metric_function_data.append(sma_25)
     sma_30 = mt.sma(data, 30); metric_function_data.append(sma_30)
-    sma_35 = mt.sma(data, 35); metric_function_data.append(sma_35)
-    sma_40 = mt.sma(data, 40); metric_function_data.append(sma_40)
-    sma_45 = mt.sma(data, 45); metric_function_data.append(sma_45)
+    # sma_35 = mt.sma(data, 35); metric_function_data.append(sma_35)
+    # sma_40 = mt.sma(data, 40); metric_function_data.append(sma_40)
+    # sma_45 = mt.sma(data, 45); metric_function_data.append(sma_45)
 #    sma_50 = mt.sma(data, 50); metric_function_data.append(sma_50)
 
     macd_26_12 = mt.macd(data, 26, 12); metric_function_data.append(macd_26_12)
     macd_28_14 = mt.macd(data, 28, 14); metric_function_data.append(macd_28_14)
     macd_30_16 = mt.macd(data, 30, 16); metric_function_data.append(macd_30_16)
-    macd_32_18 = mt.macd(data, 32, 18); metric_function_data.append(macd_32_18)
-    macd_32_20 = mt.macd(data, 32, 20); metric_function_data.append(macd_32_20)
-    macd_34_22 = mt.macd(data, 34, 22); metric_function_data.append(macd_34_22)
-    macd_36_24 = mt.macd(data, 36, 24); metric_function_data.append(macd_36_24)
+    # macd_32_18 = mt.macd(data, 32, 18); metric_function_data.append(macd_32_18)
+    # macd_32_20 = mt.macd(data, 32, 20); metric_function_data.append(macd_32_20)
+    # macd_34_22 = mt.macd(data, 34, 22); metric_function_data.append(macd_34_22)
+    # macd_36_24 = mt.macd(data, 36, 24); metric_function_data.append(macd_36_24)
 #    macd_38_26 = mt.macd(data, 38, 26); metric_function_data.append(macd_38_26)
 
     macd_trigger_9_26_12  = mt.macd_trigger(data, 9, 26, 12) ; metric_function_data.append(macd_trigger_9_26_12 )
     macd_trigger_10_28_14 = mt.macd_trigger(data, 10, 28, 14); metric_function_data.append(macd_trigger_10_28_14)
     macd_trigger_11_30_16 = mt.macd_trigger(data, 11, 30, 16); metric_function_data.append(macd_trigger_11_30_16)
-    macd_trigger_12_32_18 = mt.macd_trigger(data, 12, 32, 18); metric_function_data.append(macd_trigger_12_32_18)
-    macd_trigger_13_34_20 = mt.macd_trigger(data, 13, 34, 20); metric_function_data.append(macd_trigger_13_34_20)
-    macd_trigger_14_36_22 = mt.macd_trigger(data, 14, 36, 22); metric_function_data.append(macd_trigger_14_36_22)
-    macd_trigger_15_38_24 = mt.macd_trigger(data, 15, 38, 24); metric_function_data.append(macd_trigger_15_38_24)
+    # macd_trigger_12_32_18 = mt.macd_trigger(data, 12, 32, 18); metric_function_data.append(macd_trigger_12_32_18)
+    # macd_trigger_13_34_20 = mt.macd_trigger(data, 13, 34, 20); metric_function_data.append(macd_trigger_13_34_20)
+    # macd_trigger_14_36_22 = mt.macd_trigger(data, 14, 36, 22); metric_function_data.append(macd_trigger_14_36_22)
+    # macd_trigger_15_38_24 = mt.macd_trigger(data, 15, 38, 24); metric_function_data.append(macd_trigger_15_38_24)
 #    macd_trigger_16_40_26 = mt.macd_trigger(data, 16, 40, 26); metric_function_data.append(macd_trigger_16_40_26)
 
     willR_14 = mt.williamsR(data, 14); metric_function_data.append(willR_14)
     willR_18 = mt.williamsR(data, 18); metric_function_data.append(willR_18)
     willR_22 = mt.williamsR(data, 22); metric_function_data.append(willR_22)
-    willR_26 = mt.williamsR(data, 26); metric_function_data.append(willR_26)
-    willR_30 = mt.williamsR(data, 30); metric_function_data.append(willR_30)
-    willR_34 = mt.williamsR(data, 34); metric_function_data.append(willR_34)
-    willR_38 = mt.williamsR(data, 38); metric_function_data.append(willR_38)
+    # willR_26 = mt.williamsR(data, 26); metric_function_data.append(willR_26)
+    # willR_30 = mt.williamsR(data, 30); metric_function_data.append(willR_30)
+    # willR_34 = mt.williamsR(data, 34); metric_function_data.append(willR_34)
+    # willR_38 = mt.williamsR(data, 38); metric_function_data.append(willR_38)
 #    willR_42 = mt.williamsR(data, 42); metric_function_data.append(willR_42)
 
     kdHist_14 = mt.kdDiff(data, 14); metric_function_data.append(kdHist_14)
     kdHist_18 = mt.kdDiff(data, 18); metric_function_data.append(kdHist_18)
     kdHist_22 = mt.kdDiff(data, 22); metric_function_data.append(kdHist_22)
-    kdHist_26 = mt.kdDiff(data, 26); metric_function_data.append(kdHist_26)
-    kdHist_30 = mt.kdDiff(data, 30); metric_function_data.append(kdHist_30)
-    kdHist_34 = mt.kdDiff(data, 34); metric_function_data.append(kdHist_34)
-    kdHist_38 = mt.kdDiff(data, 38); metric_function_data.append(kdHist_38)
+    # kdHist_26 = mt.kdDiff(data, 26); metric_function_data.append(kdHist_26)
+    # kdHist_30 = mt.kdDiff(data, 30); metric_function_data.append(kdHist_30)
+    # kdHist_34 = mt.kdDiff(data, 34); metric_function_data.append(kdHist_34)
+    # kdHist_38 = mt.kdDiff(data, 38); metric_function_data.append(kdHist_38)
 #    kdHist_42 = mt.kdDiff(data, 42); metric_function_data.append(kdHist_42)
 
     ultimateOs_7_14_28 = mt.ulOs(data, 7, 14, 28); metric_function_data.append(ultimateOs_7_14_28 )
     ultimateOs_8_16_32 = mt.ulOs(data, 8, 16, 32); metric_function_data.append(ultimateOs_8_16_32 )
     ultimateOs_9_18_36 = mt.ulOs(data, 9, 18, 36); metric_function_data.append(ultimateOs_9_18_36 )
-    ultimateOs_10_20_40 = mt.ulOs(data, 10, 20, 40); metric_function_data.append(ultimateOs_10_20_40)
-    ultimateOs_11_22_44 = mt.ulOs(data, 11, 22, 44); metric_function_data.append(ultimateOs_11_22_44)
-    ultimateOs_12_24_48 = mt.ulOs(data, 12, 24, 48); metric_function_data.append(ultimateOs_12_24_48)
-    ultimateOs_13_26_52 = mt.ulOs(data, 13, 26, 52); metric_function_data.append(ultimateOs_13_26_52)
+    # ultimateOs_10_20_40 = mt.ulOs(data, 10, 20, 40); metric_function_data.append(ultimateOs_10_20_40)
+    # ultimateOs_11_22_44 = mt.ulOs(data, 11, 22, 44); metric_function_data.append(ultimateOs_11_22_44)
+    # ultimateOs_12_24_48 = mt.ulOs(data, 12, 24, 48); metric_function_data.append(ultimateOs_12_24_48)
+    # ultimateOs_13_26_52 = mt.ulOs(data, 13, 26, 52); metric_function_data.append(ultimateOs_13_26_52)
 #    ultimateOs_14_28_56 = mt.ulOs(data, 14, 28, 56); metric_function_data.append(ultimateOs_14_28_56)
 
     mfIndex_14 = mt.mfi(data, 14); metric_function_data.append(mfIndex_14)
     mfIndex_18 = mt.mfi(data, 18); metric_function_data.append(mfIndex_18)
     mfIndex_22 = mt.mfi(data, 22); metric_function_data.append(mfIndex_22)
-    mfIndex_26 = mt.mfi(data, 26); metric_function_data.append(mfIndex_26)
-    mfIndex_30 = mt.mfi(data, 30); metric_function_data.append(mfIndex_30)
+    # mfIndex_26 = mt.mfi(data, 26); metric_function_data.append(mfIndex_26)
+    # mfIndex_30 = mt.mfi(data, 30); metric_function_data.append(mfIndex_30)
 #    mfIndex_34 = mt.mfi(data, 34); metric_function_data.append(mfIndex_34)
 #    mfIndex_38 = mt.mfi(data, 38); metric_function_data.append(mfIndex_38)
 #    mfIndex_40 = mt.mfi(data, 40); metric_function_data.append(mfIndex_40)
@@ -159,15 +159,23 @@ def calculate_metrics(data):
     #                         "ultimateOs_7_14_28","ultimateOs_8_16_32","ultimateOs_9_18_36","ultimateOs_10_20_40","ultimateOs_11_22_44","ultimateOs_12_24_48",
     #                          "ultimateOs_13_26_52","ultimateOs_14_28_56", "mfIndex_14","mfIndex_18","mfIndex_22","mfIndex_26","mfIndex_30","mfIndex_34","mfIndex_38","mfIndex_40"]
 
-    metric_function_names = ["rsi_15","rsi_20","rsi_25","rsi_30","rsi_35","rsi_40","rsi_45",
-                            "sma_15","sma_20","sma_25","sma_30","sma_35","sma_40","sma_45",
-                            "macd_26_12","macd_28_14","macd_30_16","macd_32_18","macd_32_20","macd_34_22","macd_36_24",
-                            "macd_trigger_9_26_12","macd_trigger_10_28_14","macd_trigger_11_30_16","macd_trigger_12_32_18","macd_trigger_13_34_20",
-                             "macd_trigger_14_36_22","macd_trigger_15_38_24",
-                            "willR_14","willR_18","willR_22","willR_26","willR_30","willR_34","willR_38",
-                            "kdHist_14","kdHist_18","kdHist_22","kdHist_26","kdHist_30","kdHist_34","kdHist_38",
-                            "ultimateOs_7_14_28","ultimateOs_8_16_32","ultimateOs_9_18_36","ultimateOs_10_20_40","ultimateOs_11_22_44","ultimateOs_12_24_48",
-                             "ultimateOs_13_26_52", "mfIndex_14","mfIndex_18","mfIndex_22","mfIndex_26","mfIndex_30"]
+    # metric_function_names = ["rsi_15","rsi_20","rsi_25","rsi_30","rsi_35","rsi_40","rsi_45",
+    #                         "sma_15","sma_20","sma_25","sma_30","sma_35","sma_40","sma_45",
+    #                         "macd_26_12","macd_28_14","macd_30_16","macd_32_18","macd_32_20","macd_34_22","macd_36_24",
+    #                         "macd_trigger_9_26_12","macd_trigger_10_28_14","macd_trigger_11_30_16","macd_trigger_12_32_18","macd_trigger_13_34_20",
+    #                          "macd_trigger_14_36_22","macd_trigger_15_38_24",
+    #                         "willR_14","willR_18","willR_22","willR_26","willR_30","willR_34","willR_38",
+    #                         "kdHist_14","kdHist_18","kdHist_22","kdHist_26","kdHist_30","kdHist_34","kdHist_38",
+    #                         "ultimateOs_7_14_28","ultimateOs_8_16_32","ultimateOs_9_18_36","ultimateOs_10_20_40","ultimateOs_11_22_44","ultimateOs_12_24_48",
+    #                          "ultimateOs_13_26_52", "mfIndex_14","mfIndex_18","mfIndex_22","mfIndex_26","mfIndex_30"]
+    metric_function_names = ["rsi_15","rsi_20","rsi_25","rsi_30",
+                            "sma_15","sma_20","sma_25","sma_30",
+                            "macd_26_12","macd_28_14","macd_30_16",
+                            "macd_trigger_9_26_12","macd_trigger_10_28_14","macd_trigger_11_30_16",
+                            "willR_14","willR_18","willR_22",
+                            "kdHist_14","kdHist_18","kdHist_22",
+                            "ultimateOs_7_14_28","ultimateOs_8_16_32","ultimateOs_9_18_36",
+                             "mfIndex_14","mfIndex_18","mfIndex_22"]
 
 
 
@@ -180,7 +188,7 @@ def stack_data_and_metrics(data, metric_data, metric_function_names):
     return data
 
 
-def data_handler(which_stock, start_date, end_date, period = 56, is_save_csv=True):
+def data_handler(which_stock, start_date, end_date, period = 28, is_save_csv=True):
     """Downloads data, calculates metrics and save results to separate .csv files for each ETF."""
     # Open High Low Close Volume Adj Close
     stock = yahoo_finance_io.data_getter(which_stock, start_date, end_date)
@@ -219,7 +227,7 @@ def data_handler(which_stock, start_date, end_date, period = 56, is_save_csv=Tru
         return stock
 
 
-def get_data(which_stock, split_period=56, label_names=['label_df_is_less', 'label_df_is_same', 'label_df_is_more', 'label_lr_is_less','label_lr_is_more'],
+def get_data(which_stock, split_period=28, label_names=['label_df_is_less', 'label_df_is_same', 'label_df_is_more', 'label_lr_is_less','label_lr_is_more'],
              cluster=False):
     """
     Reads metric data, clusters features, prepares and returns images together with labels.
@@ -233,7 +241,7 @@ def get_data(which_stock, split_period=56, label_names=['label_df_is_less', 'lab
 
     :returns (list)images, (list)labels, (tuple)(image_row_size,image_col_size)
     """
-
+    print("get_data called for{}".format(which_stock))
     raw_data = pd.read_csv("data/{}.csv".format(which_stock))
 
     data = raw_data.drop(['date', 'low', 'close', 'high', 'open'], axis=1)
@@ -323,39 +331,74 @@ def prepare_images(save_etf=False):
 
         data_df.to_csv("images/{}_images_labels.csv".format(etf), index=False)
 
+def shuffle_data(data):
+    sort_order = np.random.permutation(len(data['images']))
+    data['images'] = data['images'].iloc[sort_order]
+    data['labels'] = data['labels'].iloc[sort_order]
+    return data
+
+def train_test_split(data, train_size):
+    # split test and train
+    # train_size = int(data['images'].shape[0]*0.9)
+
+    print("{} train images selected.".format(train_size))
+    train_images = data['images'].iloc[:train_size]
+    train_labels = data['labels'].iloc[:train_size, -2:] #select last 2 column as a label
+
+    test_images = data['images'].iloc[train_size:]
+    test_labels = data['labels'].iloc[train_size:, -2:]
+
+    return train_images,train_labels,test_images,test_labels
+
+
 
 def main():
 
-    # prepare_images(save_etf=True)
-
-    # read available etfs
+    # # prepare_images(save_etf=True)
+    #
+    # # read available etfs
     # available_etfs = pd.read_csv("available_etfs.csv", header=None, squeeze=True).values.tolist()
+    #
+    # # available_etfs = ['spy']
+    # # READ IMAGES DIRECTLY
+    # all_images = []
+    # all_labels = []
+    # for etf in available_etfs:
+    #     data_df = pd.read_csv("images/{}_images_labels.csv".format(etf))
+    #     images = data_df.iloc[:,:-5]
+    #     labels = data_df.iloc[:,-5:]
+    #
+    #     print("images are merging with {}".format(etf))
+    #     if len(all_images) == 0:
+    #         all_images = np.array(images)
+    #         all_labels = labels.values
+    #     else:
+    #         all_images = np.append(all_images, images, axis=0)
+    #         all_labels = np.append(all_labels, labels.values, axis=0)
+    #
+    #     print(pd.DataFrame(all_images).shape)
+    #
+    #
+    # data = {'images':pd.DataFrame(all_images), 'labels':pd.DataFrame(all_labels)}
 
-    available_etfs = ['spy']
-    # READ IMAGES DIRECTLY
-    all_images = []
-    all_labels = []
-    for etf in available_etfs:
-        data_df = pd.read_csv("images/{}_images_labels.csv".format(etf))
-        images = data_df.iloc[:,:-5]
-        labels = data_df.iloc[:,-5:]
+    # save to pickle
+    # pd.to_pickle(data, "data.pickle")
 
-        if len(all_images) == 0:
-            all_images = np.array(images)
-            all_labels = labels.values
-        else:
-            all_images = np.append(all_images, images, axis=0)
-            all_labels = np.append(all_labels, labels.values, axis=0)
+    # read from pickle
+    data = pd.read_pickle("data.pickle")
 
-        print(pd.DataFrame(all_images).shape)
+    # shuffle data
+    data = shuffle_data(data)
 
+    #train test split
+    train_images, train_labels, test_images, test_labels = train_test_split(data, train_size=int(data['images'].shape[0]*0.4))
 
-    data = {'images':pd.DataFrame(all_images), 'labels':pd.DataFrame(all_labels)}
 
     # call CNN
-    ch.launch_cnn(data)
+    parameters = {'learning_rate': 0.01, 'training_iters': 120000, 'batch_size': 256, 'dropout': 0.8}
+    ch.launch_cnn(train_images,train_labels,test_images,test_labels, image_shape=(28,28), parameters=parameters)
 
-
+    # todo map all data to 0-255 like regular image
 
 
     # plt.plot(sma_15_data, color='r')
