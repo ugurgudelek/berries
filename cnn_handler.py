@@ -54,10 +54,16 @@ def conv_net(x, weights, biases, dropout, image_shape=(28, 28)):
     conv2 = conv2d(conv1, weights['wc2'], biases['bc2'])
     # Max Pooling (down-sampling)
     conv2 = maxpool2d(conv2, k=2)
+    
+    # Convolution Layer
+    conv3 = conv2d(conv2, weights['wc3'], biases['bc3'])
+    # Max Pooling (down-sampling)
+    conv3 = maxpool2d(conv3, k=2)
+
 
     # Fully connected layer
     # Reshape conv2 output to fit fully connected layer input
-    fc1 = tf.reshape(conv2, [-1, weights['wd1'].get_shape().as_list()[0]])
+    fc1 = tf.reshape(conv3, [-1, weights['wd1'].get_shape().as_list()[0]])
     fc1 = tf.add(tf.matmul(fc1, weights['wd1']), biases['bd1'])
     fc1 = tf.nn.relu(fc1)
     # Apply Dropout
@@ -91,20 +97,24 @@ def launch_cnn(train_images, train_labels, test_images, test_labels,image_shape 
     # Store layers weight & bias
     weights = {
         # 5x5 conv, 1 input, 32 outputs
-        'wc1': tf.Variable(tf.random_normal([5, 5, 1, 32])),
+        'wc1': tf.Variable(tf.random_normal([4, 4, 1, 32])),
         # 5x5 conv, 32 inputs, 64 outputs
-        'wc2': tf.Variable(tf.random_normal([5, 5, 32, 64])),
+        'wc2': tf.Variable(tf.random_normal([4, 4, 32, 64])),
+        # 5x5 conv, 64 inputs, 128 outputs
+        'wc3': tf.Variable(tf.random_normal([4, 4, 64, 128])),
         # fully connected, 7*7*64 inputs, 1024 outputs
-        'wd1': tf.Variable(tf.random_normal([image_shape[0] // 4 * image_shape[0] // 4 * 64, 1024])),
+        'wd1': tf.Variable(tf.random_normal([image_shape[0] // 8 * image_shape[0] // 8 * 128, 3072])),
         # 1024 inputs, 10 outputs (class prediction)
-        'out': tf.Variable(tf.random_normal([1024, n_classes]))
+        'out': tf.Variable(tf.random_normal([3072, n_classes]))
     }
 
     biases = {
         'bc1': tf.Variable(tf.random_normal([32])),
         'bc2': tf.Variable(tf.random_normal([64])),
-        'bd1': tf.Variable(tf.random_normal([1024])),
+        'bc3': tf.Variable(tf.random_normal([128])),
+        'bd1': tf.Variable(tf.random_normal([3072])),
         'out': tf.Variable(tf.random_normal([n_classes]))
+        
     }
 
     # Construct model
@@ -159,6 +169,8 @@ def launch_cnn(train_images, train_labels, test_images, test_labels,image_shape 
         y_pred = sess.run(prob,feed_dict={x:test_images.values,keep_prob:1.})[:,1]
         y_true = np.argmax(test_labels.values, 1)
         precision, recall, pr_thresholds = precision_recall_curve(y_true, y_pred, pos_label=1)
+        print(precision)
+        print(recall)
         fpr, tpr, roc_thresholds = roc_curve(y_true, y_pred, pos_label=1)
         roc_auc = auc(fpr, tpr)
 
