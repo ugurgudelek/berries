@@ -338,8 +338,9 @@ def prepare_images(prepare_data=True, save_etf=False, is_cluster_features=False)
 
     if prepare_data:
         
-        stock_names = ['spy', 'xlf', 'qqq', 'xlu' , 'xle' , 'xlp' , 'xli' , 'xlv' , 'xlk' , 'ewj' , 'xlb', 'xly', 'eww',
-                       'dia', 'ewg', 'ewh', 'ewc', 'ewu','ewa']
+        # stock_names = ['spy', 'xlf', 'qqq', 'xlu' , 'xle' , 'xlp' , 'xli' , 'xlv' , 'xlk' , 'ewj' , 'xlb', 'xly', 'eww',
+          #              'dia', 'ewg', 'ewh', 'ewc', 'ewu','ewa']
+        stock_names = ['spy', 'xlf']
 
         # CALCULATE METRICS, CREATE DATASET CSVs
         # example of yahoo finance data getter function
@@ -404,47 +405,47 @@ def draw_image(image,xtick_labels, cmap=None):
 
 def main():
 
-    prepare_images(prepare_data=True, save_etf=True, is_cluster_features=True)
+    # prepare_images(prepare_data=True, save_etf=False, is_cluster_features=False)
     
-    # read available etfs
-    available_etfs = pd.read_csv("available_etfs.csv", header=None, squeeze=True).values.tolist()
+    # # read available etfs
+    # available_etfs = pd.read_csv("available_etfs.csv", header=None, squeeze=True).values.tolist()
     
-    # available_etfs = ['spy']
-    # READ IMAGES DIRECTLY
-    all_images = []
-    all_labels = []
-    for etf in available_etfs:
-        data_df = pd.read_csv("images/{}_images_labels.csv".format(etf))
-        images = data_df.iloc[:,:-5]
-        labels = data_df.iloc[:,-5:]
+    # # available_etfs = ['spy']
+    # # READ IMAGES DIRECTLY
+    # all_images = []
+    # all_labels = []
+    # for etf in available_etfs:
+    #     data_df = pd.read_csv("images/{}_images_labels.csv".format(etf))
+    #     images = data_df.iloc[:,:-5]
+    #     labels = data_df.iloc[:,-5:]
     
-        print("images are merging with {}".format(etf))
-        if len(all_images) == 0:
-            all_images = np.array(images)
-            all_labels = labels.values
-        else:
-            all_images = np.append(all_images, images, axis=0)
-            all_labels = np.append(all_labels, labels.values, axis=0)
+    #     print("images are merging with {}".format(etf))
+    #     if len(all_images) == 0:
+    #         all_images = np.array(images)
+    #         all_labels = labels.values
+    #     else:
+    #         all_images = np.append(all_images, images, axis=0)
+    #         all_labels = np.append(all_labels, labels.values, axis=0)
     
-        print(pd.DataFrame(all_images).shape)
+    #     print(pd.DataFrame(all_images).shape)
     
     
-    data = {'images':pd.DataFrame(all_images), 'labels':pd.DataFrame(all_labels)}
+    # data = {'images':pd.DataFrame(all_images), 'labels':pd.DataFrame(all_labels)}
     
-    # save to pickle
-    pd.to_pickle(data, "data.pickle")
+    # # save to pickle
+    # pd.to_pickle(data, "data.pickle")
 
     # read from pickle
     data = pd.read_pickle("data.pickle")
 
     # plot some samples
-    sorted_cluster_names = pd.read_csv("clustered_names.csv", header=None, squeeze=True).values.tolist()
-    draw_image(data['images'].iloc[0].values.reshape(28,28), sorted_cluster_names)
-    draw_image(data['images'].iloc[5000].values.reshape(28, 28), sorted_cluster_names)
-    draw_image(data['images'].iloc[10000].values.reshape(28, 28), sorted_cluster_names)
-    draw_image(data['images'].iloc[20000].values.reshape(28, 28), sorted_cluster_names)
-    draw_image(data['images'].iloc[30000].values.reshape(28, 28), sorted_cluster_names)
-    plt.show()
+    # sorted_cluster_names = pd.read_csv("clustered_names.csv", header=None, squeeze=True).values.tolist()
+    # draw_image(data['images'].iloc[0].values.reshape(28,28), sorted_cluster_names)
+    # draw_image(data['images'].iloc[5000].values.reshape(28, 28), sorted_cluster_names)
+    # draw_image(data['images'].iloc[10000].values.reshape(28, 28), sorted_cluster_names)
+    # draw_image(data['images'].iloc[20000].values.reshape(28, 28), sorted_cluster_names)
+    # draw_image(data['images'].iloc[30000].values.reshape(28, 28), sorted_cluster_names)
+    # plt.show()
 
     # shuffle data
     data = shuffle_data(data)
@@ -455,13 +456,13 @@ def main():
 
 
     # call CNN
-    parameters = {'learning_rate': 0.001, 'training_iters': train_size*40, 'batch_size': 64, 'dropout': 0.6}
+    parameters = {'learning_rate': 0.001, 'training_iters': train_size, 'batch_size': 64, 'dropout': 0.6}
     ch.launch_cnn(train_images,train_labels,test_images,test_labels, image_shape=(28,28), parameters=parameters)
 
-    plt.plot(sma_15_data, color='r')
-    plt.bar(left=list(range(len(macd_trigger_9_15_5))),height=-200 - macd_trigger_9_15_5, color='b')
-    plt.scatter(x=list(range(len(macd_trigger_9_15_5))), y=macd_trigger_9_15_5, color='r', s=1)
-    plt.show()
+    # plt.plot(sma_15_data, color='r')
+    # plt.bar(left=list(range(len(macd_trigger_9_15_5))),height=-200 - macd_trigger_9_15_5, color='b')
+    # plt.scatter(x=list(range(len(macd_trigger_9_15_5))), y=macd_trigger_9_15_5, color='r', s=1)
+    # plt.show()
 
 
 if __name__ == "__main__":
