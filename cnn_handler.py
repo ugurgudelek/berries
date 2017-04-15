@@ -11,7 +11,9 @@ from __future__ import print_function
 
 import tensorflow as tf
 import numpy as np
-
+from sklearn.metrics import precision_recall_curve
+from sklearn.metrics import roc_curve, auc
+import matplotlib.pyplot as plt
 
 def next_batch(data, lower, upper):
     data_size = data.shape[0]
@@ -112,7 +114,7 @@ def launch_cnn(train_images, train_labels, test_images, test_labels,image_shape 
     cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels=y))
     optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
 
-    # Evaluate model
+    # Evaluate model    
     correct_pred = tf.equal(tf.argmax(pred, 1), tf.argmax(y, 1))
     accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
 
@@ -151,6 +153,29 @@ def launch_cnn(train_images, train_labels, test_images, test_labels,image_shape 
               sess.run(accuracy, feed_dict={x: test_images.values,
                                             y: test_labels.values,
                                             keep_prob: 1.}))
+
+        # calculate precision-recall and roc
+        y_p = tf.argmax(pred, 1)
+        val_accuracy, y_pred = sess.run([accuracy, y_p], feed_dict={x:test_images.values, y:test_labels.values, keep_prob: 1.})
+        print("validation accuracy:", val_accuracy)
+        y_true = np.argmax(test_labels.values, 1)
+        precision, recall, pr_thresholds = precision_recall_curve(y_true, y_pred)
+        fpr, tpr, roc_thresholds = roc_curve(y_true, y_pred)
+        roc_auc = auc(fpr, tpr)
+
+        # plot precision-recall and roc
+        plt.figure()
+        plt.plot(recall, precision)
+        plt.title("Precision-Recall")
+        plt.xlabel("Recall")
+        plt.ylabel("Precision")
+        plt.figure()
+        plt.plot(fpr, tpr, label="ROC curve (area = %0.2f)" % roc_auc)
+        plt.title("ROC Curve")
+        plt.xlabel("FPR")
+        plt.ylabel("TPR")
+        plt.legend(loc = "lower right")
+        plt.show()
 
 # # Import MNIST data
 # from tensorflow.examples.tutorials.mnist import input_data
