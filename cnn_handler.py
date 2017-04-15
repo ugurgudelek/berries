@@ -155,12 +155,11 @@ def launch_cnn(train_images, train_labels, test_images, test_labels,image_shape 
                                             keep_prob: 1.}))
 
         # calculate precision-recall and roc
-        y_p = tf.argmax(pred, 1)
-        val_accuracy, y_pred = sess.run([accuracy, y_p], feed_dict={x:test_images.values, y:test_labels.values, keep_prob: 1.})
-        print("validation accuracy:", val_accuracy)
+        prob = tf.nn.softmax(pred)
+        y_pred = sess.run(prob,feed_dict={x:test_images.values,keep_prob:1.})[:,1]
         y_true = np.argmax(test_labels.values, 1)
-        precision, recall, pr_thresholds = precision_recall_curve(y_true, y_pred)
-        fpr, tpr, roc_thresholds = roc_curve(y_true, y_pred)
+        precision, recall, pr_thresholds = precision_recall_curve(y_true, y_pred, pos_label=1)
+        fpr, tpr, roc_thresholds = roc_curve(y_true, y_pred, pos_label=1)
         roc_auc = auc(fpr, tpr)
 
         # plot precision-recall and roc

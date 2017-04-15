@@ -313,7 +313,8 @@ def get_data(which_stock, p_sorted_predictor_names, split_period=28, label_names
         image = data[predictor_names].iloc[lower:upper]
 
         # change raw data to regular gray scale image
-        image = image.apply(lambda x: (((x - x.min()) / (x.max() - x.min())) * 255).round(), axis=0)
+        # image = image.apply(lambda x: (((x - x.min()) / (x.max() - x.min())) * 255).round(), axis=0)
+        image = (image - image.mean()) / image.std()
 
         image_flat = image.values.flatten()  # image_flat'shape : image_row_size * image_col_size
         label = data[label_names].iloc[upper - 1].values
@@ -338,9 +339,8 @@ def prepare_images(prepare_data=True, save_etf=False, is_cluster_features=False)
 
     if prepare_data:
         
-        # stock_names = ['spy', 'xlf', 'qqq', 'xlu' , 'xle' , 'xlp' , 'xli' , 'xlv' , 'xlk' , 'ewj' , 'xlb', 'xly', 'eww',
-          #              'dia', 'ewg', 'ewh', 'ewc', 'ewu','ewa']
-        stock_names = ['spy', 'xlf']
+        stock_names = ['spy', 'xlf', 'qqq', 'xlu' , 'xle' , 'xlp' , 'xli' , 'xlv' , 'xlk' , 'ewj' , 'xlb', 'xly', 'eww',
+                       'dia', 'ewg', 'ewh', 'ewc', 'ewu','ewa']
 
         # CALCULATE METRICS, CREATE DATASET CSVs
         # example of yahoo finance data getter function
@@ -362,10 +362,11 @@ def prepare_images(prepare_data=True, save_etf=False, is_cluster_features=False)
         if save_etf:
             pd.DataFrame(available_etfs).to_csv("available_etfs.csv", header=False, index=False)
 
-        if is_cluster_features == True:    
-            sorted_predictor_names = cluster_features(stock_names)
-        else:
-            sorted_predictor_names = pd.read_csv("clustered_names.csv", header=None, squeeze=True).values.tolist()
+        # cluster the features on the whole data
+        sorted_predictor_names = cluster_features(stock_names)
+
+    # read feature names from file
+    sorted_predictor_names = pd.read_csv("clustered_names.csv", header=None, squeeze=True).values.tolist()
 
     # get all flatten images and labels for cnn
     # read available etfs
@@ -405,35 +406,35 @@ def draw_image(image,xtick_labels, cmap=None):
 
 def main():
 
-    # prepare_images(prepare_data=True, save_etf=False, is_cluster_features=False)
+    prepare_images(prepare_data=False, save_etf=False, is_cluster_features=False)
     
-    # # read available etfs
-    # available_etfs = pd.read_csv("available_etfs.csv", header=None, squeeze=True).values.tolist()
+    # read available etfs
+    available_etfs = pd.read_csv("available_etfs.csv", header=None, squeeze=True).values.tolist()
     
-    # # available_etfs = ['spy']
-    # # READ IMAGES DIRECTLY
-    # all_images = []
-    # all_labels = []
-    # for etf in available_etfs:
-    #     data_df = pd.read_csv("images/{}_images_labels.csv".format(etf))
-    #     images = data_df.iloc[:,:-5]
-    #     labels = data_df.iloc[:,-5:]
+    # available_etfs = ['spy']
+    # READ IMAGES DIRECTLY
+    all_images = []
+    all_labels = []
+    for etf in available_etfs:
+        data_df = pd.read_csv("images/{}_images_labels.csv".format(etf))
+        images = data_df.iloc[:,:-5]
+        labels = data_df.iloc[:,-5:]
     
-    #     print("images are merging with {}".format(etf))
-    #     if len(all_images) == 0:
-    #         all_images = np.array(images)
-    #         all_labels = labels.values
-    #     else:
-    #         all_images = np.append(all_images, images, axis=0)
-    #         all_labels = np.append(all_labels, labels.values, axis=0)
+        print("images are merging with {}".format(etf))
+        if len(all_images) == 0:
+            all_images = np.array(images)
+            all_labels = labels.values
+        else:
+            all_images = np.append(all_images, images, axis=0)
+            all_labels = np.append(all_labels, labels.values, axis=0)
     
-    #     print(pd.DataFrame(all_images).shape)
+        print(pd.DataFrame(all_images).shape)
     
     
-    # data = {'images':pd.DataFrame(all_images), 'labels':pd.DataFrame(all_labels)}
+    data = {'images':pd.DataFrame(all_images), 'labels':pd.DataFrame(all_labels)}
     
-    # # save to pickle
-    # pd.to_pickle(data, "data.pickle")
+    # save to pickle
+    pd.to_pickle(data, "data.pickle")
 
     # read from pickle
     data = pd.read_pickle("data.pickle")
@@ -454,9 +455,8 @@ def main():
     train_size = int(data['images'].shape[0]*0.95)
     train_images, train_labels, test_images, test_labels = train_test_split(data, train_size=train_size)
 
-
     # call CNN
-    parameters = {'learning_rate': 0.001, 'training_iters': train_size, 'batch_size': 64, 'dropout': 0.6}
+    parameters = {'learning_rate': 0.001, 'training_iters': train_size*40, 'batch_size': 64, 'dropout': 0.6}
     ch.launch_cnn(train_images,train_labels,test_images,test_labels, image_shape=(28,28), parameters=parameters)
 
     # plt.plot(sma_15_data, color='r')
