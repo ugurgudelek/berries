@@ -10,7 +10,8 @@ import clustering
 import classes
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-import cnn_handler as ch
+#import cnn_handler as ch
+import cnn_keras as cs
 
 
 def crop_data(arr):
@@ -312,13 +313,10 @@ def get_data(which_stock, p_sorted_predictor_names, split_period=28, label_names
 
         image = data[predictor_names].iloc[lower:upper]
 
-        # crop image so thar it becomes 24x24
-        image = image.iloc[2:26,2:26]
-
         # change raw data to regular gray scale image
-        # image = image.apply(lambda x: (((x - x.min()) / (x.max() - x.min())) * 255).round(), axis=0)
-        # image = (image - image.mean()) / image.std()
-        image = (image - image.min()) / (image.max() - image.min())
+        #image = image.apply(lambda x: (((x - x.min()) / (x.max() - x.min())) * 255).round(), axis=0)
+        image = (image - image.mean()) / image.std()
+        #image = (image - image.min()) / (image.max() - image.min())
 
         image_flat = image.values.flatten()  # image_flat'shape : image_row_size * image_col_size
         label = data[label_names].iloc[upper - 1].values
@@ -456,12 +454,14 @@ def main():
     data = shuffle_data(data)
 
     #train test split
-    train_size = int(data['images'].shape[0]*0.95)
-    train_images, train_labels, test_images, test_labels = train_test_split(data, train_size=train_size)
+    # train_size = int(data['images'].shape[0]*0.95)
+    # train_images, train_labels, test_images, test_labels = train_test_split(data, train_size=train_size)
 
     # call CNN
-    parameters = {'learning_rate': 0.001, 'training_iters': train_size*400, 'batch_size': 1024, 'dropout': 0.6}
-    ch.launch_cnn(train_images,train_labels,test_images,test_labels, image_shape=(24,24), parameters=parameters)
+    # parameters = {'learning_rate': 0.001, 'training_iters': train_size*1200, 'batch_size': 1024, 'dropout': 0.6}
+    # ch.launch_cnn(train_images,train_labels,test_images,test_labels, image_shape=(24,24), parameters=parameters)
+    params = {"input_w" : 28, "input_h" : 28, "num_classes" : 2, "batch_size" : 1024, "epochs" : 100, "num_folds" : 10}
+    cs.train_cnn(data["images"], data["labels"].iloc[:, -2:], params)
 
     # plt.plot(sma_15_data, color='r')
     # plt.bar(left=list(range(len(macd_trigger_9_15_5))),height=-200 - macd_trigger_9_15_5, color='b')
