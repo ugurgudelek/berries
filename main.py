@@ -11,7 +11,7 @@ import classes
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 #import cnn_handler as ch
-import cnn_keras as cs
+import cnn_keras_day as cs
 
 
 def crop_data(arr):
@@ -220,7 +220,8 @@ def data_handler(which_stock, start_date, end_date, period = 28, is_save_csv=Tru
         stock['label_df_is_more'] = target_df[:, 2]
 
         # assign lr targets
-        target_lr = classes.lr_classes(stock['adjusted_close'].values, period=period, slope_quant=2)
+        # target_lr = classes.lr_classes(stock['adjusted_close'].values, period=period, slope_quant=2)
+        target_lr = classes.day_by_day_classes(stock['adjusted_close'].values, period)
         stock['label_lr_is_less'] = target_lr[:, 0]
         stock['label_lr_is_more'] = target_lr[:, 1]
 
@@ -236,24 +237,24 @@ def cluster_features(p_stock_names):
 
     # read the first csv
     raw_data = pd.read_csv("data/{}.csv".format(p_stock_names[0]))
-        
+
     # drop irrelevant features
     data = raw_data.drop(['date', 'low', 'close', 'high', 'open'], axis=1)
-        
+
     # get predictor names for dropping processes
     predictor_names = [name for name in data.columns.values.tolist() if "label" not in name]
     data = data.dropna(subset=predictor_names)  # drop nan values for proper set
 
     # all data will be appended to this dataframe
     all_data = data
-    
+
     for stock in p_stock_names[1:len(p_stock_names)]:
-        
+
         raw_data = pd.read_csv("data/{}.csv".format(stock))
-        
+
         # drop irrelevant features
         data = raw_data.drop(['date', 'low', 'close', 'high', 'open'], axis=1)
-        
+
         # get predictor names for dropping processes
         predictor_names = [name for name in data.columns.values.tolist() if "label" not in name]
         data = data.dropna(subset=predictor_names)  # drop nan values for proper set
@@ -340,7 +341,7 @@ def prepare_images(prepare_data=True, save_etf=False, is_cluster_features=False)
     #                'fxn', 'xlre']
 
     if prepare_data:
-        
+
         stock_names = ['spy', 'xlf', 'qqq', 'xlu' , 'xle' , 'xlp' , 'xli' , 'xlv' , 'xlk' , 'ewj' , 'xlb', 'xly', 'eww',
                        'dia', 'ewg', 'ewh', 'ewc', 'ewu','ewa']
 
@@ -408,11 +409,11 @@ def draw_image(image,xtick_labels, cmap=None):
 
 def main():
 
-    # prepare_images(prepare_data=False, save_etf=False, is_cluster_features=False)
-    
+    # prepare_images(prepare_data=True, save_etf=False, is_cluster_features=False)
+    #
     # # read available etfs
     # available_etfs = pd.read_csv("available_etfs.csv", header=None, squeeze=True).values.tolist()
-    
+    #
     # # available_etfs = ['spy']
     # # READ IMAGES DIRECTLY
     # all_images = []
@@ -421,7 +422,7 @@ def main():
     #     data_df = pd.read_csv("images/{}_images_labels.csv".format(etf))
     #     images = data_df.iloc[:,:-5]
     #     labels = data_df.iloc[:,-5:]
-    
+    #
     #     print("images are merging with {}".format(etf))
     #     if len(all_images) == 0:
     #         all_images = np.array(images)
@@ -429,17 +430,17 @@ def main():
     #     else:
     #         all_images = np.append(all_images, images, axis=0)
     #         all_labels = np.append(all_labels, labels.values, axis=0)
-    
+    #
     #     print(pd.DataFrame(all_images).shape)
-    
-    
+    #
+    #
     # data = {'images':pd.DataFrame(all_images), 'labels':pd.DataFrame(all_labels)}
-    
+    #
     # # save to pickle
-    # pd.to_pickle(data, "data.pickle")
+    # pd.to_pickle(data, "data_1_day.pickle")
 
     # read from pickle
-    data = pd.read_pickle("data.pickle")
+    data = pd.read_pickle("data_1_day.pickle")
 
     # plot some samples
     # sorted_cluster_names = pd.read_csv("clustered_names.csv", header=None, squeeze=True).values.tolist()
@@ -451,7 +452,7 @@ def main():
     # plt.show()
 
     # shuffle data
-    data = shuffle_data(data)
+    # data = shuffle_data(data)
 
     #train test split
     # train_size = int(data['images'].shape[0]*0.95)
@@ -460,7 +461,7 @@ def main():
     # call CNN
     # parameters = {'learning_rate': 0.001, 'training_iters': train_size*1200, 'batch_size': 1024, 'dropout': 0.6}
     # ch.launch_cnn(train_images,train_labels,test_images,test_labels, image_shape=(24,24), parameters=parameters)
-    params = {"input_w" : 28, "input_h" : 28, "num_classes" : 2, "batch_size" : 1024, "epochs" : 100, "num_folds" : 10}
+    params = {"input_w" : 28, "input_h" : 28, "num_classes" : 2, "batch_size" : 1024, "epochs" : 100}
     cs.train_cnn(data["images"], data["labels"].iloc[:, -2:], params)
 
     # plt.plot(sma_15_data, color='r')

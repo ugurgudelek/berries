@@ -56,3 +56,28 @@ def df_classes(prices, period=28, diff_thr=0.5):
     # classes[prices.shape[0] - period-1:,:] = np.nan
     return classes
 
+def day_by_day_classes(prices, period=28):
+    """
+    :param prices: adjusted price values of the asset.
+    :param period: number of values for which lr will be calculated.
+    :return: one hot encoded classes
+    
+    returns classes which is one day after of training
+    classes[:,0] := less
+    classes[:,1] := more
+    """
+
+    classes = np.zeros((prices.shape[0], 2))
+
+    for i in range(period - 1, prices.shape[0] - period):
+
+        diff = prices[i + 1] - prices[i]
+
+        if diff <= 0:
+            classes[i,0] = 1
+        else:
+            classes[i,1] = 1
+
+    return classes
+
+

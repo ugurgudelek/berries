@@ -54,7 +54,7 @@ def conv_net(x, weights, biases, dropout, image_shape=(28, 28)):
     conv2 = conv2d(conv1, weights['wc2'], biases['bc2'])
     # Max Pooling (down-sampling)
     conv2 = maxpool2d(conv2, k=2)
-    
+
     # Convolution Layer
     conv3 = conv2d(conv2, weights['wc3'], biases['bc3'])
     # Max Pooling (down-sampling)
@@ -114,7 +114,7 @@ def launch_cnn(train_images, train_labels, test_images, test_labels,image_shape 
         'bc3': tf.Variable(tf.random_normal([128])),
         'bd1': tf.Variable(tf.random_normal([3072])),
         'out': tf.Variable(tf.random_normal([n_classes]))
-        
+
     }
 
     # Construct model
@@ -124,7 +124,7 @@ def launch_cnn(train_images, train_labels, test_images, test_labels,image_shape 
     cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels=y))
     optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
 
-    # Evaluate model    
+    # Evaluate model
     correct_pred = tf.equal(tf.argmax(pred, 1), tf.argmax(y, 1))
     accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
 
