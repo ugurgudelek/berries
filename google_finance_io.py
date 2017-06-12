@@ -1,6 +1,7 @@
 import pandas as pd
 import datetime
 import os
+import numpy as np
 
 def get_one_year_data(which_stock, start, end, verbose=False):
 
@@ -86,27 +87,59 @@ def data_getter(which_stock, start, end, verbose=False):
         if cur_end == end:
             break
 
-
-    final_df.reset_index(inplace=True)
+    final_df.reset_index(inplace=True, drop=True)
     return final_df
+
+def missing_value_fix(row):
+    if row.open == '-':
+        row.open = row.close
+        row.high = row.close
+        row.low = row.close
+    return row
+
+
 
 def download_data(stock_names, start_date, end_date, path="input/raw_data", verbose=False):
     """Download raw data from google finance"""
 
+    if not os.path.exists(path):
+        os.makedirs(path)
+
     for stock_name in stock_names:
+
+        if stock_name+".csv" in os.listdir(path):
+            if verbose:
+                print(stock_name+" already exists.")
+            continue
+
         # Open High Low Close Volume Adj Close
         stock = data_getter(stock_name, start_date, end_date, verbose=verbose)
         if stock is not None:
             # reverse data to get order like 2000-2017
             stock = stock.iloc[::-1]
 
-            if not os.path.exists(path):
-                os.makedirs(path)
+            # google finance does not have adjusted close. their values already adjusted
+            # however we have used yahoo finance and its adjusted close.
+            # so i will just copy close value to adjusted close
+            stock['adjusted_close'] = stock['close']
+
+            # i found that some data rows are missing with '-'.
+            # i will copy adjusted close value to other columns
+            stock = stock.apply(missing_value_fix, axis=1)
+            stock.open = stock.open.apply(lambda x: np.nan if x==0 else x)
+            stock.open = stock.open.fillna(method='pad')
+            stock.volume = stock.volume.apply(lambda x: np.nan if x == 0 else x)
+            stock.volume = stock.volume.fillna(method='pad')
+
+            # i found that stock.open and others are object dtype.
+            # lets be sure that all are float
+            stock[['open','high','low','close','volume','adjusted_close']] = stock[['open','high','low','close','volume','adjusted_close']].astype('float64')
+
 
             #save as a csv file
             if verbose:
                 print("creating {}.csv...".format(stock_name))
-            stock.to_csv(path+"/{}.csv".format(stock_name))
+            stock.to_csv(path+"/{}.csv".format(stock_name), index=False)
 
 #  web.DataReader(which_stock, 'yahoo', start=start, end=end)
 

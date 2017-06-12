@@ -192,18 +192,15 @@ def stack_data_and_metrics(data, metric_data, metric_function_names):
 
 
 
-def data_handler(which_stock, start_date, end_date, period = 28, is_save_csv=True):
+def calculate_metrics_for_raw_data(stock_names, raw_data_path="input/raw_data", path_to_save="input/stock_with_metrics"):
     """Downloads data, calculates metrics and save results to separate .csv files for each ETF."""
-    # Open High Low Close Volume Adj Close
-    stock = yahoo_finance_io.data_getter(which_stock, start_date, end_date)
-    if stock is not None:
-        # stock = stock.as_matrix()[:, :][::-1]
-        stock = stock.iloc[::-1]
-        # Tranform array to dict for easy use
-        # stock = tranform_to_dict(stock)
 
-        # Adjust data according to adjusted close
-        stock = adjusted_data(stock)
+    if not os.path.exists(path_to_save):
+        os.makedirs(path_to_save)
+
+    for stock_name in stock_names:
+        # read stock csv
+        stock = pd.read_csv(raw_data_path+"/{}.csv".format(stock_name))
 
         # create data arr to hold all metric info
         metric_data, metric_function_names = calculate_metrics(stock)
@@ -214,8 +211,21 @@ def data_handler(which_stock, start_date, end_date, period = 28, is_save_csv=Tru
         # append data and metrics column-wise
         stock = stack_data_and_metrics(stock, metric_data, metric_function_names)
 
+        # save
+        stock.to_csv(path_to_save+"/{}.csv".format(stock_name), index=None)
+
+
+def calculate_labels(stock_names, period=28, diff_thr=0.5, stock_with_metric_path="input/stock_with_metrics", stock_with_labels_path="input/stock_with_labels"):
+
+    if not os.path.exists(stock_with_labels_path):
+        os.makedirs(stock_with_labels_path)
+
+    for stock_name in stock_names:
+        # read stock_metric csv
+        stock = pd.read_csv(stock_with_metric_path+"/{}.csv".format(stock_name))
+
         # assign df targets
-        target_df = classes.df_classes(stock['adjusted_close'].values, period=period, diff_thr=0.5)
+        target_df = classes.df_classes(stock['adjusted_close'].values, period=period, diff_thr=diff_thr)
         stock['label_df_is_less'] = target_df[:, 0]
         stock['label_df_is_same'] = target_df[:, 1]
         stock['label_df_is_more'] = target_df[:, 2]
@@ -223,13 +233,13 @@ def data_handler(which_stock, start_date, end_date, period = 28, is_save_csv=Tru
         # assign lr targets
         # target_lr = classes.lr_classes(stock['adjusted_close'].values, period=period, slope_quant=2)
         target_lr = classes.day_by_day_classes(stock['adjusted_close'].values, period)
-        stock['label_lr_is_less'] = target_lr[:, 0]
-        stock['label_lr_is_more'] = target_lr[:, 1]
+        stock['label_day_is_less'] = target_lr[:, 0]
+        stock['label_day_is_more'] = target_lr[:, 1]
 
-        if is_save_csv:
-            stock.to_csv("data/" + which_stock + ".csv", index=None)
+        stock.to_csv(stock_with_labels_path+"/{}.csv".format(stock_name))
 
-        return stock
+
+
 
 def cluster_features(p_stock_names):
     """Calls the clustering function after calculation of the metrics for all the ETFs.
@@ -473,11 +483,17 @@ def main():
 
 if __name__ == "__main__":
     # main()
-    stock_names = ['spy', 'xlf', 'qqq', 'xlu', 'xle', 'xlp', 'xli', 'xlv', 'xlk', 'ewj', 'xlb', 'xly', 'eww',
-                   'dia', 'ewg', 'ewh', 'ewc', 'ewu', 'ewa']
+    stock_names = ['spy', 'xlf', 'qqq', 'xlu', 'xle', 'xlp']\
+        # , 'xli', 'xlv', 'xlk', 'ewj', 'xlb', 'xly', 'eww',
+        #            'dia', 'ewg', 'ewh', 'ewc', 'ewu', 'ewa']
 
 
-    start_date = datetime.date(2000, 1, 3)
-    end_date = datetime.date(2016, 12, 31)
 
-    google_finance_io.download_data(stock_names,start_date,end_date, verbose=True)
+    # start_date = datetime.date(2000, 1, 3)
+    # end_date = datetime.date(2016, 12, 31)
+    #
+    # google_finance_io.download_data(stock_names,start_date,end_date, verbose=True)
+
+    # calculate_metrics_for_raw_data(stock_names)
+
+    calculate_labels(stock_names)
