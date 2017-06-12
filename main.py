@@ -3,7 +3,7 @@ import csv
 import pandas as pd
 import matplotlib.pyplot as plt
 import metrics as mt
-import yahoo_finance_io
+import google_finance_io
 import datetime
 from dateutil import parser
 import clustering
@@ -191,6 +191,7 @@ def stack_data_and_metrics(data, metric_data, metric_function_names):
     return data
 
 
+
 def data_handler(which_stock, start_date, end_date, period = 28, is_save_csv=True):
     """Downloads data, calculates metrics and save results to separate .csv files for each ETF."""
     # Open High Low Close Volume Adj Close
@@ -328,7 +329,7 @@ def get_data(which_stock, p_sorted_predictor_names, split_period=28, label_names
     return images, labels, (image_row_size, image_col_size)
 
 def prepare_images(prepare_data=True, save_etf=False, is_cluster_features=False):
-    """Stock names are determined and funtions that calculate metrics and prepare images are called.
+    """Stock names are determined and functions (which calculate metrics and prepare images) are called.
     Images are saved to separate .csv files for each ETF"""
 
     # stock_names = ['spy', 'gdx', 'xlf', 'jnug', 'eem', 'nugt', 'vxx', 'iwm', 'gdxj', 'uso', 'efa', 'uvxy', 'qqq', 'fxi',
@@ -443,8 +444,8 @@ def main():
     data = pd.read_pickle("data_1_day.pickle")
 
     # plot some samples
-    # sorted_cluster_names = pd.read_csv("clustered_names.csv", header=None, squeeze=True).values.tolist()
-    # draw_image(data['images'].iloc[0].values.reshape(28,28), sorted_cluster_names)
+    sorted_cluster_names = pd.read_csv("clustered_names.csv", header=None, squeeze=True).values.tolist()
+    draw_image(data['images'].iloc[0].values.reshape(28,28), sorted_cluster_names)
     # draw_image(data['images'].iloc[5000].values.reshape(28, 28), sorted_cluster_names)
     # draw_image(data['images'].iloc[10000].values.reshape(28, 28), sorted_cluster_names)
     # draw_image(data['images'].iloc[20000].values.reshape(28, 28), sorted_cluster_names)
@@ -471,4 +472,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # main()
+    stock_names = ['spy', 'xlf', 'qqq', 'xlu', 'xle', 'xlp', 'xli', 'xlv', 'xlk', 'ewj', 'xlb', 'xly', 'eww',
+                   'dia', 'ewg', 'ewh', 'ewc', 'ewu', 'ewa']
+
+
+    start_date = datetime.date(2000, 1, 3)
+    end_date = datetime.date(2016, 12, 31)
+
+    google_finance_io.download_data(stock_names,start_date,end_date, verbose=True)
