@@ -95,6 +95,7 @@ def missing_value_fix(row):
         row.open = row.close
         row.high = row.close
         row.low = row.close
+        row.volume = 0
     return row
 
 

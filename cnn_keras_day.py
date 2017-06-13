@@ -55,6 +55,11 @@ def train_cnn(data, labels, params):
     accuracies = []
     losses = []
 
+    try:
+        model.save("model_before")
+    except:
+        print("model could not saved.")
+
     cur_pointer = train_data_size + 1
     print("Calculating accuracy day by day...", end='\n\n')
     for i in range(test_data_size-2):
@@ -75,8 +80,14 @@ def train_cnn(data, labels, params):
 
     print()
     print(np.mean(accuracies))
+    try:
+        model.save("model_after")
+    except:
+        print("model could not saved.")
 
     print()
+
+
     # # predict the class labels
     # print("Predicting test data")
     # print()
