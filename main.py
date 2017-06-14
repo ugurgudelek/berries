@@ -146,7 +146,7 @@ def main():
     # plt.show()
 
     # 8. call CNN
-    params = {"input_w": 28, "input_h": 28, "num_classes": 2, "batch_size": 1024, "epochs": 100}
+    params = {"input_w": 28, "input_h": 28, "num_classes": 2, "batch_size": 1024, "epochs": 200}
     images = data["images"]
     labels = data["labels"]
     cs.train_cnn(images, labels, params)
