@@ -315,25 +315,51 @@ def create_images_from_data(stock_names, p_sorted_predictor_names, split_period=
 
     # return images, labels, (image_row_size, image_col_size)
 
-def get_merged_images_and_labels_data(stock_names, read_path="input/images_with_labels",labels_are_last=2):
+def get_merged_images_and_labels_data(stock_names, read_path="input/images_with_labels",labels_are_last=2, train_test_ratio=0.9):
 
-    all_images = []
-    all_labels = []
+    all_train_images = []
+    all_train_labels = []
+    all_test_images = []
+    all_test_labels= []
+
+
+
     for stock in stock_names:
         data_df = pd.read_csv(read_path+"/{}.csv".format(stock))
         images = data_df.iloc[:,:-labels_are_last]
         labels = data_df.iloc[:,-labels_are_last:]
 
         print("all images are merging with {} ...".format(stock))
-        if len(all_images) == 0:
-            all_images = np.array(images)
-            all_labels = labels.values
+
+        # determine where to split
+        image_count = images.shape[0]
+        train_image_count = int(image_count * train_test_ratio)
+        test_image_count = image_count - train_image_count
+
+        # split train and test
+        # for 16 year of data : nearly 14 year train-last 2 year test
+        train_images = images.iloc[0:train_image_count]
+        test_images = images.iloc[train_image_count:]
+        train_labels = labels.iloc[0:train_image_count]
+        test_labels = labels.iloc[train_image_count:]
+
+        if len(all_train_images) == 0:
+            all_train_images = np.array(train_images)
+            all_train_labels = train_labels.values
+            all_test_images = np.array(test_images)
+            all_test_labels = test_labels.values
         else:
-            all_images = np.append(all_images, images, axis=0)
-            all_labels = np.append(all_labels, labels.values, axis=0)
+            all_train_images = np.append(all_train_images, train_images, axis=0)
+            all_train_labels = np.append(all_train_labels, train_labels.values, axis=0)
+            all_test_images = np.append(all_test_images, test_images, axis=0)
+            all_test_labels = np.append(all_test_labels, test_labels.values, axis=0)
 
-        print("current shape is {} and {} label ".format(pd.DataFrame(all_images).shape, all_labels.shape[1]))
+        print("current train shape is {} and {} label ".format(pd.DataFrame(all_train_images).shape, all_train_labels.shape[1]))
+        print("current test shape is {} and {} label ".format(pd.DataFrame(all_test_images).shape, all_test_labels.shape[1]))
 
-    data = {'images':pd.DataFrame(all_images), 'labels':pd.DataFrame(all_labels)}
+    data = {'train_images':pd.DataFrame(all_train_images),
+            'test_images':pd.DataFrame(all_test_images),
+            'train_labels':pd.DataFrame(all_train_labels),
+            'test_labels':pd.DataFrame(all_test_labels)}
 
     return data

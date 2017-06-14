@@ -10,14 +10,17 @@ from keras.layers import Dense, Dropout, Activation, Flatten
 from keras.layers import Conv2D, MaxPooling2D
 
 
-def train_cnn(data, labels, params):
+def train_cnn(data, params):
     """Trains and evaluates CNN on the given train and test data, respectively."""
 
-    data = data.as_matrix()
-    labels = labels.as_matrix()
+    train_images = data['train_images'].as_matrix()
+    test_images = data['test_images'].as_matrix()
 
-    data = data.reshape(data.shape[0], params["input_w"], params["input_h"], 1)
+    train_labels = data['train_labels'].as_matrix()
+    test_labels = data['test_labels'].as_matrix()
 
+    train_images = train_images.reshape(train_images.shape[0], params["input_w"], params["input_h"], 1)
+    test_images = test_images.reshape(test_images.shape[0], params["input_w"], params["input_h"], 1)
 
 
     # CNN model
@@ -34,18 +37,13 @@ def train_cnn(data, labels, params):
                   optimizer=keras.optimizers.Adadelta(),
                   metrics=['accuracy'])
 
-    data_size = data.shape[0]
-    train_data_size = int(data_size*0.9)
-    test_data_size = data_size - train_data_size
 
-    trainData = data[0:train_data_size, :]
-    trainLabels = labels[0:train_data_size, :]
 
-    print("model will be trained with {} and be tested with {} sample".format(train_data_size,test_data_size))
+    print("model will be trained with {} and be tested with {} sample".format(train_images.shape,test_images.shape))
     # fit the model to the training data
     print("Fitting model to the training data...")
     print("")
-    model.fit(trainData, trainLabels, batch_size=params["batch_size"], epochs=params["epochs"], verbose=1,validation_data=None)
+    model.fit(train_images, train_labels, batch_size=params["batch_size"], epochs=params["epochs"], verbose=1,validation_data=None)
 
 
     recalls = []
@@ -57,31 +55,48 @@ def train_cnn(data, labels, params):
 
     try:
         model.save("model_before")
+        print("model saved succesfully")
     except:
         print("model could not saved.")
 
-    cur_pointer = train_data_size + 1
+    # train_data_size = train_images.shape[0]
+    # test_data_size = test_images.shape[0]
+    # cur_pointer = train_data_size + 1
     print("Calculating accuracy day by day...", end='\n\n')
-    for i in range(test_data_size-2):
-        # train with 1 more image
-        model.train_on_batch(np.reshape(data[train_data_size + 1 + i, :], (1, params["input_w"], params["input_h"], 1)),
-                            np.reshape(labels[train_data_size + 1 + i, :], (1, params["num_classes"])))
+    for i,(image,label) in enumerate(zip(test_images,test_labels)):
 
-        # test with first untrained day which is the day after previously trained one
-        loss_cur,acc_cur = model.test_on_batch(np.reshape(data[train_data_size + 1 + i + 1, :], (1, params["input_w"], params["input_h"], 1)),
-                            np.reshape(labels[train_data_size + 1 + i + 1, :], (1, params["num_classes"])))
+        image = image.reshape((1, params["input_w"], params["input_h"], 1))
+        label = label.reshape((1, params["num_classes"]))
+        # test for next image
+        loss_cur,acc_cur = model.test_on_batch(image,label)
+
+        # train with only 1 more image
+        model.train_on_batch(image, label)
 
         accuracies.append(acc_cur)
         losses.append(loss_cur)
 
         # show values every 100 cycle
         if i % 100 == 0:
-            print("{} to {} mean : ".format(i-100,i), np.mean(accuracies))
+            print("{} to {} mean : ".format(i - 100, i), np.mean(accuracies))
+
+
+    # for i in range(test_data_size-2):
+    #     # train with 1 more image
+    #     model.train_on_batch(np.reshape(data[train_data_size + 1 + i, :], (1, params["input_w"], params["input_h"], 1)),
+    #                         np.reshape(labels[train_data_size + 1 + i, :], (1, params["num_classes"])))
+    #
+    #     # test with first untrained day which is the day after previously trained one
+    #     loss_cur,acc_cur = model.test_on_batch(np.reshape(data[train_data_size + 1 + i + 1, :], (1, params["input_w"], params["input_h"], 1)),
+    #                         np.reshape(labels[train_data_size + 1 + i + 1, :], (1, params["num_classes"])))
+
+
 
     print()
     print(np.mean(accuracies))
     try:
         model.save("model_after")
+        print("model saved succesfully")
     except:
         print("model could not saved.")
 
