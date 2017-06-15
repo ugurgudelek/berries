@@ -160,7 +160,7 @@ def main():
     # draw_image(data['images'].iloc[0].values.reshape(28, 28), sorted_cluster_names)
     # plt.show()
 
-    # todo: 1. veriyi artış haline getir.
+    # done: 1. veriyi artış haline getir.
 
     # todo: 2. veriden istatistik- bununla thresholdları ayarla
 
