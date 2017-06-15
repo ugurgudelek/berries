@@ -152,7 +152,7 @@ def main():
     data = get_merged_images_and_labels_data(stock_names, labels_are_last=2, train_test_ratio=0.9)
 
     # 8. call CNN
-    params = {"input_w": 28, "input_h": 28, "num_classes": 2, "batch_size": 1024, "epochs": 50}
+    params = {"input_w": 28, "input_h": 28, "num_classes": 2, "batch_size": 1024, "epochs": 100}
 
     cs.train_cnn(data, params)
 
