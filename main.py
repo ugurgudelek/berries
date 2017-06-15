@@ -3,6 +3,7 @@ import csv
 import pandas as pd
 import matplotlib.pyplot as plt
 from checked_methods import *
+from new_methods import *
 import google_finance_io
 import datetime
 from dateutil import parser
