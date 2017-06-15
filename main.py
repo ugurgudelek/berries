@@ -129,10 +129,11 @@ def main():
 
     # todo: normalize
 
+
     # 3.calculate labels for available stocks and save them into csv file
     calculate_labels(stock_names)
 
-    # todo:
+
 
     # 4.cluster features for available stocks and their features then save them into csv file
     cluster_features(stock_names)
@@ -145,7 +146,7 @@ def main():
     # 6. create flatten images with data and labels.
     create_images_from_data(stock_names, sorted_cluster_names)
 
-    # todo: testi zaman olarak ayırmalıyız.
+
     # 7. merge all available data
     # data has 'images' and 'labels'
     data = get_merged_images_and_labels_data(stock_names, labels_are_last=2, train_test_ratio=0.9)
@@ -159,14 +160,23 @@ def main():
     # draw_image(data['images'].iloc[0].values.reshape(28, 28), sorted_cluster_names)
     # plt.show()
 
+    # todo: 1. veriyi artış haline getir.
 
-    # todo: kar-zarar hesaplamak lazım.
+    # todo: 2. veriden istatistik- bununla thresholdları ayarla
 
-    # todo: sürekli artış hipotezi. - buy-hold karşılaştırması.
+    # todo: 3. labelları 3 e çıkar.  # todo: biraz fuzzy logic gibi regression
 
-    # todo: labelları 3 e çıkar.
+    # todo: 4. kar-zarar hesaplamak lazım.
 
-    # todo: resim
+    # todo: 5. sürekli artış hipotezi. - buy-hold karşılaştırması.
+
+    # todo: 6. resim
+
+    # todo: 7. literature - related work - finance lstm,rnn
+
+    # todo: 8. hisselere ve yıla göre başarım
+
+    # todo: 9. hisse senetlerinin artırmak lazım.
 
 
 
