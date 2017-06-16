@@ -10,7 +10,9 @@ from keras.layers import Dense, Dropout, Activation, Flatten
 from keras.layers import Conv2D, MaxPooling2D
 
 
-def train_cnn(data, params):
+
+
+def train_cnn(data, params, model_name):
     """Trains and evaluates CNN on the given train and test data, respectively."""
 
     train_images = data['train_images'].as_matrix()
@@ -54,10 +56,10 @@ def train_cnn(data, params):
     losses = []
 
     try:
-        model.save("model_before")
-        print("model saved succesfully")
+        model.save(model_name+"_before_")
+        print("model before saved succesfully")
     except:
-        print("model could not saved.")
+        print("model before could not saved.")
 
     # train_data_size = train_images.shape[0]
     # test_data_size = test_images.shape[0]

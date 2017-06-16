@@ -1,25 +1,27 @@
-```
-# done: 1. veriyi artış haline getir.
 
-# done: 2. veriden istatistik- bununla thresholdları ayarla
+ done: 1. veriyi artış haline getir.
 
-# done: 3. labelları regression yap.  # done: biraz fuzzy logic gibi regression
+ done: 2. veriden istatistik- bununla thresholdları ayarla
 
-# todo: 4. accuracy hesaplarken 3 class gibi yap. helper içindeki split_min_var ı kullanabilirsin.
+ done: 3. labelları regression yap.  # done: biraz fuzzy logic gibi regression
 
-# todo: 4. kar-zarar hesaplamak lazım.
+ todo: 4. accuracy hesaplarken 3 class gibi yap. helper içindeki split_min_var ı kullanabilirsin.
 
-# todo: 5. sürekli artış hipotezi. - buy-hold karşılaştırması.
 
-# todo: 6. resim
+ todo: 4. kar-zarar hesaplamak lazım.
 
-# todo: 7. literature - related work - finance lstm,rnn
+ todo: 5. sürekli artış hipotezi. - buy-hold karşılaştırması.
 
-# todo: 8. hisselere ve yıla göre başarım
+ todo: 6. resim
 
-# todo: 9. hisse senetlerinin artırmak lazım.
+ todo: 7. literature - related work - finance lstm,rnn
 
-# todo : metric diversity sini arttır.
+ todo: 8. hisselere ve yıla göre başarım
 
- # todo: clustering olmadan ne oluyor?
-```
+ todo: 9. hisse senetlerinin artırmak lazım.
+
+ todo : metric diversity sini arttır.
+
+ todo: clustering olmadan ne oluyor?
+
+

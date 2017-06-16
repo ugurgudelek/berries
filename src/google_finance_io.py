@@ -3,8 +3,8 @@ import datetime
 import os
 import numpy as np
 
-def get_one_year_data(which_stock, start, end, verbose=False):
 
+def get_one_year_data(which_stock, start, end, verbose=False):
     if end.year - start.year > 1:
         raise Exception('get_one_year_data only supports max 1 year range')
 
@@ -51,6 +51,7 @@ def get_one_year_data(which_stock, start, end, verbose=False):
         return None
     return df
 
+
 def data_getter(which_stock, start, end, verbose=False):
     """
     helper function for google finance api
@@ -66,7 +67,7 @@ def data_getter(which_stock, start, end, verbose=False):
     final_df = None
     # split into chunks if more than 1 years
     cur_start = datetime.date(start.year - 1, start.month, start.day)
-    while(True):
+    while (True):
         cur_start = datetime.date(cur_start.year + 1, cur_start.month, cur_start.day)
         cur_end = datetime.date(cur_start.year + 1, cur_start.month, cur_start.day)
 
@@ -82,13 +83,14 @@ def data_getter(which_stock, start, end, verbose=False):
         if final_df is None:
             final_df = one_year_df
         else:
-            final_df = pd.concat([get_one_year_data(which_stock, cur_start, cur_end),final_df])
+            final_df = pd.concat([get_one_year_data(which_stock, cur_start, cur_end), final_df])
 
         if cur_end == end:
             break
 
     final_df.reset_index(inplace=True, drop=True)
     return final_df
+
 
 def missing_value_fix(row):
     if row.open == '-':
@@ -99,8 +101,7 @@ def missing_value_fix(row):
     return row
 
 
-
-def download_data(stock_names, start_date, end_date, path="input/raw_data", verbose=False):
+def download_data(stock_names, start_date, end_date, path="../input/raw_data", verbose=False):
     """Download raw data from google finance"""
 
     if not os.path.exists(path):
@@ -108,9 +109,9 @@ def download_data(stock_names, start_date, end_date, path="input/raw_data", verb
 
     for stock_name in stock_names:
 
-        if stock_name+".csv" in os.listdir(path):
+        if stock_name + ".csv" in os.listdir(path):
             if verbose:
-                print(stock_name+" already exists.")
+                print(stock_name + " already exists.")
             continue
 
         # Open High Low Close Volume Adj Close
@@ -127,28 +128,29 @@ def download_data(stock_names, start_date, end_date, path="input/raw_data", verb
             # i found that some data rows are missing with '-'.
             # i will copy adjusted close value to other columns
             stock = stock.apply(missing_value_fix, axis=1)
-            stock.open = stock.open.apply(lambda x: np.nan if x==0 else x)
+            stock.open = stock.open.apply(lambda x: np.nan if x == 0 else x)
             stock.open = stock.open.fillna(method='pad')
             stock.volume = stock.volume.apply(lambda x: np.nan if x == 0 else x)
             stock.volume = stock.volume.fillna(method='pad')
 
             # i found that stock.open and others are object dtype.
             # lets be sure that all are float
-            stock[['open','high','low','close','volume','adjusted_close']] = stock[['open','high','low','close','volume','adjusted_close']].astype('float64')
+            stock[['open', 'high', 'low', 'close', 'volume', 'adjusted_close']] = stock[
+                ['open', 'high', 'low', 'close', 'volume', 'adjusted_close']].astype('float64')
 
-
-            #save as a csv file
+            # save as a csv file
             if verbose:
                 print("creating {}.csv...".format(stock_name))
-            stock.to_csv(path+"/{}.csv".format(stock_name), index=False)
+            stock.to_csv(path + "/{}.csv".format(stock_name), index=False)
 
-#  web.DataReader(which_stock, 'yahoo', start=start, end=end)
+
+# web.DataReader(which_stock, 'yahoo', start=start, end=end)
 
 if "__name__" == "__main__":
     start_date = datetime.date(1994, 1, 1)
     end_date = datetime.date(2016, 12, 30)
     df = data_getter("SPY", start_date, end_date, verbose=True)
-#     todo: open values sometimes get 0.0 value. Check and fix later.
+# todo: open values sometimes get 0.0 value. Check and fix later.
 
 
 # http://www.google.com/finance/historical?q=NYSEARCA:SPY&startdate=Jun+13%2C+2010&enddate=Jun+12%2C+2017&num=30&output=csv
