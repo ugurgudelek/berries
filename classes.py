@@ -1,5 +1,6 @@
 import numpy as np
 from scipy import stats
+import pandas as pd
 
 
 def lr_classes(prices, period=28, slope_quant=2):
@@ -69,7 +70,7 @@ def day_by_day_classes(prices, period=28):
 
     classes = np.zeros((prices.shape[0], 2))
 
-    for i in range(period - 1, prices.shape[0] - period):
+    for i in range(period - 1, prices.shape[0] - 1):
 
         diff = prices[i + 1] - prices[i]
 
@@ -79,5 +80,23 @@ def day_by_day_classes(prices, period=28):
             classes[i,1] = 1
 
     return classes
+
+def day_by_day_reg(changes, period=28):
+
+    """
+    
+    :param (pd.Series) changes: 
+    :param (int) period: 
+    :return: (pd.Series)
+    """
+
+    classes = changes.shift(periods=-1)
+    classes.iloc[0:period - 1] = np.nan
+    return classes
+
+
+
+
+
 
 

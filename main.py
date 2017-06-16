@@ -128,8 +128,7 @@ def main():
     # 2.calculate metric for available stocks and save them into csv file
     calculate_metrics_for_raw_data(stock_names)
 
-    # todo: normalize
-
+    # done: normalize (in calculate_labels)
 
     # 3.calculate labels for available stocks and save them into csv file
     calculate_labels(stock_names)

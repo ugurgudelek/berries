@@ -5,6 +5,7 @@ import clustering
 import classes
 import metrics as mt
 import time
+from new_methods import *
 
 def assign_null_into_data(arr, length):
     for i, data in enumerate(arr):
@@ -65,17 +66,15 @@ def calculate_labels(stock_names, period=28, diff_thr=0.5, stock_with_metric_pat
         # read stock_metric csv
         stock = pd.read_csv(stock_with_metric_path+"/{}.csv".format(stock_name))
 
-        # assign df targets
-        target_df = classes.df_classes(stock['adjusted_close'].values, period=period, diff_thr=diff_thr)
-        stock['label_df_is_less'] = target_df[:, 0]
-        stock['label_df_is_same'] = target_df[:, 1]
-        stock['label_df_is_more'] = target_df[:, 2]
+        # normalize price values
+        stock = apply_normalization_to_raw_data(stock)
 
-        # assign lr targets
-        # target_lr = classes.lr_classes(stock['adjusted_close'].values, period=period, slope_quant=2)
-        target_lr = classes.day_by_day_classes(stock['adjusted_close'].values, period)
-        stock['label_day_is_less'] = target_lr[:, 0]
-        stock['label_day_is_more'] = target_lr[:, 1]
+        target_day_class = classes.day_by_day_classes(stock['adjusted_close'].values, period)
+        stock['label_day_is_less'] = target_day_class[:, 0]
+        stock['label_day_is_more'] = target_day_class[:, 1]
+
+        target_day_regr = classes.day_by_day_reg(stock['pct_change_tanh'], period)
+        stock['label_day_tanh_regr'] = target_day_regr
 
         stock.to_csv(stock_with_labels_path+"/{}.csv".format(stock_name), index=None)
 
