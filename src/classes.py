@@ -44,7 +44,7 @@ def df_classes(prices, period=28, diff_thr=0.5):
 
     for i in range(period - 1, prices.shape[0] - period):
 
-        curDiff = prices[i + period] - prices[i+1]
+        curDiff = prices[i + period] - prices[i + 1]
 
         if abs(curDiff) < diff_thr:
             classes[i, 1] = 1
@@ -56,6 +56,7 @@ def df_classes(prices, period=28, diff_thr=0.5):
     # classes[0:period,:] = np.nan
     # classes[prices.shape[0] - period-1:,:] = np.nan
     return classes
+
 
 def day_by_day_classes(prices, period=28):
     """
@@ -75,28 +76,20 @@ def day_by_day_classes(prices, period=28):
         diff = prices[i + 1] - prices[i]
 
         if diff <= 0:
-            classes[i,0] = 1
+            classes[i, 0] = 1
         else:
-            classes[i,1] = 1
+            classes[i, 1] = 1
 
     return classes
+
 
 def day_by_day_reg(changes, period=28):
-
     """
-    
-    :param (pd.Series) changes: 
+    :param (pd.Series) changes:
     :param (int) period: 
-    :return: (pd.Series)
+    :return: (pd.Series) labels
     """
 
-    classes = changes.shift(periods=-1)
-    classes.iloc[0:period - 1] = np.nan
-    return classes
-
-
-
-
-
-
-
+    labels = changes.shift(periods=-1)
+    labels.iloc[0:period - 1] = np.nan
+    return labels
