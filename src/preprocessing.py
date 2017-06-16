@@ -5,23 +5,18 @@ import clustering
 import classes
 import metrics as mt
 import time
-from new_methods import *
 
-def assign_null_into_data(arr, length):
-    for i, data in enumerate(arr):
-        null_len = length - len(data)
-        null_part = np.zeros(null_len)
-        null_part.fill(np.nan)
-
-        arr[i] = np.hstack((null_part, data))
-    return arr
+from helper import *
 
 
-def stack_data_and_metrics(data, metric_data, metric_function_names):
-    for i, datum in enumerate(metric_data):
-        data[metric_function_names[i]] = datum
-    return data
+def apply_normalization_to_raw_data(stock):
 
+    # insert percent change column into main dataframe
+    percentage = stock.adjusted_close.pct_change(periods=1)
+    percentage.iloc[0] = 0.0
+    percentage_100 = percentage * 100
+    stock['pct_change_tanh'] = percentage_100.apply(np.tanh)
+    return stock
 
 
 def calculate_metrics_for_raw_data(stock_names, raw_data_path="input/raw_data", path_to_save="input/stock_with_metrics"):
@@ -52,7 +47,7 @@ def calculate_metrics_for_raw_data(stock_names, raw_data_path="input/raw_data", 
         stock.to_csv(path_to_save+"/{}.csv".format(stock_name), index=None)
 
 
-def calculate_labels(stock_names, period=28, diff_thr=0.5, stock_with_metric_path="input/stock_with_metrics", stock_with_labels_path="input/stock_with_labels"):
+def calculate_labels(stock_names, period=28, stock_with_metric_path="input/stock_with_metrics", stock_with_labels_path="input/stock_with_labels"):
 
     if not os.path.exists(stock_with_labels_path):
         os.makedirs(stock_with_labels_path)
