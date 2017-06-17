@@ -12,6 +12,7 @@ import os
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import cnn_keras_regr as cs
+from keras.models import load_model
 
 
 def main():
@@ -49,7 +50,7 @@ def main():
     # 8. call CNN
     params = {"input_w": 28, "input_h": 28, "num_classes": 1, "batch_size": 1024, "epochs": 100}
     with K.get_session():
-        cs.train_cnn(data, params,"model_regr_100epoch")
+        cs.start_cnn_session(data, params,model_name="model_regr_100epoch")
 
     # draw some sample
     # draw_image(data['images'].iloc[0].values.reshape(28, 28), sorted_cluster_names)
@@ -68,5 +69,22 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
-    # check_for_null("input/images_with_labels")
+    # main()
+
+    data = get_last_saved_data()
+    model = load_model("../model/model_regr_100epoch_before_2017_06_16 21_55_06_953896")
+    params = {"input_w": 28, "input_h": 28, "num_classes": 1, "batch_size": 1024, "epochs": 100}
+    with K.get_session():
+        _,history = cs.test(model, data, params, q_ratio=0.8)
+
+        predictions = pd.Series(history['prediction'])
+        predictions = predictions.apply(lambda x: x[0][0])
+        test_labels = data["test_labels"]
+
+        predictions.hist(bins=100)
+        test_labels.hist(bins=100)
+
+
+        p = predictions.apply(lambda x: x[0])
+
+

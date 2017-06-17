@@ -8,6 +8,9 @@ import time
 
 from helper import *
 
+def get_last_saved_data(read_path="../input/last_saved_data"):
+    return pd.read_pickle(read_path+"/last_saved.pickle")
+
 
 def apply_normalization_to_raw_data(stock):
     # insert percent change column into main dataframe
@@ -209,7 +212,7 @@ def create_images_from_data(stock_names, sorted_cluster_names, label_names, spli
 
 # 7.
 def get_merged_images_and_labels_data(stock_names, read_path="../input/images_with_labels", labels_are_last=1,
-                                      train_test_ratio=0.9):
+                                      train_test_ratio=0.9, save_path="../input/last_saved_data"):
     all_train_images = []
     all_train_labels = []
     all_test_images = []
@@ -254,6 +257,11 @@ def get_merged_images_and_labels_data(stock_names, read_path="../input/images_wi
             'test_images': pd.DataFrame(all_test_images),
             'train_labels': pd.DataFrame(all_train_labels),
             'test_labels': pd.DataFrame(all_test_labels)}
+
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
+    pd.to_pickle(data, save_path+"/last_saved.pickle")
 
     return data
 
