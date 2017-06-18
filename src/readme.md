@@ -5,7 +5,7 @@
 
  done: 3. labelları regression yap.  # done: biraz fuzzy logic gibi regression
 
- todo: 4. accuracy hesaplarken 3 class gibi yap. helper içindeki split_min_var ı kullanabilirsin.
+ done: 4. accuracy hesaplarken 3 class gibi yap. helper içindeki split_min_var ı kullanabilirsin.
 
 
  todo: 4. kar-zarar hesaplamak lazım.

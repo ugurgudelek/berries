@@ -3,6 +3,14 @@ import matplotlib.pyplot as plt
 import os
 import pandas as pd
 
+def quantize(x, ratio=0.38):
+    if x > ratio:
+        return 1
+    elif x < -ratio:
+        return -1
+    else:
+        return 0
+
 def assign_null_into_data(arr, length):
     for i, data in enumerate(arr):
         null_len = length - len(data)

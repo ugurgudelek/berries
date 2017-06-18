@@ -164,8 +164,15 @@ def create_images_from_data(stock_names, sorted_cluster_names, label_names, spli
         data = pd.read_csv(stock_with_labels_path + "/{}.csv".format(stock_name))
         predictor_names = sorted_cluster_names
 
+
+
+
+
+
         # drop irrelevant features
-        data = data[predictor_names + label_names]
+        data = data[['date'] + predictor_names + label_names]
+        # when i do this, later i can reach data with stock name and date
+
 
         # drop nan values for proper set
         data = data.dropna()
@@ -178,7 +185,8 @@ def create_images_from_data(stock_names, sorted_cluster_names, label_names, spli
 
         images = []
         labels = []
-        merged = []
+        dates = []
+        names = []
         # split image chunks
         for i in range(split_period - 1, data.shape[0] - split_period):
             lower = i - split_period + 1
@@ -191,19 +199,28 @@ def create_images_from_data(stock_names, sorted_cluster_names, label_names, spli
 
             image_flat = image.values.flatten()  # image_flat'shape : image_row_size * image_col_size
             label = data[label_names].iloc[upper - 1].values
+            date = data['date'].iloc[upper-1]
+
 
             images.append(image_flat)
             labels.append(label)
+            dates.append(date)
+            names.append(stock_name)
 
         # save data into one big dataframe
         # period * period + label_size for each row
         # image_count = row size
-        data_df = pd.concat([pd.DataFrame(images), pd.DataFrame(labels)], axis=1)
+
+        data_df = pd.concat([pd.Series(names),
+                             pd.Series(dates),
+                             pd.DataFrame(images,dtype='float32'),
+                             pd.DataFrame(labels,dtype='float32')],ignore_index=True,axis=1)
+
 
         if not os.path.exists(save_path):
             os.makedirs(save_path)
 
-        data_df.to_csv(save_path + "/{}.csv".format(stock_name), index=None, header=None)
+        data_df.to_csv(save_path + "/{}.csv".format(stock_name), index=False, header=None)
 
         print("Elapsed time : {}".format(time.time() - start_time))
 
@@ -217,11 +234,18 @@ def get_merged_images_and_labels_data(stock_names, read_path="../input/images_wi
     all_train_labels = []
     all_test_images = []
     all_test_labels = []
+    all_train_names = []
+    all_test_names = []
+    all_train_dates=[]
+    all_test_dates=[]
 
+    # todo: burada şu strig colon işini çöz
     for stock in stock_names:
-        data_df = pd.read_csv(read_path + "/{}.csv".format(stock))
-        images = data_df.iloc[:, :-labels_are_last]
-        labels = data_df.iloc[:, -labels_are_last:]
+        data_df = pd.read_csv(read_path + "/{}.csv".format(stock), header=None)
+        names = data_df.iloc[:, 0] # first element
+        dates = data_df.iloc[:, 1] # second element
+        images = data_df.iloc[:, 2:-labels_are_last] # remaining elements
+        labels = data_df.iloc[:, -labels_are_last:] # last elements
 
         print("all images are merging with {} ...".format(stock))
 
@@ -237,16 +261,33 @@ def get_merged_images_and_labels_data(stock_names, read_path="../input/images_wi
         train_labels = labels.iloc[0:train_image_count]
         test_labels = labels.iloc[train_image_count:]
 
+        train_names = names.iloc[0:train_image_count]
+        train_dates = dates.iloc[0:train_image_count]
+        test_names = names.iloc[train_image_count:]
+        test_dates = dates.iloc[train_image_count:]
+
+        # todo: need to make data class because above not seems good. -ugurgudelek
+
         if len(all_train_images) == 0:
             all_train_images = np.array(train_images)
             all_train_labels = train_labels.values
             all_test_images = np.array(test_images)
             all_test_labels = test_labels.values
+
+            all_train_names = np.array(train_names)
+            all_test_names = np.array(test_names)
+            all_train_dates = np.array(train_dates)
+            all_test_dates = np.array(test_dates)
         else:
             all_train_images = np.append(all_train_images, train_images, axis=0)
             all_train_labels = np.append(all_train_labels, train_labels.values, axis=0)
             all_test_images = np.append(all_test_images, test_images, axis=0)
             all_test_labels = np.append(all_test_labels, test_labels.values, axis=0)
+
+            all_train_names = np.append(all_train_names,train_names, axis=0)
+            all_test_names =  np.append(all_test_names, test_names, axis=0)
+            all_train_dates = np.append(all_train_dates,train_dates, axis=0)
+            all_test_dates =  np.append(all_test_dates, test_dates, axis=0)
 
         print("current train shape is {} and {} label ".format(pd.DataFrame(all_train_images).shape,
                                                                all_train_labels.shape[1]))
@@ -256,7 +297,12 @@ def get_merged_images_and_labels_data(stock_names, read_path="../input/images_wi
     data = {'train_images': pd.DataFrame(all_train_images),
             'test_images': pd.DataFrame(all_test_images),
             'train_labels': pd.DataFrame(all_train_labels),
-            'test_labels': pd.DataFrame(all_test_labels)}
+            'test_labels': pd.DataFrame(all_test_labels),
+            'train_names': pd.DataFrame(all_train_names),
+            'train_dates': pd.DataFrame(all_train_dates),
+            'test_names': pd.DataFrame(all_test_names),
+            'test_dates': pd.DataFrame(all_test_dates),
+            }
 
     if not os.path.exists(save_path):
         os.makedirs(save_path)

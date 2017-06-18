@@ -12,14 +12,9 @@ from keras.layers import Conv2D, MaxPooling2D
 import datetime
 import os
 
+from helper import quantize
 
-def quantize(x, ratio=0.38):
-    if x > ratio:
-        return 1
-    elif x < -ratio:
-        return -1
-    else:
-        return 0
+
 
 
 def custom_test_on_batch(model, image, label, q_ratio=0.38):
@@ -50,12 +45,13 @@ def construct_cnn(params):
     return model
 
 
+
 def fit(model, data, params):
     train_images = data['train_images'].as_matrix()
     train_labels = data['train_labels'].as_matrix()
     train_images = train_images.reshape(train_images.shape[0], params["input_w"], params["input_h"], 1)
 
-    print("model will be trained with {} and be tested with {} sample".format(train_images.shape))
+    print("model will be trained with {}".format(train_images.shape))
     # fit the model to the training data
     print("Fitting model to the training data...")
     print("")
@@ -110,7 +106,7 @@ def test(model, data, params, q_ratio=0.38):
 
     print()
     history = {'prediction': predictions, 'loss': losses, 'acc': accuracies }
-    return model, history,
+    return model, history
 
 
 def start_cnn_session(data, params, model_name, save_path="../model"):
