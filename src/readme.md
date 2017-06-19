@@ -16,7 +16,7 @@
 
  todo: 7. literature - related work - finance lstm,rnn
 
- todo: 8. hisselere ve yıla göre başarım
+ done: 8. hisselere ve yıla göre başarım
 
  todo: 9. hisse senetlerinin artırmak lazım.
 
