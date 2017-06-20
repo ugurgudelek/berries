@@ -69,11 +69,19 @@ def main():
 
 if __name__ == "__main__":
     # main()
-    data = get_last_saved_data()
-    model = load_model("../model/model_regr_100epoch_before_2017_06_16 21_55_06_953896")
-    params = {"input_w": 28, "input_h": 28, "num_classes": 1, "batch_size": 1024, "epochs": 100}
-    with K.get_session():
-        _, history = cs.test(model, data, params, q_ratio=0.8)
 
-        pd.to_pickle(history, "../result/history.pickle")
+    # data = get_last_saved_data()
+    # model = load_model("../model/model_regr_100epoch_before_2017_06_16 21_55_06_953896")
+    # params = {"input_w": 28, "input_h": 28, "num_classes": 1, "batch_size": 1024, "epochs": 100}
+    # with K.get_session():
+    #     _, history = cs.test(model, data, params, q_ratio=0.8)
+    #
+    #     pd.to_pickle(history, "../result/history.pickle")
+
+    stock_names = ['spy', 'xlf', 'xlu', 'xle',
+                   'xlp', 'xli', 'xlv', 'xlk', 'ewj',
+                   'xlb', 'xly', 'eww', 'dia', 'ewg',
+                   'ewh', 'ewc', 'ewa']
+    cluster_features(stock_names, drop_this_cols=['date', 'low', 'close', 'high', 'open', 'adjusted_close'], hierarcy_no_plot=False)
+    plt.show()
 
