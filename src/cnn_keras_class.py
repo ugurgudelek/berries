@@ -1,11 +1,8 @@
 import numpy as np
 import pandas as pd
 import csv
-from sklearn.model_selection import StratifiedKFold
-
-import matplotlib.pyplot as plt
 import keras
-from keras.models import Sequential
+from keras.models import Sequential, load_model
 from keras.layers import Dense, Dropout, Activation, Flatten
 from keras.layers import Conv2D, MaxPooling2D
 
@@ -13,20 +10,6 @@ import datetime
 import os
 
 from helper import quantize
-
-
-
-
-def custom_test_on_batch(model, image, label, q_ratio=0.38):
-    prediction = model.predict(image)
-    mse = (label - prediction) ** 2
-    p_q = quantize(prediction,q_ratio)
-    r_q = quantize(label,q_ratio)
-    if p_q == r_q:
-        return prediction, mse, 1
-    else:
-        return prediction, mse, 0
-
 
 def construct_cnn(params):
     # CNN model
@@ -38,10 +21,10 @@ def construct_cnn(params):
     model.add(Flatten())
     model.add(Dense(128, activation='relu'))
     model.add(Dropout(0.5))
-    model.add(Dense(params["num_classes"]))
-    model.compile(loss=keras.losses.mean_squared_error,
+    model.add(Dense(params["num_classes"], activation="softmax"))
+    model.compile(loss=keras.losses.categorical_crossentropy,
                   optimizer=keras.optimizers.Adadelta(),
-                  metrics=['mse', 'mae'])
+                  metrics=['binary_accuracy'])
     return model
 
 
@@ -65,13 +48,7 @@ def test(model, data, params, q_ratio=0.38):
     test_images = data['test_images'].as_matrix()
     test_labels = data['test_labels'].as_matrix()
     test_images = test_images.reshape(test_images.shape[0], params["input_w"], params["input_h"], 1)
-
-    recalls = []
-    precisions = []
-    fprs = []
-    tprs = []
-    accuracies = []
-    losses = []
+    
     predictions=[]
 
     # train_data_size = train_images.shape[0]
@@ -82,58 +59,60 @@ def test(model, data, params, q_ratio=0.38):
 
         image = image.reshape((1, params["input_w"], params["input_h"], 1))
         label = label.reshape((1, params["num_classes"]))
-        # test for next image
 
-        prediction, loss_cur, acc_cur = custom_test_on_batch(model, image, label, q_ratio=q_ratio)
-        # loss_cur,acc_cur = model.test_on_batch(image,label)
+        # test for next image
+        prediction = model.predict(image)
 
         predictions.append(prediction)
-        accuracies.append(acc_cur)
-        losses.append(loss_cur)
-
 
         # train with only 1 more image
         model.train_on_batch(image, label)
 
-
-
-        # show values every 100 cycle
+        # inform every 100 cycle
         if i % 100 == 0 and i != 0:
-            print("{} to {} mean : ".format(i - 100, i), np.mean(accuracies))
-
-    print()
-    print(np.mean(accuracies))
-
-    print()
-    return model
-    #history = {'prediction': predictions, 'loss': losses, 'acc': accuracies }
-    #return model, history
+            print("Test {}-th image".format(i))
+            
+    return predictions
 
 
-def start_cnn_session(data, params, model_name, save_path="../model"):
+def start_cnn_session(data, params, model_name, model_save_path="../model", result_save_path="../result", full_path=""):
     """Trains and evaluates CNN on the given train and test data, respectively."""
 
     # get date and clock info for model saving..
     now = str(datetime.datetime.now())
     now = now.replace('-', '_').replace(':', '_').replace('.', '_')
 
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
+    if full_path != "":
 
-    # construct cnn
-    print("CNN constructing...")
-    model = construct_cnn(params=params)
-
-    # fit data
-    print("CNN fit session started...")
-    model = fit(model, data, params)
-
-    # save model before test
-    model.save(save_path + "/" + model_name + "_before_" + now)
+        model = load_model(full_path)
+        
+    else:
+        
+        if not os.path.exists(model_save_path):
+            os.makedirs(model_save_path)
+            
+        # construct cnn
+        print("CNN constructing...")
+        model = construct_cnn(params=params)
+        
+        # fit data
+        print("CNN fit session started...")
+        model = fit(model, data, params)
+        
+        # save model before test
+        model.save(model_save_path + "/" + model_name + "_before_" + now)
 
     # test
     print("CNN test session started...")
-    model = test(model, data, params)
+    predictions = test(model, data, params)
+    # predictions is list of lists, flatten it
+    predictions = [item for sublist in predictions for item in sublist]
+    predictions = np.asarray(predictions)
+    # make list of numpy array out of data['test_labels']
+    actual = data['test_labels'].values
 
-    # save model after test
-    model.save(save_path + "/" + model_name + "_after_" + now)
+    # calculate and print accuracy
+    print("Accuracy: {}%".format(np.sum(np.argmax(predictions,1) == np.argmax(actual,1)) / predictions.shape[0] * 100)) # simple accuracy (in %)
+
+    # save predictions after test
+    np.savetxt(result_save_path + "/predictions_" + model_name + "_" + now, np.concatenate((predictions, actual), axis=1), delimiter=',')

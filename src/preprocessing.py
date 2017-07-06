@@ -85,6 +85,31 @@ def calculate_labels(stock_names, period=28, stock_with_metric_path="../input/st
 
         stock.to_csv(stock_with_labels_path + "/{}.csv".format(stock_name), index=None)
 
+# calculates labels for classification        
+def calculate_labels_cls(stock_names, period=28, stock_with_metric_path="../input/stock_with_metrics",
+                                   stock_with_labels_path="../input/stock_with_labels"):
+    if not os.path.exists(stock_with_labels_path):
+        os.makedirs(stock_with_labels_path)
+
+    for stock_name in stock_names:
+        # skip if exist
+        if stock_name + ".csv" in os.listdir(stock_with_labels_path):
+            print(stock_with_labels_path + "/{}.csv is already exist. Delete file to recompile".format(stock_name))
+            continue
+
+        # read stock_metric csv
+        stock = pd.read_csv(stock_with_metric_path + "/{}.csv".format(stock_name))
+
+        # tanh(percentage_change) used because of that normalization is must
+        target_day_regr = classes.day_by_day_reg(stock['pct_change_tanh'], period)
+
+        # classes according to tanh (3 classes: < - 0.38 ; > -0.38 && < 0.38 ; > 0.38
+        stock['label_class_tanh_less'] = (target_day_regr <= -0.38).astype(int)
+        stock['label_class_tanh_inrange'] = ((target_day_regr > -0.38) & (target_day_regr <= 0.38)).astype(int)
+        stock['label_class_tanh_more'] = (target_day_regr > 0.38).astype(int)
+
+        stock.to_csv(stock_with_labels_path + "/{}.csv".format(stock_name), index=None)
+
 
 # 4.
 def cluster_features(p_stock_names, drop_this_cols, hierarcy_no_plot=True,
@@ -164,11 +189,6 @@ def create_images_from_data(stock_names, sorted_cluster_names, label_names, spli
         data = pd.read_csv(stock_with_labels_path + "/{}.csv".format(stock_name))
         predictor_names = sorted_cluster_names
 
-
-
-
-
-
         # drop irrelevant features
         data = data[['date'] + predictor_names + label_names]
         # when i do this, later i can reach data with stock name and date
@@ -246,6 +266,94 @@ def get_merged_images_and_labels_data(stock_names, read_path="../input/images_wi
         dates = data_df.iloc[:, 1] # second element
         images = data_df.iloc[:, 2:-labels_are_last] # remaining elements
         labels = data_df.iloc[:, -labels_are_last:] # last elements
+
+        print("all images are merging with {} ...".format(stock))
+
+        # determine where to split
+        image_count = images.shape[0]
+        train_image_count = int(image_count * train_test_ratio)
+        test_image_count = image_count - train_image_count
+
+        # split train and test
+        # for 16 year of data : nearly 14 year train-last 2 year test
+        train_images = images.iloc[0:train_image_count]
+        test_images = images.iloc[train_image_count:]
+        train_labels = labels.iloc[0:train_image_count]
+        test_labels = labels.iloc[train_image_count:]
+
+        train_names = names.iloc[0:train_image_count]
+        train_dates = dates.iloc[0:train_image_count]
+        test_names = names.iloc[train_image_count:]
+        test_dates = dates.iloc[train_image_count:]
+
+        # todo: need to make data class because above not seems good. -ugurgudelek
+
+        if len(all_train_images) == 0:
+            all_train_images = np.array(train_images)
+            all_train_labels = train_labels.values
+            all_test_images = np.array(test_images)
+            all_test_labels = test_labels.values
+
+            all_train_names = np.array(train_names)
+            all_test_names = np.array(test_names)
+            all_train_dates = np.array(train_dates)
+            all_test_dates = np.array(test_dates)
+        else:
+            all_train_images = np.append(all_train_images, train_images, axis=0)
+            all_train_labels = np.append(all_train_labels, train_labels.values, axis=0)
+            all_test_images = np.append(all_test_images, test_images, axis=0)
+            all_test_labels = np.append(all_test_labels, test_labels.values, axis=0)
+
+            all_train_names = np.append(all_train_names,train_names, axis=0)
+            all_test_names =  np.append(all_test_names, test_names, axis=0)
+            all_train_dates = np.append(all_train_dates,train_dates, axis=0)
+            all_test_dates =  np.append(all_test_dates, test_dates, axis=0)
+
+        print("current train shape is {} and {} label ".format(pd.DataFrame(all_train_images).shape,
+                                                               all_train_labels.shape[1]))
+        print("current test shape is {} and {} label ".format(pd.DataFrame(all_test_images).shape,
+                                                              all_test_labels.shape[1]))
+
+    data = {'train_images': pd.DataFrame(all_train_images),
+            'test_images': pd.DataFrame(all_test_images),
+            'train_labels': pd.DataFrame(all_train_labels),
+            'test_labels': pd.DataFrame(all_test_labels),
+            'train_names': pd.DataFrame(all_train_names),
+            'train_dates': pd.DataFrame(all_train_dates),
+            'test_names': pd.DataFrame(all_test_names),
+            'test_dates': pd.DataFrame(all_test_dates),
+            }
+
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
+    pd.to_pickle(data, save_path+"/last_saved.pickle")
+
+    return data
+
+# merging images and labels for classification
+def get_merged_images_and_labels_data_cls(stock_names, read_path="../input/images_with_labels", last_image_col = -4, labels_ind = [-3, -2, -1],
+                                      train_test_ratio=0.9, save_path="../input/last_saved_data"):
+
+    if os.path.isfile(save_path+"/last_saved.pickle"):
+        return pd.read_pickle(save_path+"/last_saved.pickle")
+    
+    all_train_images = []
+    all_train_labels = []
+    all_test_images = []
+    all_test_labels = []
+    all_train_names = []
+    all_test_names = []
+    all_train_dates=[]
+    all_test_dates=[]
+
+    # todo: burada şu strig colon işini çöz
+    for stock in stock_names:
+        data_df = pd.read_csv(read_path + "/{}.csv".format(stock), header=None)
+        names = data_df.iloc[:, 0] # first element
+        dates = data_df.iloc[:, 1] # second element
+        images = data_df.iloc[:, 2:(last_image_col + 1)] # remaining elements
+        labels = pd.concat([data_df.iloc[:,labels_ind]], axis = 1)            
 
         print("all images are merging with {} ...".format(stock))
 

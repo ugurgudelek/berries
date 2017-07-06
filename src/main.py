@@ -68,7 +68,7 @@ def main():
 
 
 if __name__ == "__main__":
-    # main()
+    main()
 
     # data = get_last_saved_data()
     # model = load_model("../model/model_regr_100epoch_before_2017_06_16 21_55_06_953896")
@@ -78,10 +78,10 @@ if __name__ == "__main__":
     #
     #     pd.to_pickle(history, "../result/history.pickle")
 
-    stock_names = ['spy', 'xlf', 'xlu', 'xle',
-                   'xlp', 'xli', 'xlv', 'xlk', 'ewj',
-                   'xlb', 'xly', 'eww', 'dia', 'ewg',
-                   'ewh', 'ewc', 'ewa']
-    cluster_features(stock_names, drop_this_cols=['date', 'low', 'close', 'high', 'open', 'adjusted_close'], hierarcy_no_plot=False)
-    plt.show()
+    # stock_names = ['spy', 'xlf', 'xlu', 'xle',
+    #                'xlp', 'xli', 'xlv', 'xlk', 'ewj',
+    #                'xlb', 'xly', 'eww', 'dia', 'ewg',
+    #                'ewh', 'ewc', 'ewa']
+    # cluster_features(stock_names, drop_this_cols=['date', 'low', 'close', 'high', 'open', 'adjusted_close'], hierarcy_no_plot=False)
+    # plt.show()
 

@@ -22,6 +22,6 @@
 
  todo : metric diversity sini arttır.
 
- todo: clustering olmadan ne oluyor?
+ done: regression MSE 0.58902 without clustering 0.59014 with clustering
 
 
