@@ -12,10 +12,11 @@ import os
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import cnn_keras_regr as cs
+import cnn_keras_class as cscls
 from keras.models import load_model
 
 
-def main():
+def main(regression = True):
     stock_names = ['spy', 'xlf', 'xlu', 'xle',
                    'xlp', 'xli', 'xlv', 'xlk', 'ewj',
                    'xlb', 'xly', 'eww', 'dia', 'ewg',
@@ -30,45 +31,52 @@ def main():
     # 2.calculate metric for available stocks and save them into csv file
     normalize_and_calculate_metrics(stock_names)
 
-    # 3.calculate labels for available stocks and save them into csv file
-    calculate_labels(stock_names)
+    if regression == True:
 
-    # 4.cluster features for available stocks and their features then save them into csv file
-    cluster_features(stock_names, drop_this_cols=['date', 'low', 'close', 'high', 'open','adjusted_close'])
+        # 3.calculate labels for available stocks and save them into csv file
+        calculate_labels(stock_names)
+        
+        # 4.cluster features for available stocks and their features then save them into csv file
+        cluster_features(stock_names, drop_this_cols=['date', 'low', 'close', 'high', 'open','adjusted_close'])
 
-    # 5.read sorted (via hierarchical clustering) feature names from file
-    sorted_cluster_names = pd.read_csv("../input/clustered_names.csv", header=None, squeeze=True).values.tolist()
+        # 5.read sorted (via hierarchical clustering) feature names from file
+        sorted_cluster_names = pd.read_csv("../input/clustered_names.csv", header=None, squeeze=True).values.tolist()
 
-    # 6. create flatten images with data and labels.
-    create_images_from_data(stock_names, sorted_cluster_names, label_names=['label_day_tanh_regr'])
+        # 6. create flatten images with data and labels.
+        create_images_from_data(stock_names, sorted_cluster_names, label_names=['label_day_tanh_regr'])
+        
+        # 7. merge all available data
+        # data has 'images' and 'labels'
+        data = get_merged_images_and_labels_data(stock_names, labels_are_last=1, train_test_ratio=0.9)
+        
+        # 8. call CNN
+        params = {"input_w": 28, "input_h": 28, "num_classes": 1, "batch_size": 1024, "epochs": 100}
+        with K.get_session():
+            cs.start_cnn_session(data, params,model_name="model_regr_100epoch")
+        #
+        # # draw some sample
+        # # draw_image(data['images'].iloc[0].values.reshape(28, 28), sorted_cluster_names)
+        # # plt.show()
 
-    # 7. merge all available data
-    # data has 'images' and 'labels'
-    data = get_merged_images_and_labels_data(stock_names, labels_are_last=1, train_test_ratio=0.9)
+        # plt.plot(sma_15_data, color='r')
+        # plt.bar(left=list(range(len(macd_trigger_9_15_5))),height=-200 - macd_trigger_9_15_5, color='b')
+        # plt.scatter(x=list(range(len(macd_trigger_9_15_5))), y=macd_trigger_9_15_5, color='r', s=1)
+        # plt.show()
 
-    # 8. call CNN
-    params = {"input_w": 28, "input_h": 28, "num_classes": 1, "batch_size": 1024, "epochs": 100}
-    with K.get_session():
-        cs.start_cnn_session(data, params,model_name="model_regr_100epoch")
-    #
-    # # draw some sample
-    # # draw_image(data['images'].iloc[0].values.reshape(28, 28), sorted_cluster_names)
-    # # plt.show()
-
-
-
-
-
-
-
-    # plt.plot(sma_15_data, color='r')
-    # plt.bar(left=list(range(len(macd_trigger_9_15_5))),height=-200 - macd_trigger_9_15_5, color='b')
-    # plt.scatter(x=list(range(len(macd_trigger_9_15_5))), y=macd_trigger_9_15_5, color='r', s=1)
-    # plt.show()
+    else:
+        
+        calculate_labels_cls(stock_names)
+        cluster_features(stock_names, drop_this_cols=['date', 'low', 'close', 'high', 'open','adjusted_close'])
+        sorted_cluster_names = pd.read_csv("../input/clustered_names.csv", header=None, squeeze=True).values.tolist()
+        create_images_from_data(stock_names, sorted_cluster_names, label_names=['label_class_tanh_less', 'label_class_tanh_inrange', 'label_class_tanh_more'])
+        data = get_merged_images_and_labels_data_cls(stock_names, last_image_col = -4, labels_ind = [-3, -2, -1], train_test_ratio = 0.9)
+        params = {"input_w": 28, "input_h": 28, "num_classes": 3, "batch_size": 1024, "epochs": 100}
+        with K.get_session():
+            cscls.start_cnn_session(data, params, model_save_name="model_class_100epoch", model_read_name = "")
 
 
 if __name__ == "__main__":
-    main()
+    main(regression = False)
 
     # data = get_last_saved_data()
     # model = load_model("../model/model_regr_100epoch_before_2017_06_16 21_55_06_953896")

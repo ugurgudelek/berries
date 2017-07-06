@@ -50,6 +50,7 @@ def test(model, data, params, q_ratio=0.38):
     test_images = test_images.reshape(test_images.shape[0], params["input_w"], params["input_h"], 1)
     
     predictions=[]
+    num_correct_preds  = 0
 
     # train_data_size = train_images.shape[0]
     # test_data_size = test_images.shape[0]
@@ -63,6 +64,10 @@ def test(model, data, params, q_ratio=0.38):
         # test for next image
         prediction = model.predict(image)
 
+        # update the number of correct predictions
+        if np.argmax(prediction, 1) == np.argmax(label, 1):
+            num_correct_preds += 1
+
         predictions.append(prediction)
 
         # train with only 1 more image
@@ -70,26 +75,26 @@ def test(model, data, params, q_ratio=0.38):
 
         # inform every 100 cycle
         if i % 100 == 0 and i != 0:
-            print("Test {}-th image".format(i))
+            print("{}-th image, mean accuracy {} %".format(i, num_correct_preds / len(predictions) * 100))
             
     return predictions
 
 
-def start_cnn_session(data, params, model_name, model_save_path="../model", result_save_path="../result", full_path=""):
+def start_cnn_session(data, params, model_save_name, model_path="../model", result_path="../result", model_read_name=""):
     """Trains and evaluates CNN on the given train and test data, respectively."""
 
     # get date and clock info for model saving..
     now = str(datetime.datetime.now())
     now = now.replace('-', '_').replace(':', '_').replace('.', '_')
 
-    if full_path != "":
+    if model_read_name != "":
 
-        model = load_model(full_path)
+        model = load_model(model_path + "/" + model_read_name)
         
     else:
         
-        if not os.path.exists(model_save_path):
-            os.makedirs(model_save_path)
+        if not os.path.exists(model_path):
+            os.makedirs(model_path)
             
         # construct cnn
         print("CNN constructing...")
@@ -100,7 +105,7 @@ def start_cnn_session(data, params, model_name, model_save_path="../model", resu
         model = fit(model, data, params)
         
         # save model before test
-        model.save(model_save_path + "/" + model_name + "_before_" + now)
+        model.save(model_path + "/" + model_save_name + "_before_" + now)
 
     # test
     print("CNN test session started...")
@@ -112,7 +117,7 @@ def start_cnn_session(data, params, model_name, model_save_path="../model", resu
     actual = data['test_labels'].values
 
     # calculate and print accuracy
-    print("Accuracy: {}%".format(np.sum(np.argmax(predictions,1) == np.argmax(actual,1)) / predictions.shape[0] * 100)) # simple accuracy (in %)
+    print("Accuracy: {} %".format(np.sum(np.argmax(predictions,1) == np.argmax(actual,1)) / predictions.shape[0] * 100)) # simple accuracy (in %)
 
     # save predictions after test
-    np.savetxt(result_save_path + "/predictions_" + model_name + "_" + now, np.concatenate((predictions, actual), axis=1), delimiter=',')
+    np.savetxt(result_path + "/predictions_" + model_save_name + "_" + now, np.concatenate((predictions, actual), axis=1), delimiter=',')
