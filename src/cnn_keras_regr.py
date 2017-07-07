@@ -5,7 +5,7 @@ from sklearn.model_selection import StratifiedKFold
 
 import matplotlib.pyplot as plt
 import keras
-from keras.models import Sequential
+from keras.models import Sequential, load_model
 from keras.layers import Dense, Dropout, Activation, Flatten
 from keras.layers import Conv2D, MaxPooling2D
 
@@ -105,35 +105,45 @@ def test(model, data, params, q_ratio=0.38):
     print(np.mean(accuracies))
 
     print()
-    return model
+    return predictions
     #history = {'prediction': predictions, 'loss': losses, 'acc': accuracies }
     #return model, history
 
 
-def start_cnn_session(data, params, model_name, save_path="../model"):
+def start_cnn_session(data, params, model_save_name, model_path="../model", result_path = "../result", model_read_name = ""):
     """Trains and evaluates CNN on the given train and test data, respectively."""
 
     # get date and clock info for model saving..
     now = str(datetime.datetime.now())
     now = now.replace('-', '_').replace(':', '_').replace('.', '_')
 
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
-
-    # construct cnn
-    print("CNN constructing...")
-    model = construct_cnn(params=params)
-
-    # fit data
-    print("CNN fit session started...")
-    model = fit(model, data, params)
-
-    # save model before test
-    model.save(save_path + "/" + model_name + "_before_" + now)
+    if model_read_name != "":
+        
+        model = load_model(model_path + "/" + model_read_name)
+        
+    else:
+    
+        if not os.path.exists(model_path):
+            os.makedirs(model_path)
+            
+        # construct cnn
+        print("CNN constructing...")
+        model = construct_cnn(params=params)
+        
+        # fit data
+        print("CNN fit session started...")
+        model = fit(model, data, params)
+        
+        # save model before test
+        model.save(model_path + "/" + model_save_name + "_before_" + now)
 
     # test
     print("CNN test session started...")
-    model = test(model, data, params)
+    predictions = test(model, data, params)
+    # make predictions and actual labels numpy array
+    predictions = [item for sublist in predictions for item in sublist]
+    predictions = np.asarray(predictions)
+    actual = data['test_labels'].values
 
-    # save model after test
-    model.save(save_path + "/" + model_name + "_after_" + now)
+    # save predictions after test
+    np.savetxt(result_path + "/predictions_" + model_save_name + "_" + now, np.concatenate((predictions, actual), axis=1), delimiter=',')

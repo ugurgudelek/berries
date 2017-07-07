@@ -52,7 +52,7 @@ def main(regression = True):
         # 8. call CNN
         params = {"input_w": 28, "input_h": 28, "num_classes": 1, "batch_size": 1024, "epochs": 100}
         with K.get_session():
-            cs.start_cnn_session(data, params,model_name="model_regr_100epoch")
+            cs.start_cnn_session(data, params, model_save_name="model_regr_100epoch", model_read_name = "")
         #
         # # draw some sample
         # # draw_image(data['images'].iloc[0].values.reshape(28, 28), sorted_cluster_names)
@@ -76,7 +76,7 @@ def main(regression = True):
 
 
 if __name__ == "__main__":
-    main(regression = False)
+    main(regression = True)
 
     # data = get_last_saved_data()
     # model = load_model("../model/model_regr_100epoch_before_2017_06_16 21_55_06_953896")
