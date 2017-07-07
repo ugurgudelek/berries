@@ -22,8 +22,6 @@
 
  todo : metric diversity sini arttır.
 
- done: regression MSE 0.58902 without clustering 0.59014 with clustering
- 
-       classification accuracy 58.34734 % without clustering 57.07283 % with clustering
+ done: regression MSE 0.58902 without clustering 0.59014 with clustering ; classification accuracy 57.07283 % without clustering 58.34734 % with clustering
 
 
