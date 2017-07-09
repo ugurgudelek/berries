@@ -64,38 +64,40 @@ def fit(model, data, params):
 def test(model, data, params, q_ratio=0.38):
     test_images = data['test_images'].as_matrix()
     test_labels = data['test_labels'].as_matrix()
+    test_names = data['test_names'].as_matrix()
+    test_dates = data['test_dates'].as_matrix()
     test_images = test_images.reshape(test_images.shape[0], params["input_w"], params["input_h"], 1)
-
-    recalls = []
+    
     precisions = []
-    fprs = []
-    tprs = []
     accuracies = []
     losses = []
-    predictions=[]
+    predictions = {}
 
     # train_data_size = train_images.shape[0]
     # test_data_size = test_images.shape[0]
     # cur_pointer = train_data_size + 1
     print("Calculating accuracy day by day...", end='\n\n')
-    for i, (image, label) in enumerate(zip(test_images, test_labels)):
+    for i, (image, label, name, date) in enumerate(zip(test_images, test_labels, test_names, test_dates)):
 
         image = image.reshape((1, params["input_w"], params["input_h"], 1))
         label = label.reshape((1, params["num_classes"]))
         # test for next image
 
-        prediction, loss_cur, acc_cur = custom_test_on_batch(model, image, label, q_ratio=q_ratio)
+        prediction, _, acc_cur = custom_test_on_batch(model, image, label, q_ratio=q_ratio)
         # loss_cur,acc_cur = model.test_on_batch(image,label)
 
-        predictions.append(prediction)
-        accuracies.append(acc_cur)
-        losses.append(loss_cur)
+        if name[0] not in predictions:
 
+            predictions[name[0]] = np.array([[date[0], prediction[0][0], label[0][0]]])
+            
+        else:
+
+            predictions[name[0]] = np.append(predictions[name[0]], np.array([[date[0], prediction[0][0], label[0][0]]]), axis = 0)
+            
+        accuracies.append(acc_cur)
 
         # train with only 1 more image
         model.train_on_batch(image, label)
-
-
 
         # show values every 100 cycle
         if i % 100 == 0 and i != 0:
@@ -140,10 +142,18 @@ def start_cnn_session(data, params, model_save_name, model_path="../model", resu
     # test
     print("CNN test session started...")
     predictions = test(model, data, params)
-    # make predictions and actual labels numpy array
-    predictions = [item for sublist in predictions for item in sublist]
-    predictions = np.asarray(predictions)
-    actual = data['test_labels'].values
+    predictions = pd.Panel(predictions).to_frame()
+    predictions.to_pickle(result_path + "/predictions_" + model_save_name + "_" + now)
+    
+    # predictions, names, dates = test(model, data, params)
+    # # make predictions, names, dates and actual labels numpy array
+    # predictions = [item for sublist in predictions for item in sublist]
+    # predictions = np.asarray(predictions)
+    # names = [item for sublist in names for item in sublist]
+    # names = np.asarray(names).reshape((-1,1))
+    # dates = [item for sublist in dates for item in sublist]
+    # dates = np.asarray(dates).reshape((-1,1))
+    # actual = data['test_labels'].values
 
-    # save predictions after test
-    np.savetxt(result_path + "/predictions_" + model_save_name + "_" + now, np.concatenate((predictions, actual), axis=1), delimiter=',')
+    # # save predictions after test
+    # np.savetxt(result_path + "/predictions_" + model_save_name + "_" + now + ".csv", np.concatenate((names, dates, predictions, actual), axis=1), delimiter=',', fmt = "%s %s %s %s")

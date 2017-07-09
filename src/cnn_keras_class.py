@@ -47,16 +47,19 @@ def fit(model, data, params):
 def test(model, data, params, q_ratio=0.38):
     test_images = data['test_images'].as_matrix()
     test_labels = data['test_labels'].as_matrix()
+    test_names = data['test_names'].as_matrix()
+    test_dates = data['test_dates'].as_matrix()
     test_images = test_images.reshape(test_images.shape[0], params["input_w"], params["input_h"], 1)
     
-    predictions=[]
+    predictions={}
     num_correct_preds  = 0
+    num_preds = 0
 
     # train_data_size = train_images.shape[0]
     # test_data_size = test_images.shape[0]
     # cur_pointer = train_data_size + 1
     print("Calculating accuracy day by day...", end='\n\n')
-    for i, (image, label) in enumerate(zip(test_images, test_labels)):
+    for i, (image, label, name, date) in enumerate(zip(test_images, test_labels, test_names, test_dates)):
 
         image = image.reshape((1, params["input_w"], params["input_h"], 1))
         label = label.reshape((1, params["num_classes"]))
@@ -67,15 +70,23 @@ def test(model, data, params, q_ratio=0.38):
         # update the number of correct predictions
         if np.argmax(prediction, 1) == np.argmax(label, 1):
             num_correct_preds += 1
+        num_preds += 1
+            
+        # add current prediction to the dictionary
+        if name[0] not in predictions:
 
-        predictions.append(prediction)
+            predictions[name[0]] = np.array([[date[0], prediction[0][0], prediction[0][1], prediction[0][2], label[0][0], label[0][1], label[0][2]]])
+            
+        else:
+
+            predictions[name[0]] = np.append(predictions[name[0]], np.array([[date[0], prediction[0][0], prediction[0][1], prediction[0][2], label[0][0], label[0][1], label[0][2]]]), axis = 0)
 
         # train with only 1 more image
         model.train_on_batch(image, label)
 
         # inform every 100 cycle
         if i % 100 == 0 and i != 0:
-            print("{}-th image, mean accuracy {} %".format(i, num_correct_preds / len(predictions) * 100))
+            print("{}-th image, mean accuracy {} %".format(i, num_correct_preds / num_preds * 100))
             
     return predictions
 
@@ -110,14 +121,17 @@ def start_cnn_session(data, params, model_save_name, model_path="../model", resu
     # test
     print("CNN test session started...")
     predictions = test(model, data, params)
+    predictions = pd.Panel(predictions).to_frame()
+    predictions.to_pickle(result_path + "/predictions_" + model_save_name + "_" + now)
+    
     # predictions is list of lists, flatten it
-    predictions = [item for sublist in predictions for item in sublist]
-    predictions = np.asarray(predictions)
-    # make list of numpy array out of data['test_labels']
-    actual = data['test_labels'].values
+    # predictions = [item for sublist in predictions for item in sublist]
+    # predictions = np.asarray(predictions)
+    # # make list of numpy array out of data['test_labels']
+    # actual = data['test_labels'].values
 
-    # calculate and print accuracy
-    print("Accuracy: {} %".format(np.sum(np.argmax(predictions,1) == np.argmax(actual,1)) / predictions.shape[0] * 100)) # simple accuracy (in %)
+    # # calculate and print accuracy
+    # print("Accuracy: {} %".format(np.sum(np.argmax(predictions,1) == np.argmax(actual,1)) / predictions.shape[0] * 100)) # simple accuracy (in %)
 
-    # save predictions after test
-    np.savetxt(result_path + "/predictions_" + model_save_name + "_" + now, np.concatenate((predictions, actual), axis=1), delimiter=',')
+    # # save predictions after test
+    # np.savetxt(result_path + "/predictions_" + model_save_name + "_" + now, np.concatenate((predictions, actual), axis=1), delimiter=',')
