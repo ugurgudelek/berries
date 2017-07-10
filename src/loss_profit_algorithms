@@ -1,0 +1,37 @@
+
+Buy-Sell Algorithm for Regression:
+
+    Find the minimum date, min_date
+    
+    Find the maximum date, max_date
+    
+    current_date = min_date
+    
+    While current_date < max_date :
+
+        higher_stocks = {}
+        lower_stocks = {}        
+
+        For each stock that we have prediction in current_date:
+            
+            if predicted value > actual_value for that stock:
+                
+                higher_stocks[stock] = predicted_value - actual value
+                
+            else if predicted value < actual_value for that stock:
+            
+                lower_stocks.append(stock)
+            
+        If higher_stocks not empty :
+            
+            Find the highest stock in higher_stock, highest_stock
+            
+            If we have enough captial to buy the highest_stock :
+            
+                Buy the highest_stock with all of our captial
+                
+        If lower_stocks not empty we have any of the stocks that are in the lower_stocks:
+                
+            Sell all of them
+        
+        current_date += 1 day

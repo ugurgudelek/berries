@@ -3,6 +3,7 @@ import csv
 import pandas as pd
 import matplotlib.pyplot as plt
 from preprocessing import *
+import loss_profit
 import google_finance_io
 import datetime
 from dateutil import parser
@@ -77,6 +78,14 @@ def main(regression = True):
 
 if __name__ == "__main__":
     main(regression = True)
+
+    # stock_names = ['spy', 'xlf']
+    # prices = loss_profit.prepare_adj_close(stock_names)
+    # capital, shares = loss_profit.buy_sell_regr(predictions_name = 'predictions_model_regr_1epoch_2017_07_10 11_16_55_376371', adj_close = prices)
+
+    # print(capital)
+    # print(shares)
+    
 
     # data = get_last_saved_data()
     # model = load_model("../model/model_regr_100epoch_before_2017_06_16 21_55_06_953896")
