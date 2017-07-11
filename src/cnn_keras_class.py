@@ -51,7 +51,11 @@ def test(model, data, params, q_ratio=0.38):
     test_dates = data['test_dates'].as_matrix()
     test_images = test_images.reshape(test_images.shape[0], params["input_w"], params["input_h"], 1)
     
-    predictions={}
+    predictions = []    
+    names = []
+    dates = []
+    actuals = []
+    
     num_correct_preds  = 0
     num_preds = 0
 
@@ -71,15 +75,11 @@ def test(model, data, params, q_ratio=0.38):
         if np.argmax(prediction, 1) == np.argmax(label, 1):
             num_correct_preds += 1
         num_preds += 1
-            
-        # add current prediction to the dictionary
-        if name[0] not in predictions:
-
-            predictions[name[0]] = np.array([[date[0], prediction[0][0], prediction[0][1], prediction[0][2], label[0][0], label[0][1], label[0][2]]])
-            
-        else:
-
-            predictions[name[0]] = np.append(predictions[name[0]], np.array([[date[0], prediction[0][0], prediction[0][1], prediction[0][2], label[0][0], label[0][1], label[0][2]]]), axis = 0)
+        
+        predictions.append(np.array([prediction[0][0], prediction[0][1], prediction[0][2]]))
+        names.append(name[0])
+        dates.append(date[0])
+        actuals.append(np.array([label[0][0], label[0][1], label[0][2]]))
 
         # train with only 1 more image
         model.train_on_batch(image, label)
@@ -88,7 +88,9 @@ def test(model, data, params, q_ratio=0.38):
         if i % 100 == 0 and i != 0:
             print("{}-th image, mean accuracy {} %".format(i, num_correct_preds / num_preds * 100))
             
-    return predictions
+    pred_df = pd.DataFrame({'Name' : np.asarray(names), 'Date' : np.asarray(dates), 'Pred0' : np.asarray(predictions)[:,0], 'Pred1' : np.asarray(predictions)[:,1], 'Pred2' : np.asarray(predictions)[:,2], 'Act0' : np.asarray(actuals)[:,0], 'Act1' : np.asarray(actuals)[:,1], 'Act2' : np.asarray(actuals)[:,2]})
+            
+    return pred_df
 
 
 def start_cnn_session(data, params, model_save_name, model_path="../model", result_path="../result", model_read_name=""):
@@ -120,9 +122,8 @@ def start_cnn_session(data, params, model_save_name, model_path="../model", resu
 
     # test
     print("CNN test session started...")
-    predictions = test(model, data, params)
-    predictions = pd.Panel(predictions).to_frame()
-    predictions.to_pickle(result_path + "/predictions_" + model_save_name + "_" + now)
+    pred_df = test(model, data, params)
+    pred_df.to_pickle(result_path + "/predictions_" + model_save_name + "_" + now)
     
     # predictions is list of lists, flatten it
     # predictions = [item for sublist in predictions for item in sublist]

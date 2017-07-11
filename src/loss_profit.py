@@ -11,7 +11,9 @@ def prepare_adj_close(stock_names, raw_data_path = "../input/raw_data"):
     """This function reads raw data and prepares adjusted close dataframe, which is indexed by stock_names.
     The first element of each row is the date and the second element is adjusted close value on that date."""
 
-    adj_close = {}
+    closes = None
+    names = None
+    dates = None
 
     # populate the dictionary
     for name in stock_names:
@@ -22,12 +24,17 @@ def prepare_adj_close(stock_names, raw_data_path = "../input/raw_data"):
             return None
 
         stock = pd.read_csv(raw_data_path + "/{}.csv".format(name))
+        
+        if closes is None:
+            closes = stock['adjusted_close'].values
+            dates = stock['date'].values
+            names = np.repeat(name, stock['date'].values.shape[0])
+        else:
+            closes = np.concatenate((closes, stock['adjusted_close'].values))
+            dates = np.concatenate((dates, stock['date'].values))
+            names = np.concatenate((names, np.repeat(name, stock['date'].values.shape[0])))
 
-        stock_data = np.concatenate((stock['date'].values.reshape((-1,1)), stock['adjusted_close'].values.reshape((-1,1))), axis = 1)
-
-        adj_close[name] = stock_data
-
-    adj_close = pd.Panel(adj_close).to_frame()
+    adj_close = pd.DataFrame({'Name' : names, 'Date' : dates, 'Adj_Close' : closes})
 
     return adj_close
         
@@ -42,7 +49,7 @@ def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000, buy_thr 
     # read the predictions data
     predictions = pd.read_pickle(predictions_path + predictions_name)
     # stock names
-    stock_names = predictions.keys()
+    stock_names = predictions['Name'].unique()
     # our capital
     capital = initial_capital
     # number of shares for each stock
@@ -59,10 +66,10 @@ def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000, buy_thr 
     max_date = datetime.strptime('1000-12-12', date_fmt)
     for name in stock_names:
 
-        pred_length = int(predictions[name].shape[0] / predictions[name][0].shape[0])
+        pred_length = int(predictions.loc[predictions['Name'] == name].shape[0])
         
-        tmp_min_date = datetime.strptime(predictions[name][0][0], date_fmt)
-        tmp_max_date = datetime.strptime(predictions[name][pred_length - 1][0], date_fmt)
+        tmp_min_date = datetime.strptime(predictions.loc[predictions['Name'] == name].iloc[0]['Date'], date_fmt)
+        tmp_max_date = datetime.strptime(predictions.loc[predictions['Name'] == name].iloc[pred_length - 1]['Date'], date_fmt)
         
         if tmp_min_date < min_date:
 
@@ -85,19 +92,21 @@ def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000, buy_thr 
         # find higher and lower stocks
         for name in stock_names:
 
-            for i in range(0, int(predictions[name].shape[0] / predictions[name][0].shape[0])):
+            for i in range(0, int(predictions.loc[predictions['Name'] == name].shape[0])):
 
-                tmp_date = datetime.strptime(predictions[name][i][0], date_fmt)
+                tmp_date = datetime.strptime(predictions.loc[predictions['Name'] == name].iloc[i]['Date'], date_fmt)
 
                 if tmp_date == current_date:
+                
+                    tmp_prediction = float(predictions.loc[predictions['Name'] == name].iloc[i]['Prediction'])
 
-                    if float(predictions[name][i][1]) > 0 :
+                    if tmp_prediction > 0 :
 
-                        higher_stocks[name] = float(predictions[name][i][1])
+                        higher_stocks[name] = tmp_prediction
 
-                    elif float(predictions[name][i][1]) < 0 :
+                    elif tmp_prediction < 0 :
 
-                        lower_stocks[name] = float(predictions[name][i][1])
+                        lower_stocks[name] = tmp_prediction
                         
                     break  # we can break because predictions are assumed to be sorted by date ascending
 
@@ -110,7 +119,7 @@ def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000, buy_thr 
             highest_up_change = 0
 
             # find the highest stock
-            for cur_high_stock in higher_stocks.keys():
+            for cur_high_stock in higher_stocks:
 
                 if higher_stocks[cur_high_stock] > highest_up_change:
 
@@ -120,11 +129,11 @@ def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000, buy_thr 
 
             # find the price of the highest stock on the current date
             highest_price = 0
-            for i in range(0, int(adj_close[highest_stock].shape[0] / adj_close[highest_stock][0].shape[0])):
+            for i in range(0, int(adj_close.loc[adj_close['Name'] == highest_stock].shape[0])):
                 
-                if datetime.strptime(adj_close[highest_stock][i][0], date_fmt) == current_date:
+                if datetime.strptime(adj_close.loc[adj_close['Name'] == highest_stock].iloc[i]['Date'], date_fmt) == current_date:
                     
-                    highest_price = float(adj_close[highest_stock][i][1])
+                    highest_price = float(adj_close.loc[adj_close['Name'] == highest_stock].iloc[i]['Adj_Close'])
                     break
                 
             # if we have enough capital to buy the highest_stock, buy it with all of our money
@@ -138,18 +147,18 @@ def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000, buy_thr 
         if lower_stocks:
 
             # for each stock in lower_stocks
-            for lower_stock in lower_stocks.keys():
+            for lower_stock in lower_stocks:
 
                 # if we have any of this stock
                 if shares[lower_stock] != 0:
                     
                     # find the price of this stock on the current date
                     lower_price = 0
-                    for i in range(0, int(adj_close[lower_stock].shape[0] / adj_close[lower_stock][0].shape[0])):
+                    for i in range(0, int(adj_close.loc[adj_close['Name'] == lower_stock].shape[0])):
                 
-                        if datetime.strptime(adj_close[lower_stock][i][0], date_fmt) == current_date:
+                        if datetime.strptime(adj_close.loc[adj_close['Name'] == lower_stock].iloc[i]['Date'], date_fmt) == current_date:
                     
-                            lower_price = float(adj_close[lower_stock][i][1])
+                            lower_price = float(adj_close.loc[adj_close['Name'] == lower_stock].iloc[i]['Adj_Close'])
                             break
 
                     # sell this stock
@@ -171,21 +180,21 @@ def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000, buy_thr 
             print("End of the term, selling all higher stocks..")
             
             # if higher_stocks is not empty
-            if higher_stocks.keys():
+            if higher_stocks:
                 
                 # for each stock in higher_stocks
-                for higher_stock in higher_stocks.keys():
+                for higher_stock in higher_stocks:
                     
                     # if we have any of this stock
                     if shares[higher_stock] != 0:
                         
                         # find the price of this stock on the current date
                         higher_price = 0
-                        for i in range(0, int(adj_close[higher_stock].shape[0] / adj_close[higher_stock][0].shape[0])):
+                        for i in range(0, int(adj_close.loc[adj_close['Name'] == higher_stock].shape[0])):
                             
-                            if datetime.strptime(adj_close[higher_stock][i][0], date_fmt) == current_date:
+                            if datetime.strptime(adj_close.loc[adj_close['Name'] == higher_stock].iloc[i]['Date'], date_fmt) == current_date:
                                 
-                                higher_price = float(adj_close[higher_stock][i][1])
+                                higher_price = float(adj_close.loc[adj_close['Name'] == higher_stock].iloc[i]['Adj_Close'])
                                 break
                             
                         # sell this stock
@@ -199,5 +208,3 @@ def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000, buy_thr 
             print("----------------------------")
                             
     return capital, shares
-            
-        

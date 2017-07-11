@@ -53,7 +53,7 @@ def main(regression = True):
         # 8. call CNN
         params = {"input_w": 28, "input_h": 28, "num_classes": 1, "batch_size": 1024, "epochs": 100}
         with K.get_session():
-            cs.start_cnn_session(data, params, model_save_name="model_regr_100epoch", model_read_name = "")
+            cs.start_cnn_session(data, params, model_save_name="model_regr_100epoch", model_read_name = "model_regr_100epoch_before_2017_07_07 17_52_36_962776")
         #
         # # draw some sample
         # # draw_image(data['images'].iloc[0].values.reshape(28, 28), sorted_cluster_names)
@@ -73,18 +73,21 @@ def main(regression = True):
         data = get_merged_images_and_labels_data_cls(stock_names, last_image_col = -4, labels_ind = [-3, -2, -1], train_test_ratio = 0.9)
         params = {"input_w": 28, "input_h": 28, "num_classes": 3, "batch_size": 1024, "epochs": 100}
         with K.get_session():
-            cscls.start_cnn_session(data, params, model_save_name="model_class_100epoch", model_read_name = "")
+            cscls.start_cnn_session(data, params, model_save_name="model_class_100epoch", model_read_name = "model_class_100epoch_before_2017_07_07 15_53_18_724997")
 
 
 if __name__ == "__main__":
-    main(regression = True)
+    #main(regression = True)
 
-    # stock_names = ['spy', 'xlf']
-    # prices = loss_profit.prepare_adj_close(stock_names)
-    # capital, shares = loss_profit.buy_sell_regr(predictions_name = 'predictions_model_regr_1epoch_2017_07_10 11_16_55_376371', adj_close = prices)
+    stock_names = ['spy', 'xlf', 'xlu', 'xle',
+                   'xlp', 'xli', 'xlv', 'xlk', 'ewj',
+                   'xlb', 'xly', 'eww', 'dia', 'ewg',
+                   'ewh', 'ewc', 'ewa']
+    prices = loss_profit.prepare_adj_close(stock_names)
+    capital, shares = loss_profit.buy_sell_regr(predictions_name = 'predictions_model_regr_100epoch_2017_07_11 16_24_27_177432', adj_close = prices)
 
-    # print(capital)
-    # print(shares)
+    print(capital)
+    print(shares)
     
 
     # data = get_last_saved_data()

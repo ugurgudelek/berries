@@ -71,7 +71,11 @@ def test(model, data, params, q_ratio=0.38):
     precisions = []
     accuracies = []
     losses = []
-    predictions = {}
+    
+    predictions = []
+    names = []
+    dates = []
+    actuals = []
 
     # train_data_size = train_images.shape[0]
     # test_data_size = test_images.shape[0]
@@ -85,14 +89,11 @@ def test(model, data, params, q_ratio=0.38):
 
         prediction, _, acc_cur = custom_test_on_batch(model, image, label, q_ratio=q_ratio)
         # loss_cur,acc_cur = model.test_on_batch(image,label)
-
-        if name[0] not in predictions:
-
-            predictions[name[0]] = np.array([[date[0], prediction[0][0], label[0][0]]])
-            
-        else:
-
-            predictions[name[0]] = np.append(predictions[name[0]], np.array([[date[0], prediction[0][0], label[0][0]]]), axis = 0)
+        
+        predictions.append(prediction[0][0])
+        names.append(name[0])
+        dates.append(date[0])
+        actuals.append(label[0][0])
             
         accuracies.append(acc_cur)
 
@@ -107,7 +108,9 @@ def test(model, data, params, q_ratio=0.38):
     print(np.mean(accuracies))
 
     print()
-    return predictions
+    
+    pred_df = pd.DataFrame({'Name' : np.asarray(names), 'Date' : np.asarray(dates), 'Prediction' : np.asarray(predictions), 'Actual' : np.asarray(actuals)})
+    return pred_df
     #history = {'prediction': predictions, 'loss': losses, 'acc': accuracies }
     #return model, history
 
@@ -141,9 +144,8 @@ def start_cnn_session(data, params, model_save_name, model_path="../model", resu
 
     # test
     print("CNN test session started...")
-    predictions = test(model, data, params)
-    predictions = pd.Panel(predictions).to_frame()
-    predictions.to_pickle(result_path + "/predictions_" + model_save_name + "_" + now)
+    pred_df = test(model, data, params)
+    pred_df.to_pickle(result_path + "/predictions_" + model_save_name + "_" + now)
     
     # predictions, names, dates = test(model, data, params)
     # # make predictions, names, dates and actual labels numpy array
