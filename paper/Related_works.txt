@@ -1,0 +1,14 @@
+Related Works
+
+Chang, Liu, Lin, Fan, and Ng (2009) had applied neural network, dynamic time win- dows, and Case Based Reasoning (CBR) to predict stock trading.They concluded that percentage prediction accuracy for stock buy- ing or selling decisions was promising.
+
+Two neural network architectures, namely multi-layer perception (MLP) neural net- works and generalized regression neural networks have been used to forecast closing price movements of Kuwait stock exchange (Mostafa, 2010)
+
+Chang, Liu, Fan, Lin, and Lai (2009) also used ensemble of neural networks and intelligent piecewise linear representation to determine the stock turning points. The results demonstrated that the hybrid system can make a significant and constant amount of profit compared to other approaches.
+
+The BPN integrated with an im- proved bacterial chemotaxis optimization (IBCO) was applied to predict various stock indices of S&P 500 (Zhang &Wu, 2009)
+
+GGAP-RBF network was also applied to predict stock prices and achieve good prediction accuracy (Wang, Huang, Saratchandran, & Sundararajan, 2005)
+
+A new approach based on logistic regression model predicted the stock price trend of next month by using the stock prices of current month (Gong & Sun, 2009).
+

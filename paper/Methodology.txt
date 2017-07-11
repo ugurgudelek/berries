@@ -1,0 +1,15 @@
+-Verileri nerden aldik nelerini degistirdik?
+-Featurelari listele.Tablo seklinde neleri kullandik onlari yaz.
+
+-Clustering nasil ve neden yapildi?
+
+-Stationary time series, tanh
+
+-Resimler nasil olusturuldu. 
+-28 gün neden?
+
+-Belki algoritma verilebilir.
+
+-Cnn parametre setup i ?
+
+
