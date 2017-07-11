@@ -59,6 +59,17 @@ Rohit Choudhry, and Kumkum Garg]
 		systems [8], and fuzzy sets [9]
 SVM 58 iken 61e çikarmislar. 2 class- rise and fall
 
+6. [Supervised and Unsupervised Methods for Stock Trend Forecasting Nicole Powell, Simon Y. Foo, and Mark Weatherspoon]
+
+-- SVM ile kmean karsilastirmislar.
+-- Paper biraz bastansavma gibi geldi bana.
+		When data is time variant, data selection will influence the training result [4].
+		iJade Stock Advisor
+		is a stock prediction system that was developed using a RBF recurrent network. It is discussed in more detail in [5].
+		
+-- accuracy ve sinif olayini nasil yaptilar çok detayli degil.
+
+
 
 		
 
