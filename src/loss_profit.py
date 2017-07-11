@@ -1,5 +1,6 @@
 
 import os
+from collections import defaultdict
 import numpy as np
 import pandas as pd
 from datetime import datetime
@@ -53,7 +54,7 @@ def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000, buy_thr 
     # our capital
     capital = initial_capital
     # number of shares for each stock
-    shares = {}
+    shares = defaultdict(list)
     # initialize the shares
     for name in stock_names:
 
@@ -61,112 +62,48 @@ def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000, buy_thr 
 
     # find the minimum date among first dates of the predictions
     # predictions are assumed to be sorted by date ascending
-    date_fmt = '%Y-%m-%d'
-    min_date = datetime.strptime('3000-12-12', date_fmt)
-    max_date = datetime.strptime('1000-12-12', date_fmt)
-    for name in stock_names:
-
-        pred_length = int(predictions.loc[predictions['Name'] == name].shape[0])
-        
-        tmp_min_date = datetime.strptime(predictions.loc[predictions['Name'] == name].iloc[0]['Date'], date_fmt)
-        tmp_max_date = datetime.strptime(predictions.loc[predictions['Name'] == name].iloc[pred_length - 1]['Date'], date_fmt)
-        
-        if tmp_min_date < min_date:
-
-            min_date = tmp_min_date
-
-        if tmp_max_date > max_date:
-
-            max_date = tmp_max_date
-
+    min_date = predictions['Date'].min()
+    max_date = predictions['Date'].max()
 
     # start buying and selling
-    current_date = min_date
-    while current_date < max_date :
-
-        # stocks that we have predicted to go higher from this date and how high we predict
-        higher_stocks = {}
-        # stocks that we have predicted to go lower from this date
-        lower_stocks = {}
-
-        # find higher and lower stocks
-        for name in stock_names:
-
-            for i in range(0, int(predictions.loc[predictions['Name'] == name].shape[0])):
-
-                tmp_date = datetime.strptime(predictions.loc[predictions['Name'] == name].iloc[i]['Date'], date_fmt)
-
-                if tmp_date == current_date:
-                
-                    tmp_prediction = float(predictions.loc[predictions['Name'] == name].iloc[i]['Prediction'])
-
-                    if tmp_prediction > 0 :
-
-                        higher_stocks[name] = tmp_prediction
-
-                    elif tmp_prediction < 0 :
-
-                        lower_stocks[name] = tmp_prediction
-                        
-                    break  # we can break because predictions are assumed to be sorted by date ascending
-
-        # buy - sell operation
-
-        # if higher_stocks is not empty
-        if higher_stocks:
-
-            highest_stock = None
-            highest_up_change = 0
-
-            # find the highest stock
-            for cur_high_stock in higher_stocks:
-
-                if higher_stocks[cur_high_stock] > highest_up_change:
-
-                    highest_stock = cur_high_stock
-                    highest_up_change = higher_stocks[cur_high_stock]
+    current_date = datetime.strptime(min_date, '%Y-%m-%d')
+    while current_date < datetime.strptime(max_date, '%Y-%m-%d'):
+        
+        # find highest stock and it's price on the current date
+        higher_stocks = predictions.loc[np.logical_and(predictions['Date'] == current_date.strftime("%Y-%m-%d"), predictions['Prediction'] > 0)]
+        
+        if not higher_stocks.empty:
             
-
-            # find the price of the highest stock on the current date
-            highest_price = 0
-            for i in range(0, int(adj_close.loc[adj_close['Name'] == highest_stock].shape[0])):
-                
-                if datetime.strptime(adj_close.loc[adj_close['Name'] == highest_stock].iloc[i]['Date'], date_fmt) == current_date:
-                    
-                    highest_price = float(adj_close.loc[adj_close['Name'] == highest_stock].iloc[i]['Adj_Close'])
-                    break
-                
+            highest_stock = predictions.iloc[predictions.loc[np.logical_and(predictions['Date'] == current_date.strftime("%Y-%m-%d"), predictions['Prediction'] > 0)]['Prediction'].idxmax()][['Name', 'Prediction']]
+            highest_price = float(adj_close[np.logical_and(adj_close['Date'] == current_date.strftime("%Y-%m-%d"), adj_close['Name'] == highest_stock['Name'])]['Adj_Close'])
+        
             # if we have enough capital to buy the highest_stock, buy it with all of our money
             if capital > highest_price:
-
-                print("Stock {} will go up ({}), buying...".format(highest_stock, higher_stocks[highest_stock]))
-                shares[highest_stock] += capital // highest_price
+    
+                print("Stock {} will go up ({}), buying...".format(highest_stock['Name'], highest_stock['Prediction']))
+                shares[highest_stock['Name']] += capital // highest_price
                 capital -= (capital // highest_price) * highest_price
+        
+        lower_stocks = predictions.loc[np.logical_and(predictions['Date'] == current_date.strftime("%Y-%m-%d"), predictions['Prediction'] < 0)][['Name', 'Prediction']]
                 
         # if lower_stocks is not empty
-        if lower_stocks:
+        if not lower_stocks.empty:
 
             # for each stock in lower_stocks
-            for lower_stock in lower_stocks:
+            for lower_stock in lower_stocks['Name']:
 
                 # if we have any of this stock
                 if shares[lower_stock] != 0:
                     
                     # find the price of this stock on the current date
-                    lower_price = 0
-                    for i in range(0, int(adj_close.loc[adj_close['Name'] == lower_stock].shape[0])):
-                
-                        if datetime.strptime(adj_close.loc[adj_close['Name'] == lower_stock].iloc[i]['Date'], date_fmt) == current_date:
-                    
-                            lower_price = float(adj_close.loc[adj_close['Name'] == lower_stock].iloc[i]['Adj_Close'])
-                            break
+                    lower_price = float(adj_close[np.logical_and(adj_close['Date'] == current_date.strftime("%Y-%m-%d"), adj_close['Name'] == lower_stock)]['Adj_Close'])
 
                     # sell this stock
-                    print("Stocks {} will go down ({}), selling...".format(lower_stock, lower_stocks[lower_stock]))
+                    print("Stocks {} will go down ({}), selling...".format(lower_stock, lower_stocks.loc[lower_stocks['Name'] == lower_stock]['Prediction']))
                     capital += lower_price * shares[lower_stock]
                     shares[lower_stock] = 0
 
-        print("Date: " + current_date.strftime(date_fmt))
+        print("Date: " + current_date.strftime("%Y-%m-%d"))
         print("Capital: " + str(capital))
         print("Shares: " + str(shares))
         print("----------------------------")
@@ -174,35 +111,21 @@ def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000, buy_thr 
         # increment date by 1 day
         current_date += timedelta(days = 1)
 
-        # sell higher shares to obtain the final capital at the end of the term
-        if current_date == max_date:
+        # sell all shares to obtain the final capital at the end of the term
+        if current_date == datetime.strptime(max_date, '%Y-%m-%d') and shares:
 
-            print("End of the term, selling all higher stocks..")
+            print("End of the term, selling all the shares...")
             
-            # if higher_stocks is not empty
-            if higher_stocks:
+            for current_share in shares:
                 
-                # for each stock in higher_stocks
-                for higher_stock in higher_stocks:
-                    
-                    # if we have any of this stock
-                    if shares[higher_stock] != 0:
-                        
-                        # find the price of this stock on the current date
-                        higher_price = 0
-                        for i in range(0, int(adj_close.loc[adj_close['Name'] == higher_stock].shape[0])):
-                            
-                            if datetime.strptime(adj_close.loc[adj_close['Name'] == higher_stock].iloc[i]['Date'], date_fmt) == current_date:
-                                
-                                higher_price = float(adj_close.loc[adj_close['Name'] == higher_stock].iloc[i]['Adj_Close'])
-                                break
-                            
-                        # sell this stock
-                        capital += higher_price * shares[higher_stock]
-                        shares[higher_stock] = 0
+                # price of the share on the current date
+                current_share_price = float(adj_close[np.logical_and(adj_close['Date'] == current_date.strftime("%Y-%m-%d"), adj_close['Name'] == current_share)]['Adj_Close'])
+                
+                # sell this stock
+                capital += current_share_price * shares[current_share]
+                shares[current_share] = 0
 
-
-            print("Date: " + current_date.strftime(date_fmt))
+            print("Date: " + current_date.strftime("%Y-%m-%d"))
             print("Capital: " + str(capital))
             print("Shares: " + str(shares))
             print("----------------------------")

@@ -7,15 +7,13 @@ import loss_profit
 import google_finance_io
 import datetime
 from dateutil import parser
-from keras import backend as K
-
 import os
 
+from keras import backend as K
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import cnn_keras_regr as cs
 import cnn_keras_class as cscls
 from keras.models import load_model
-
 
 def main(regression = True):
     stock_names = ['spy', 'xlf', 'xlu', 'xle',
@@ -77,16 +75,21 @@ def main(regression = True):
 
 
 if __name__ == "__main__":
+    
     #main(regression = True)
 
     stock_names = ['spy', 'xlf', 'xlu', 'xle',
                    'xlp', 'xli', 'xlv', 'xlk', 'ewj',
                    'xlb', 'xly', 'eww', 'dia', 'ewg',
                    'ewh', 'ewc', 'ewa']
+    print("Preparing adjusted close dataframe...")
     prices = loss_profit.prepare_adj_close(stock_names)
+    print("Calculating loss and profit...")
     capital, shares = loss_profit.buy_sell_regr(predictions_name = 'predictions_model_regr_100epoch_2017_07_11 16_24_27_177432', adj_close = prices)
 
+    print("Final captial:")
     print(capital)
+    print("Final shares:")
     print(shares)
     
 
