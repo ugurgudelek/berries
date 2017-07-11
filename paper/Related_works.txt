@@ -1,14 +1,75 @@
 Related Works
 
-Chang, Liu, Lin, Fan, and Ng (2009) had applied neural network, dynamic time win- dows, and Case Based Reasoning (CBR) to predict stock trading.They concluded that percentage prediction accuracy for stock buy- ing or selling decisions was promising.
+1.[A novel model by evolving partially connected neural network for stock price trend forecasting
+Pei-Chann Changa Di-di Wangb Chang-le Zhoub]
+--novel model by evolving partially connected neural networks (EPCNNs)
 
-Two neural network architectures, namely multi-layer perception (MLP) neural net- works and generalized regression neural networks have been used to forecast closing price movements of Kuwait stock exchange (Mostafa, 2010)
+		Chang, Liu, Lin, Fan, and Ng (2009) had applied neural network, dynamic time win- dows, and Case Based Reasoning (CBR) to predict stock trading.They concluded that percentage prediction accuracy for stock buy- ing or selling decisions was promising.
 
-Chang, Liu, Fan, Lin, and Lai (2009) also used ensemble of neural networks and intelligent piecewise linear representation to determine the stock turning points. The results demonstrated that the hybrid system can make a significant and constant amount of profit compared to other approaches.
+		Two neural network architectures, namely multi-layer perception (MLP) neural net- works and generalized regression neural networks have been used to forecast closing price movements of Kuwait stock exchange (Mostafa, 2010)
 
-The BPN integrated with an im- proved bacterial chemotaxis optimization (IBCO) was applied to predict various stock indices of S&P 500 (Zhang &Wu, 2009)
+		Chang, Liu, Fan, Lin, and Lai (2009) also used ensemble of neural networks and intelligent piecewise linear representation to determine the stock turning points. The results demonstrated that the hybrid system can make a significant and constant amount of profit compared to other approaches.
 
-GGAP-RBF network was also applied to predict stock prices and achieve good prediction accuracy (Wang, Huang, Saratchandran, & Sundararajan, 2005)
+		The BPN integrated with an im- proved bacterial chemotaxis optimization (IBCO) was applied to predict various stock indices of S&P 500 (Zhang &Wu, 2009)
 
-A new approach based on logistic regression model predicted the stock price trend of next month by using the stock prices of current month (Gong & Sun, 2009).
+		GGAP-RBF network was also applied to predict stock prices and achieve good prediction accuracy (Wang, Huang, Saratchandran, & Sundararajan, 2005)
+
+		A new approach based on logistic regression model predicted the stock price trend of next month by using the stock prices of current month (Gong & Sun, 2009).
+	
+	Adamlar bir alpha degiskeni tanimlamislar. Pred- actual alpha dan küçükse dogru demisler.
+	Haliyle %97 gibi yüksek degerler çikmis.
+	
+2. [A multiple-kernel support vector regression approach for stock market price forecastingq
+Chi-Yuan Yeh, Chi-Wei Huang, Shie-Jue Lee]
+-- SVR kullanmislar. Tune etmesi zor oldugu için "two-stage multiple-kernel learning algorithm by incorporating sequential minimal optimization and the gradient projection method"  insa etmisler.
+
+		artificial neural networks (ANN) (Hansen & Nelson, 1997; Kim & Han, 2008; Kwon & Moon, 2007; Qi & Zhang, 2008; Zhang & Zhou, 2004), fuzzy neural networks (FNN) (Chang & Liu, 2008; Oh, Pedrycz, & Park, 2006; Zarandi, Rezaee, Turksen, & Neshat, 2009), and support vector regression (SVR) (Cao & Tay, 2001, 2003; Fernando, Julio, & Javier, 2003; Gestel et al., 2001; Pai & Lin, 2005; Tay & Cao, 2001; Valeriy & Supriya, 2006; Yang, Chan, & King, 2002)
+		
+		ANN has been widely used for modeling stock market time ser-
+		ies due to its universal approximation property (Kecman, 2001).		
+		However, ANN suffers from local minimum traps and difficulty in determining the hidden layer size and learning rate.
+		
+		the practitioner has to deter- mine in advance the type of kernel function and the associated kernel hyperparameters for SVR. Unsuitably chosen kernel func- tions or hyperparameter settings may lead to significantly poor performance (Chapelle, Vapnik, Bousquet, & Mukherjee, 2002; Duan, Keerthi, & Poo, 2003; Kwok, 2000).
+	
+	Adamlar parametre seçilmeden SVR olusturmuslar. Sonuçlarini bizimkilerle kiyaslamak çok mantikli degil.
+
+3. [SUPPORT VECTOR MACHINE FOR REGRESSION AND APPLICATIONS TO FINANCIAL FORECASTING
+Theodore B. Trafalig and Huseyin Ince**]
+-- SVM ile RBF kiyaslamislar.
+-- Sonuçlarinda MSE var sadece. O yüzden bizimkiyle kiyasyabilir miyiz bilmiyorum..
+
+4. [Stock Price Forecasting by Hybrid Machine Learning Techniques
+Tsai, C.-F. and Wang, S.-P.]
+		data mining technique is also used for forecasting stock market [9].
+		it has been confirmed to provide good performances on forecasting stock price [11], [13]. 
+--Adamlar ANN ile DT yi birlestirmisler. 2- class
+
+--DT tek basina 65 accuracy.
+--ANN tek basina 59 accuracy
+--DT+ANN 77 acc
+
+5. [A Hybrid Machine Learning System for Stock Market Forecasting
+Rohit Choudhry, and Kumkum Garg]
+--Genetic ile SVM birlestirilmis.
+
+		Studies have also shown that predicting direction as compared to value can generate higher profits [1].
+		
+		Time Delay Neural Networks have been used in [2] for stock market trend prediction. Probabilistic Neural Networks have been used in [3] to model it as a classification problem, the 2 classes being a rise or a fall in the market. Recurrent Neural Nets have been used in [4] for predicting the next day’s price of the stock index. Other methods that have been used to forecast the stock market include Bayesian belief networks [5], evolutionary algorithms
+		[6] [7], classifier
+		systems [8], and fuzzy sets [9]
+SVM 58 iken 61e çikarmislar. 2 class- rise and fall
+
+
+		
+
+
+
+
+
+
+
+
+		
+
+
 
