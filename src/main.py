@@ -82,15 +82,26 @@ if __name__ == "__main__":
                    'xlp', 'xli', 'xlv', 'xlk', 'ewj',
                    'xlb', 'xly', 'eww', 'dia', 'ewg',
                    'ewh', 'ewc', 'ewa']
+    
     print("Preparing adjusted close dataframe...")
     prices = loss_profit.prepare_adj_close(stock_names)
-    print("Calculating loss and profit...")
+    
+    print("Calculating final capital using prediction model...")
     capital, shares = loss_profit.buy_sell_regr(predictions_name = 'predictions_model_regr_100epoch_2017_07_11 16_24_27_177432', adj_close = prices)
 
     print("Final captial:")
     print(capital)
     print("Final shares:")
     print(shares)
+
+    print("-----------------------------------------")
+    print("Calculating final capital using buy & hold...")
+
+    buy_hold_final_capital, buy_hold_final_shares = loss_profit.buy_hold(stock_names, prices)
+    print("Final captial:")
+    print(buy_hold_final_capital)
+    print("Final shares:")
+    print(buy_hold_final_shares)
     
 
     # data = get_last_saved_data()
