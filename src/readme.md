@@ -8,9 +8,9 @@
  done: 4. accuracy hesaplarken 3 class gibi yap. helper içindeki split_min_var ı kullanabilirsin.
 
 
- todo: 4. kar-zarar hesaplamak lazım.
+ done: 4. kar-zarar hesaplamak lazım.
 
- todo: 5. sürekli artış hipotezi. - buy-hold karşılaştırması.
+ done: 5. sürekli artış hipotezi. - buy-hold karşılaştırması.
 
  todo: 6. resim
 
