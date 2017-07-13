@@ -76,10 +76,10 @@ def test(model, data, params, q_ratio=0.38):
             num_correct_preds += 1
         num_preds += 1
         
-        predictions.append(np.array([prediction[0][0], prediction[0][1], prediction[0][2]]))
+        predictions.append(np.array([prediction[0][0], prediction[0][1]]))
         names.append(name[0])
         dates.append(date[0])
-        actuals.append(np.array([label[0][0], label[0][1], label[0][2]]))
+        actuals.append(np.array([label[0][0], label[0][1]]))
 
         # train with only 1 more image
         model.train_on_batch(image, label)
@@ -88,7 +88,7 @@ def test(model, data, params, q_ratio=0.38):
         if i % 100 == 0 and i != 0:
             print("{}-th image, mean accuracy {} %".format(i, num_correct_preds / num_preds * 100))
             
-    pred_df = pd.DataFrame({'Name' : np.asarray(names), 'Date' : np.asarray(dates), 'Pred0' : np.asarray(predictions)[:,0], 'Pred1' : np.asarray(predictions)[:,1], 'Pred2' : np.asarray(predictions)[:,2], 'Act0' : np.asarray(actuals)[:,0], 'Act1' : np.asarray(actuals)[:,1], 'Act2' : np.asarray(actuals)[:,2]})
+    pred_df = pd.DataFrame({'Name' : np.asarray(names), 'Date' : np.asarray(dates), 'Pred0' : np.asarray(predictions)[:,0], 'Pred1' : np.asarray(predictions)[:,1], 'Act0' : np.asarray(actuals)[:,0], 'Act1' : np.asarray(actuals)[:,1]})
             
     return pred_df
 

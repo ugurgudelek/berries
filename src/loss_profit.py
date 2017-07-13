@@ -40,12 +40,10 @@ def prepare_adj_close(stock_names, raw_data_path = "../input/raw_data"):
     return adj_close
         
 
-def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000, buy_thr = .38, sell_thr = -.38, predictions_path = "../result/"):
+def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000, predictions_path = "../result/"):
     """This function buys and sells stocks for regression according to given thresholds.
     predictions_name: name of the file that contains the predictions data.
-    adj_close: adjusted closes for stocks. This is a dataframe indexed by stock names, like predictions.
-    buy_thr: if the sigmoid values are predicted to exceed this threshold, then buy the highest predicted stock.
-    sell_thr: if the sigmoid values are predicted to fall behind this threshold, then sell the lowest predicted stock."""
+    adj_close: adjusted closes for stocks. This is a dataframe indexed by stock names, like predictions."""
     
     # read the predictions data
     predictions = pd.read_pickle(predictions_path + predictions_name)

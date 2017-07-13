@@ -64,14 +64,14 @@ def main(regression = True):
 
     else:
         
-        calculate_labels_cls(stock_names)
+        calculate_labels(stock_names)
         cluster_features(stock_names, drop_this_cols=['date', 'low', 'close', 'high', 'open','adjusted_close'])
         sorted_cluster_names = pd.read_csv("../input/clustered_names.csv", header=None, squeeze=True).values.tolist()
-        create_images_from_data(stock_names, sorted_cluster_names, label_names=['label_class_tanh_less', 'label_class_tanh_inrange', 'label_class_tanh_more'])
-        data = get_merged_images_and_labels_data_cls(stock_names, last_image_col = -4, labels_ind = [-3, -2, -1], train_test_ratio = 0.9)
-        params = {"input_w": 28, "input_h": 28, "num_classes": 3, "batch_size": 1024, "epochs": 100}
+        create_images_from_data(stock_names, sorted_cluster_names, label_names=['label_day_is_less', 'label_day_is_more'])
+        data = get_merged_images_and_labels_data_cls(stock_names, last_image_col = -3, labels_ind = [-2, -1], train_test_ratio = 0.9)
+        params = {"input_w": 28, "input_h": 28, "num_classes": 2, "batch_size": 1024, "epochs": 100}
         with K.get_session():
-            cscls.start_cnn_session(data, params, model_save_name="model_class_100epoch", model_read_name = "model_class_100epoch_before_2017_07_07 15_53_18_724997")
+            cscls.start_cnn_session(data, params, model_save_name="model_class_100epoch", model_read_name = "model_class_100epoch_before_2017_07_13 12_22_28_390356")
 
 
 if __name__ == "__main__":
