@@ -76,18 +76,18 @@ def main(regression = True):
 
 if __name__ == "__main__":
     
-    #main(regression = True)
+    # main(regression = True)
 
     stock_names = ['spy', 'xlf', 'xlu', 'xle',
                    'xlp', 'xli', 'xlv', 'xlk', 'ewj',
                    'xlb', 'xly', 'eww', 'dia', 'ewg',
                    'ewh', 'ewc', 'ewa']
-    
+
     print("Preparing adjusted close dataframe...")
     prices = loss_profit.prepare_adj_close(stock_names)
-    
+
     print("Calculating final capital using prediction model...")
-    capital, shares = loss_profit.buy_sell_regr(predictions_name = 'predictions_model_regr_100epoch_2017_07_11 16_24_27_177432', adj_close = prices)
+    capital, shares = loss_profit.buy_sell_regr(predictions_name = 'predictions_model_regr_100epoch_2017_07_11 16_24_27_177432', adj_close = prices, buy_thr=0, sell_thr=0)
 
     print("Final captial:")
     print(capital)

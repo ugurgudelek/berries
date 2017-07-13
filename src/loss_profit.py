@@ -80,7 +80,7 @@ def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000, buy_thr 
     while current_date < datetime.strptime(max_date, '%Y-%m-%d'):
         
         # find highest stock and it's price on the current date
-        higher_stocks = predictions.loc[np.logical_and(predictions['Date'] == current_date.strftime("%Y-%m-%d"), predictions['Prediction'] > 0)]
+        higher_stocks = predictions.loc[np.logical_and(predictions['Date'] == current_date.strftime("%Y-%m-%d"), predictions['Prediction'] > buy_thr)]
         
         if not higher_stocks.empty:
             
@@ -88,7 +88,7 @@ def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000, buy_thr 
             highest_price = float(adj_close[np.logical_and(adj_close['Date'] == current_date.strftime("%Y-%m-%d"), adj_close['Name'] == highest_stock['Name'])]['Adj_Close'])
         
             # if we have enough capital to buy the highest_stock, buy it with all of our money
-            if capital > highest_price:
+            if capital > highest_price and type(highest_price) is float:
     
                 print("Stock {} will go up ({}), buying...".format(highest_stock['Name'], highest_stock['Prediction']))
                 highest_amount = capital // highest_price
@@ -103,7 +103,7 @@ def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000, buy_thr 
                 record_capitals.append(capital)
                 record_shares.append(copy.copy(shares))
         
-        lower_stocks = predictions.loc[np.logical_and(predictions['Date'] == current_date.strftime("%Y-%m-%d"), predictions['Prediction'] < 0)][['Name', 'Prediction']]
+        lower_stocks = predictions.loc[np.logical_and(predictions['Date'] == current_date.strftime("%Y-%m-%d"), predictions['Prediction'] < sell_thr)][['Name', 'Prediction']]
                 
         # if lower_stocks is not empty
         if not lower_stocks.empty:
