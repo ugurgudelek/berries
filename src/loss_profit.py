@@ -40,7 +40,7 @@ def prepare_adj_close(stock_names, raw_data_path = "../input/raw_data"):
     return adj_close
         
 
-def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000, predictions_path = "../result/"):
+def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000.0, buy_thr= 0.0, sell_thr=0.0, predictions_path = "../result/"):
     """This function buys and sells stocks for regression according to given thresholds.
     predictions_name: name of the file that contains the predictions data.
     adj_close: adjusted closes for stocks. This is a dataframe indexed by stock names, like predictions."""
