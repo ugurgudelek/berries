@@ -40,7 +40,7 @@ def prepare_adj_close(stock_names, raw_data_path = "../input/raw_data"):
     return adj_close
         
 
-def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000.0, buy_thr= 0.0, sell_thr=0.0, predictions_path = "../result/"):
+def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000.0, buy_thr= 0.0, sell_thr=0.0,transaction_cost = 5, predictions_path = "../result/"):
     """This function buys and sells stocks for regression according to given thresholds.
     predictions_name: name of the file that contains the predictions data.
     adj_close: adjusted closes for stocks. This is a dataframe indexed by stock names, like predictions."""
@@ -69,6 +69,7 @@ def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000.0, buy_th
     record_amounts = []
     record_prices = []
     record_capitals = []
+    record_transation_costs = []
 
     # amount of each share after an operation, thus, have the same amount of rows as the lists above
     record_shares = []
@@ -86,12 +87,14 @@ def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000.0, buy_th
             highest_price = float(adj_close[np.logical_and(adj_close['Date'] == current_date.strftime("%Y-%m-%d"), adj_close['Name'] == highest_stock['Name'])]['Adj_Close'])
         
             # if we have enough capital to buy the highest_stock, buy it with all of our money
-            if capital > highest_price and type(highest_price) is float:
+            if capital > highest_price + transaction_cost and type(highest_price) is float:
     
                 print("Stock {} will go up ({}), buying...".format(highest_stock['Name'], highest_stock['Prediction']))
-                highest_amount = capital // highest_price
+                highest_amount = (capital - transaction_cost) // highest_price
                 shares[highest_stock['Name']] += highest_amount
                 capital -= highest_amount * highest_price
+                capital -= transaction_cost  # sub transaction cost
+
 
                 record_dates.append(current_date.strftime("%Y-%m-%d"))
                 record_operations.append('buy')
@@ -100,6 +103,7 @@ def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000.0, buy_th
                 record_prices.append(highest_price)
                 record_capitals.append(capital)
                 record_shares.append(copy.copy(shares))
+                record_transation_costs.append(transaction_cost)
         
         lower_stocks = predictions.loc[np.logical_and(predictions['Date'] == current_date.strftime("%Y-%m-%d"), predictions['Prediction'] < sell_thr)][['Name', 'Prediction']]
                 
@@ -120,6 +124,7 @@ def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000.0, buy_th
                     lower_amount = shares[lower_stock]
                     capital += lower_price * lower_amount
                     shares[lower_stock] = 0
+                    capital -= transaction_cost #sub transaction cost
 
                     record_dates.append(current_date.strftime("%Y-%m-%d"))
                     record_operations.append('sell')
@@ -128,6 +133,7 @@ def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000.0, buy_th
                     record_prices.append(lower_price)
                     record_capitals.append(capital)
                     record_shares.append(copy.copy(shares))
+                    record_transation_costs.append(transaction_cost)
 
         print("Date: " + current_date.strftime("%Y-%m-%d"))
         print("Capital: " + str(capital))
@@ -149,16 +155,19 @@ def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000.0, buy_th
                 
                 # sell this stock
                 current_amount = shares[current_share]
-                capital += current_share_price * current_amount
-                shares[current_share] = 0
+                if current_amount > 0: #if we have this share
+                    capital += current_share_price * current_amount
+                    shares[current_share] = 0
+                    capital -= transaction_cost
 
-                record_dates.append(current_date.strftime("%Y-%m-%d"))
-                record_operations.append('sell')
-                record_names.append(current_share)
-                record_amounts.append(current_amount)
-                record_prices.append(current_share_price)
-                record_capitals.append(capital)
-                record_shares.append(copy.copy(shares))
+                    record_dates.append(current_date.strftime("%Y-%m-%d"))
+                    record_operations.append('sell')
+                    record_names.append(current_share)
+                    record_amounts.append(current_amount)
+                    record_prices.append(current_share_price)
+                    record_capitals.append(capital)
+                    record_shares.append(copy.copy(shares))
+                    record_transation_costs.append(transaction_cost)
 
             print("Date: " + current_date.strftime("%Y-%m-%d"))
             print("Capital: " + str(capital))
@@ -168,7 +177,7 @@ def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000.0, buy_th
     # save records to file
     now = str(datetime.now())
     now = now.replace('-', '_').replace(':', '_').replace('.', '_')
-    pd.DataFrame({'Dates':record_dates, 'Operations':record_operations, 'Names':record_names, 'Amounts':record_amounts, 'Prices':record_prices, 'Capitals':record_capitals}).to_pickle(predictions_path + "buy_sell_model_regr_" + now)
+    pd.DataFrame({'Dates':record_dates, 'Operations':record_operations, 'Names':record_names, 'Amounts':record_amounts, 'Prices':record_prices, 'Capitals':record_capitals, 'Transaction Costs':record_transation_costs}).to_pickle(predictions_path + "buy_sell_model_regr_" + now)
     pd.DataFrame.from_dict(record_shares).to_pickle(predictions_path + "buy_sell_model_regr_shares_" + now)
                             
     return capital, shares
