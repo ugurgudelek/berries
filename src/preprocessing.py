@@ -224,6 +224,10 @@ def create_images_from_data(stock_names, sorted_cluster_names, label_names, spli
 # 7.
 def get_merged_images_and_labels_data(stock_names, read_path="../input/images_with_labels", labels_are_last=1,
                                       train_test_ratio=0.9, save_path="../input/last_saved_data"):
+    
+    if os.path.isfile(save_path+"/last_saved.pickle"):
+        return pd.read_pickle(save_path+"/last_saved.pickle")
+    
     all_train_images = []
     all_train_labels = []
     all_test_images = []

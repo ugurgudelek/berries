@@ -13,6 +13,7 @@ from keras import backend as K
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import cnn_keras_regr as cs
 import cnn_keras_class as cscls
+import mlp_keras_regr as ms
 from keras.models import load_model
 
 def main(regression = True):
@@ -52,6 +53,12 @@ def main(regression = True):
         params = {"input_w": 28, "input_h": 28, "num_classes": 1, "batch_size": 1024, "epochs": 100}
         with K.get_session():
             cs.start_cnn_session(data, params, model_save_name="model_regr_100epoch", model_read_name = "model_regr_100epoch_before_2017_07_07 17_52_36_962776")
+            
+        # for mlp
+        #params = {"input_w": 28, "input_h": 28, "num_classes": 1, "batch_size": 1024, "epochs": 100}
+        #with K.get_session():
+            #ms.start_mlp_session(data, params, model_save_name="model_mlp_regr_100epoch", model_read_name = "") 
+        
         #
         # # draw some sample
         # # draw_image(data['images'].iloc[0].values.reshape(28, 28), sorted_cluster_names)
@@ -76,7 +83,7 @@ def main(regression = True):
 
 if __name__ == "__main__":
     
-    # main(regression = True)
+    #main(regression = True)
 
     stock_names = ['spy', 'xlf', 'xlu', 'xle',
                    'xlp', 'xli', 'xlv', 'xlk', 'ewj',
@@ -87,7 +94,7 @@ if __name__ == "__main__":
     prices = loss_profit.prepare_adj_close(stock_names)
 
     print("Calculating final capital using prediction model...")
-    capital, shares = loss_profit.buy_sell_regr(predictions_name = 'predictions_model_regr_100epoch_2017_07_11 16_24_27_177432', adj_close = prices, buy_thr=0.38, sell_thr=-0.38, transaction_cost=10)
+    capital, shares = loss_profit.buy_sell_regr(predictions_name = 'predictions_mlp_model_mlp_regr_100epoch_2017_07_14 18_19_58_840342', adj_close = prices, buy_thr=0, sell_thr=-0, transaction_cost=10)
 
     print("Final captial:")
     print(capital)
