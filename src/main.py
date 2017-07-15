@@ -13,7 +13,7 @@ from keras import backend as K
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import cnn_keras_regr as cs
 import cnn_keras_class as cscls
-import mlp_keras_regr as ms
+#import mlp_keras_regr as ms
 from keras.models import load_model
 
 def main(regression = True):
@@ -94,23 +94,25 @@ if __name__ == "__main__":
     prices = loss_profit.prepare_adj_close(stock_names)
 
     print("Calculating final capital using prediction model...")
-    capital, shares = loss_profit.buy_sell_regr(predictions_name = 'predictions_mlp_model_mlp_regr_100epoch_2017_07_14 18_19_58_840342', adj_close = prices, buy_thr=0, sell_thr=-0, transaction_cost=10)
-
+    #capital, shares = loss_profit.buy_sell_regr(predictions_name = 'predictions_model_regr_100epoch_2017_07_11 16_24_27_177432', adj_close = prices, buy_thr=.38, sell_thr=-.38, transaction_cost=0)
+    #capital, shares = loss_profit.buy_sell_class3(predictions_name = 'predictions_model_class_100epoch_2017_07_11 17_08_21_002137', adj_close = prices, transaction_cost=5)
+    capital, shares = loss_profit.buy_sell_class2(predictions_name = 'predictions_model_class_100epoch_2017_07_13 13_15_09_200788', adj_close = prices, transaction_cost=5)
+   
     print("Final captial:")
     print(capital)
     print("Final shares:")
     print(shares)
-
+    
     print("-----------------------------------------")
     print("Calculating final capital using buy & hold...")
-
+    
     buy_hold_final_capital, buy_hold_final_shares = loss_profit.buy_hold(stock_names, prices)
     print("Final captial:")
     print(buy_hold_final_capital)
     print("Final shares:")
     print(buy_hold_final_shares)
     
-
+    
     # data = get_last_saved_data()
     # model = load_model("../model/model_regr_100epoch_before_2017_06_16 21_55_06_953896")
     # params = {"input_w": 28, "input_h": 28, "num_classes": 1, "batch_size": 1024, "epochs": 100}
@@ -118,7 +120,7 @@ if __name__ == "__main__":
     #     _, history = cs.test(model, data, params, q_ratio=0.8)
     #
     #     pd.to_pickle(history, "../result/history.pickle")
-
+    
     # stock_names = ['spy', 'xlf', 'xlu', 'xle',
     #                'xlp', 'xli', 'xlv', 'xlk', 'ewj',
     #                'xlb', 'xly', 'eww', 'dia', 'ewg',
