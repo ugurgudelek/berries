@@ -40,15 +40,22 @@ def prepare_adj_close(stock_names, raw_data_path = "../input/raw_data"):
     return adj_close
         
 
-def buy_sell_regr(predictions_name, adj_close, initial_capital = 10000.0, buy_thr= 0.0, sell_thr=0.0,transaction_cost = 5, predictions_path = "../result/"):
+def buy_sell_regr(stock_names, predictions_name, adj_close, initial_capital = 10000.0, buy_thr= 0.0, sell_thr=0.0,transaction_cost = 5, predictions_path = "../result/"):
     """This function buys and sells stocks for regression according to given thresholds.
     predictions_name: name of the file that contains the predictions data.
     adj_close: adjusted closes for stocks. This is a dataframe indexed by stock names, like predictions."""
-    
+
+
+
     # read the predictions data
     predictions = pd.read_pickle(predictions_path + predictions_name)
-    # stock names
-    stock_names = predictions['Name'].unique()
+
+    # select only those stated in stock_names parameter
+    idxs = [list(predictions.loc[predictions['Name'] == stock_name].index) for stock_name in stock_names]  # this is list of lists
+    idxs_fixed = [i for idx in idxs for i in idx] # now it is a list
+    # update predictions
+    predictions = predictions.iloc[idxs_fixed].reset_index(drop = True)
+
     # our capital
     capital = initial_capital
     # number of shares for each stock
