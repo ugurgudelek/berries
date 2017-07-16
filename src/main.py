@@ -13,6 +13,7 @@ from keras import backend as K
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import cnn_keras_regr as cs
 import cnn_keras_class as cscls
+import cnn_keras_class3 as cscls3
 #import mlp_keras_regr as ms
 from keras.models import load_model
 
@@ -70,7 +71,7 @@ def main(regression = True):
         # plt.show()
 
     else:
-        
+        #2-class
         calculate_labels(stock_names)
         cluster_features(stock_names, drop_this_cols=['date', 'low', 'close', 'high', 'open','adjusted_close'])
         sorted_cluster_names = pd.read_csv("../input/clustered_names.csv", header=None, squeeze=True).values.tolist()
@@ -78,12 +79,23 @@ def main(regression = True):
         data = get_merged_images_and_labels_data_cls(stock_names, last_image_col = -3, labels_ind = [-2, -1], train_test_ratio = 0.9)
         params = {"input_w": 28, "input_h": 28, "num_classes": 2, "batch_size": 1024, "epochs": 100}
         with K.get_session():
-            cscls.start_cnn_session(data, params, model_save_name="model_class_100epoch", model_read_name = "model_class_100epoch_before_2017_07_13 12_22_28_390356")
+            cscls.start_cnn_session(data, params, model_save_name="model_class_100epoch", model_read_name = "model_2class_100epoch_before_2017_07_13 12_22_28_390356")
+
+        # 3-class
+        # calculate_labels_3class(stock_names)
+        # cluster_features(stock_names, drop_this_cols=['date', 'low', 'close', 'high', 'open','adjusted_close'])
+        # sorted_cluster_names = pd.read_csv("../input/clustered_names.csv", header=None, squeeze=True).values.tolist()
+        # create_images_from_data(stock_names, sorted_cluster_names, label_names=['label_day_tanh_less', 'label_day_tanh_inrange', 'label_day_tanh_more'])
+        # data = get_merged_images_and_labels_data_cls(stock_names, last_image_col = -4, labels_ind = [-3, -2, -1], train_test_ratio = 0.9)
+        # params = {"input_w": 28, "input_h": 28, "num_classes": 3, "batch_size": 1024, "epochs": 100}
+        
+        # with K.get_session():
+        #     cscls3.start_cnn_session(data, params, model_save_name="model_class_100epoch", model_read_name = "model_3class_100epoch_before_2017_07_07 15_53_18_724997")
 
 
 if __name__ == "__main__":
     
-    #main(regression = True)
+    main(regression = False)
 
     stock_names = ['spy', 'xlf', 'xlu', 'xle',
                    'xlp', 'xli', 'xlv', 'xlk', 'ewj',
@@ -93,24 +105,24 @@ if __name__ == "__main__":
     print("Preparing adjusted close dataframe...")
     prices = loss_profit.prepare_adj_close(stock_names)
 
-    print("Calculating final capital using prediction model...")
+    # print("Calculating final capital using prediction model...")
     #capital, shares,_,_ = loss_profit.buy_sell_regr(predictions_name = 'predictions_model_regr_100epoch_2017_07_11 16_24_27_177432', adj_close = prices, buy_thr=.38, sell_thr=-.38, transaction_cost=0)
-    #capital, shares = loss_profit.buy_sell_class3(predictions_name = 'predictions_model_class_100epoch_2017_07_11 17_08_21_002137', adj_close = prices, transaction_cost=5)
-    capital, shares = loss_profit.buy_sell_class2(predictions_name = 'predictions_model_class_100epoch_2017_07_13 13_15_09_200788', adj_close = prices, transaction_cost=5)
+    #capital, shares = loss_profit.buy_sell_class3(predictions_name = 'predictions_model_class_100epoch_2017_07_17 00_16_57_239094', adj_close = prices, transaction_cost=5)
+    capital, shares = loss_profit.buy_sell_class2(predictions_name = 'predictions_model_class2_100epoch_2017_07_17 01_18_47_663062', adj_close = prices, transaction_cost=0)
    
-    print("Final captial:")
-    print(capital)
-    print("Final shares:")
-    print(shares)
+    # print("Final captial:")
+    # print(capital)
+    # print("Final shares:")
+    # print(shares)
     
-    print("-----------------------------------------")
-    print("Calculating final capital using buy & hold...")
+    # print("-----------------------------------------")
+    # print("Calculating final capital using buy & hold...")
     
-    buy_hold_final_capital, buy_hold_final_shares = loss_profit.buy_hold(stock_names, prices)
-    print("Final captial:")
-    print(buy_hold_final_capital)
-    print("Final shares:")
-    print(buy_hold_final_shares)
+    # buy_hold_final_capital, buy_hold_final_shares = loss_profit.buy_hold(stock_names, prices)
+    # print("Final captial:")
+    # print(buy_hold_final_capital)
+    # print("Final shares:")
+    # print(buy_hold_final_shares)
     
     
     # data = get_last_saved_data()

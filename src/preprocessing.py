@@ -85,6 +85,29 @@ def calculate_labels(stock_names, period=28, stock_with_metric_path="../input/st
 
         stock.to_csv(stock_with_labels_path + "/{}.csv".format(stock_name), index=None)
 
+def calculate_labels_3class(stock_names, thr_1 = -.38, thr_2 = 0.38, period=28, stock_with_metric_path="../input/stock_with_metrics",
+                                   stock_with_labels_path="../input/stock_with_labels"):
+    if not os.path.exists(stock_with_labels_path):
+        os.makedirs(stock_with_labels_path)
+
+    for stock_name in stock_names:
+        # skip if exist
+        if stock_name + ".csv" in os.listdir(stock_with_labels_path):
+            print(stock_with_labels_path + "/{}.csv is already exist. Delete file to recompile".format(stock_name))
+            continue
+
+        # read stock_metric csv
+        stock = pd.read_csv(stock_with_metric_path + "/{}.csv".format(stock_name))
+
+        # tanh(percentage_change) used because of that normalization is must
+        target_day_regr = classes.day_by_day_reg(stock['pct_change_tanh'], period)
+        stock['label_day_tanh_less'] = (target_day_regr < thr_1).values.astype(float)
+        stock['label_day_tanh_inrange'] = (np.logical_and(target_day_regr > thr_1, target_day_regr < thr_2)).values.astype(float)
+        stock['label_day_tanh_more'] = (target_day_regr > thr_2).values.astype(float)
+
+        stock.to_csv(stock_with_labels_path + "/{}.csv".format(stock_name), index=None)
+
+
 # 4.
 def cluster_features(p_stock_names, drop_this_cols, hierarcy_no_plot=True,
                      stock_with_metric_path="../input/stock_with_metrics", save_path="../input/"):
