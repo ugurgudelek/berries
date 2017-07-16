@@ -45,12 +45,30 @@ def fit(model, data, params):
 
 
 def test(model, data, params, q_ratio=0.38):
-    test_images = data['test_images'].as_matrix()
-    test_labels = data['test_labels'].as_matrix()
-    test_names = data['test_names'].as_matrix()
-    test_dates = data['test_dates'].as_matrix()
+    test_images = data['test_images']
+    test_labels = data['test_labels']
+    test_names = data['test_names']
+    test_dates = data['test_dates']
+
+
+    # interpolation fix
+    d_df = pd.DataFrame()
+    d_df['date'] = test_dates.iloc[:,0]
+    d_df['name'] = test_names.iloc[:,0]
+    d_df = pd.merge(left=d_df, right= test_labels, left_index=True, right_index=True)
+    label_ends_here = d_df.shape[1]
+    d_df = pd.merge(left=d_df, right= test_images, left_index=True, right_index=True, suffixes=['_label',''])
+    # sort by date
+    d_df = d_df.sort_values(by=['date','name'])
+
+    test_dates = d_df['date'].as_matrix()
+    test_names = d_df['name'].as_matrix()
+    test_labels = d_df.iloc[:,2:label_ends_here].as_matrix()
+    test_images = d_df.iloc[:, label_ends_here:].as_matrix()
+    # end of interpolation fix
+
     test_images = test_images.reshape(test_images.shape[0], params["input_w"], params["input_h"], 1)
-    
+
     predictions = []    
     names = []
     dates = []
@@ -62,11 +80,24 @@ def test(model, data, params, q_ratio=0.38):
     # train_data_size = train_images.shape[0]
     # test_data_size = test_images.shape[0]
     # cur_pointer = train_data_size + 1
+
+    cur_date = d_df.date.iloc[0]
+    train_again_images = []
+    train_again_labels = []
     print("Calculating accuracy day by day...", end='\n\n')
     for i, (image, label, name, date) in enumerate(zip(test_images, test_labels, test_names, test_dates)):
 
         image = image.reshape((1, params["input_w"], params["input_h"], 1))
         label = label.reshape((1, params["num_classes"]))
+
+        if cur_date != date: # update model
+            for train_image,train_label in zip(train_again_images,train_again_labels):
+                # train with only 1 more image
+                model.train_on_batch(train_image, train_label)
+            train_again_images = []
+            train_again_labels = []
+            cur_date = date
+
 
         # test for next image
         prediction = model.predict(image)
