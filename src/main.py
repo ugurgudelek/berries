@@ -94,7 +94,7 @@ if __name__ == "__main__":
     prices = loss_profit.prepare_adj_close(stock_names)
 
     print("Calculating final capital using prediction model...")
-    #capital, shares = loss_profit.buy_sell_regr(predictions_name = 'predictions_model_regr_100epoch_2017_07_11 16_24_27_177432', adj_close = prices, buy_thr=.38, sell_thr=-.38, transaction_cost=0)
+    #capital, shares,_,_ = loss_profit.buy_sell_regr(predictions_name = 'predictions_model_regr_100epoch_2017_07_11 16_24_27_177432', adj_close = prices, buy_thr=.38, sell_thr=-.38, transaction_cost=0)
     #capital, shares = loss_profit.buy_sell_class3(predictions_name = 'predictions_model_class_100epoch_2017_07_11 17_08_21_002137', adj_close = prices, transaction_cost=5)
     capital, shares = loss_profit.buy_sell_class2(predictions_name = 'predictions_model_class_100epoch_2017_07_13 13_15_09_200788', adj_close = prices, transaction_cost=5)
    
