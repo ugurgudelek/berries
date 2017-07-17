@@ -183,7 +183,8 @@ def start_cnn_session(data, params, model_save_name, model_path="../model", resu
 
     # test
     print("CNN test session started...")
-    q_ratio = 0.38 # means 3 class : 0 means 2 class
+    # q_ratio = 0.38 # means 3 class :
+    q_ratio = 0 # means 2 class
     pred_df = test(model, data, params, q_ratio=q_ratio)
     pred_df.to_pickle(result_path + "/predictions_" + model_save_name + "_qratio_"+str(q_ratio)+"_" + now)
     
