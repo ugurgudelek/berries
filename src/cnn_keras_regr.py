@@ -67,27 +67,6 @@ def test(model, data, params, q_ratio=0.38):
     test_names = data['test_names']
     test_dates = data['test_dates']
 
-    # interpolation fix
-    d_df = pd.DataFrame()
-    d_df['date'] = test_dates.iloc[:,0]
-    d_df['name'] = test_names.iloc[:,0]
-    d_df = pd.merge(left=d_df, right= test_labels, left_index=True, right_index=True)
-    label_ends_here = d_df.shape[1]
-    d_df = pd.merge(left=d_df, right= test_images, left_index=True, right_index=True, suffixes=['_label',''])
-    # sort by date
-    d_df = d_df.sort_values(by=['date','name'])
-
-    test_dates = d_df['date'].as_matrix()
-    test_names = d_df['name'].as_matrix()
-    test_labels = d_df.iloc[:,2:label_ends_here].as_matrix()
-    test_images = d_df.iloc[:, label_ends_here:].as_matrix()
-    # end of interpolation fix
-
-
-
-
-
-
     test_images = test_images.reshape(test_images.shape[0], params["input_w"], params["input_h"], 1)
     
     precisions = []
@@ -99,10 +78,6 @@ def test(model, data, params, q_ratio=0.38):
     dates = []
     actuals = []
     mses = []
-
-    # train_data_size = train_images.shape[0]
-    # test_data_size = test_images.shape[0]
-    # cur_pointer = train_data_size + 1
 
     cur_date = d_df.date.iloc[0]
     train_again_images = []
@@ -122,7 +97,6 @@ def test(model, data, params, q_ratio=0.38):
             train_again_labels = []
             cur_date = date
 
-
         prediction, mse, acc_cur = custom_test_on_batch(model, image, label, q_ratio=q_ratio)
         # loss_cur,acc_cur = model.test_on_batch(image,label)
         train_again_images.append(image)
@@ -135,8 +109,6 @@ def test(model, data, params, q_ratio=0.38):
             
         accuracies.append(acc_cur)
         mses.append(mse)
-
-
 
         # show values every 100 cycle
         if i % 100 == 0 and i != 0:

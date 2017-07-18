@@ -61,6 +61,7 @@ def normalize_and_calculate_metrics(stock_names, raw_data_path="../input/raw_dat
 # 3.
 def calculate_labels(stock_names, period=28, stock_with_metric_path="../input/stock_with_metrics",
                                    stock_with_labels_path="../input/stock_with_labels"):
+    """Calculates labels for both regression and 2-class classification"""
     if not os.path.exists(stock_with_labels_path):
         os.makedirs(stock_with_labels_path)
 
@@ -314,16 +315,23 @@ def get_merged_images_and_labels_data(stock_names, read_path="../input/images_wi
                                                                all_train_labels.shape[1]))
         print("current test shape is {} and {} label ".format(pd.DataFrame(all_test_images).shape,
                                                               all_test_labels.shape[1]))
+    print("Sorting test data by date and name...")
+    sorted_test_data = pd.DataFrame()
+    sorted_test_data['date'] = all_test_dates
+    sorted_test_data['name'] = all_test_names
+    sorted_test_data['image'] = all_test_images
+    sorted_test_data['label'] = all_test_labels
+    sorted_test_data = sorted_test_data.sort_values(by = ['date', 'name'])
 
     data = {'train_images': pd.DataFrame(all_train_images),
-            'test_images': pd.DataFrame(all_test_images),
+            'test_images': pd.DataFrame(sorted_test_data['image'].values),
             'train_labels': pd.DataFrame(all_train_labels),
-            'test_labels': pd.DataFrame(all_test_labels),
+            'test_labels': pd.DataFrame(sorted_test_data['label'].values),
             'train_names': pd.DataFrame(all_train_names),
             'train_dates': pd.DataFrame(all_train_dates),
-            'test_names': pd.DataFrame(all_test_names),
-            'test_dates': pd.DataFrame(all_test_dates),
-            }
+            'test_names': pd.DataFrame(sorted_test_data['name'].values),
+            'test_dates': pd.DataFrame(sorted_test_data['date'].values)
+    }    
 
     if not os.path.exists(save_path):
         os.makedirs(save_path)
@@ -403,15 +411,23 @@ def get_merged_images_and_labels_data_cls(stock_names, read_path="../input/image
         print("current test shape is {} and {} label ".format(pd.DataFrame(all_test_images).shape,
                                                               all_test_labels.shape[1]))
 
+    print("Sorting test data by date and name...")
+    sorted_test_data = pd.DataFrame()
+    sorted_test_data['date'] = all_test_dates
+    sorted_test_data['name'] = all_test_names
+    sorted_test_data['image'] = all_test_images
+    sorted_test_data['label'] = all_test_labels
+    sorted_test_data = sorted_test_data.sort_values(by = ['date', 'name'])
+
     data = {'train_images': pd.DataFrame(all_train_images),
-            'test_images': pd.DataFrame(all_test_images),
+            'test_images': pd.DataFrame(sorted_test_data['image'].values),
             'train_labels': pd.DataFrame(all_train_labels),
-            'test_labels': pd.DataFrame(all_test_labels),
+            'test_labels': pd.DataFrame(sorted_test_data['label'].values),
             'train_names': pd.DataFrame(all_train_names),
             'train_dates': pd.DataFrame(all_train_dates),
-            'test_names': pd.DataFrame(all_test_names),
-            'test_dates': pd.DataFrame(all_test_dates),
-            }
+            'test_names': pd.DataFrame(sorted_test_data['name'].values),
+            'test_dates': pd.DataFrame(sorted_test_data['date'].values)
+    }
 
     if not os.path.exists(save_path):
         os.makedirs(save_path)
