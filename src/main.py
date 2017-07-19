@@ -57,7 +57,7 @@ def main(create_model = False, model_type = "regression"):
             # 8. call CNN
             params = {"input_w": 28, "input_h": 28, "num_classes": 1, "batch_size": 1024, "epochs": 100}
             with K.get_session():
-                cs.start_cnn_session(data, params, model_save_name="model_regr_100epoch", model_read_name = "model_regr_100epoch_before_2017_07_07 17_52_36_962776")
+                cs.start_cnn_session(data, params, model_save_name="model_regr_100epoch", model_read_name = "model_regr_100epoch_before_2017_07_19 21_47_40_106461")
             
         # for mlp
         #params = {"input_w": 28, "input_h": 28, "num_classes": 1, "batch_size": 1024, "epochs": 100}
@@ -75,7 +75,7 @@ def main(create_model = False, model_type = "regression"):
             data = preprocessing.get_merged_images_and_labels_data_cls(stock_names, last_image_col = -3, labels_ind = [-2, -1], train_test_ratio = 0.9)
             params = {"input_w": 28, "input_h": 28, "num_classes": 2, "batch_size": 1024, "epochs": 100}
             with K.get_session():
-                cscls.start_cnn_session(data, params, model_save_name="model_2class_100epoch", model_read_name = "model_2class_100epoch_before_2017_07_13 12_22_28_390356")
+                cscls.start_cnn_session(data, params, model_save_name="model_2class_100epoch", model_read_name = "model_2class_100epoch_before_2017_07_19 22_33_44_785205")
 
         elif model_type == "classification-3":
 
@@ -89,7 +89,7 @@ def main(create_model = False, model_type = "regression"):
             params = {"input_w": 28, "input_h": 28, "num_classes": 3, "batch_size": 1024, "epochs": 100}
             
             with K.get_session():
-                cscls3.start_cnn_session(data, params, model_save_name="model_3class_100epoch", model_read_name = "model_3class_100epoch_before_2017_07_07 15_53_18_724997")
+                cscls3.start_cnn_session(data, params, model_save_name="model_3class_100epoch", model_read_name = "model_3class_100epoch_before_2017_07_19 23_17_01_345010")
 
     else:
 
@@ -99,17 +99,17 @@ def main(create_model = False, model_type = "regression"):
         if model_type == "regression":
 
             print("Calculating final capital using prediction model...")
-            capital, shares,_,_ = loss_profit.buy_sell_regr(predictions_name = 'predictions_model_regr_100epoch_2017_07_11 16_24_27_177432', adj_close = prices, buy_thr=.38, sell_thr=-.38, transaction_cost=0)
+            capital, shares,_,_ = loss_profit.buy_sell_regr(stock_names, predictions_name = 'predictions_model_regr_100epoch_qratio_0_2017_07_19 22_19_02_006504', adj_close = prices, buy_thr=0, sell_thr=0, transaction_cost=5)
 
         elif model_type == "classification-2":
 
             print("Calculating final capital using classification-2 model...")
-            capital, shares = loss_profit.buy_sell_class2(predictions_name = 'predictions_model_class2_100epoch_2017_07_17 01_18_47_663062', adj_close = prices, transaction_cost=0)
+            capital, shares = loss_profit.buy_sell_class2(predictions_name = 'predictions_model_2class_100epoch_2017_07_19 23_02_34_349364', adj_close = prices, transaction_cost=5)
 
         elif model_type == "classification-3":
 
             print("Calculating final capital using classification-3 model...")
-            capital, shares = loss_profit.buy_sell_class3(predictions_name = 'predictions_model_class3_100epoch_2017_07_17 00_16_57_239094', adj_close = prices, transaction_cost=5)
+            capital, shares = loss_profit.buy_sell_class3(predictions_name = 'predictions_model_3class_100epoch_2017_07_19 23_17_01_345010', adj_close = prices, transaction_cost=5)
 
             print("Final captial:")
             print(capital)
@@ -129,7 +129,7 @@ def main(create_model = False, model_type = "regression"):
 
 if __name__ == "__main__":
     
-    main(create_model = True, model_type = "regression")
+    main(create_model = False, model_type = "classification-3")
     
     # data = get_last_saved_data()
     # model = load_model("../model/model_regr_100epoch_before_2017_06_16 21_55_06_953896")

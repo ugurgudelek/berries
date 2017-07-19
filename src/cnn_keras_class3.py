@@ -50,7 +50,7 @@ def test(model, data, params, q_ratio=0.38):
     test_names = data['test_names']
     test_dates = data['test_dates']
 
-    test_images = test_images.reshape(test_images.shape[0], params["input_w"], params["input_h"], 1)
+    test_images = test_images.as_matrix().reshape(test_images.shape[0], params["input_w"], params["input_h"], 1)
 
     predictions = []    
     names = []
@@ -60,11 +60,11 @@ def test(model, data, params, q_ratio=0.38):
     num_correct_preds  = 0
     num_preds = 0
 
-    cur_date = d_df.date.iloc[0]
+    cur_date = test_dates.iloc[0][0]
     train_again_images = []
     train_again_labels = []
     print("Calculating accuracy day by day...", end='\n\n')
-    for i, (image, label, name, date) in enumerate(zip(test_images, test_labels, test_names, test_dates)):
+    for i, (image, label, name, date) in enumerate(zip(test_images, test_labels.as_matrix(), test_names[0], test_dates[0])):
 
         image = image.reshape((1, params["input_w"], params["input_h"], 1))
         label = label.reshape((1, params["num_classes"]))
