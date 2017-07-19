@@ -319,12 +319,12 @@ def get_merged_images_and_labels_data(stock_names, read_path="../input/images_wi
     sorted_test_data = pd.DataFrame()
     sorted_test_data['date'] = all_test_dates
     sorted_test_data['name'] = all_test_names
-    sorted_test_data['image'] = all_test_images
+    sorted_test_data['image'] = [i for i in all_test_images]
     sorted_test_data['label'] = all_test_labels
     sorted_test_data = sorted_test_data.sort_values(by = ['date', 'name'])
 
     data = {'train_images': pd.DataFrame(all_train_images),
-            'test_images': pd.DataFrame(sorted_test_data['image'].values),
+            'test_images': pd.DataFrame(np.asarray([i for i in sorted_test_data['image']])),
             'train_labels': pd.DataFrame(all_train_labels),
             'test_labels': pd.DataFrame(sorted_test_data['label'].values),
             'train_names': pd.DataFrame(all_train_names),
@@ -415,14 +415,14 @@ def get_merged_images_and_labels_data_cls(stock_names, read_path="../input/image
     sorted_test_data = pd.DataFrame()
     sorted_test_data['date'] = all_test_dates
     sorted_test_data['name'] = all_test_names
-    sorted_test_data['image'] = all_test_images
-    sorted_test_data['label'] = all_test_labels
+    sorted_test_data['image'] = [i for i in all_test_images]
+    sorted_test_data['label'] = [i for i in all_test_labels]
     sorted_test_data = sorted_test_data.sort_values(by = ['date', 'name'])
 
     data = {'train_images': pd.DataFrame(all_train_images),
-            'test_images': pd.DataFrame(sorted_test_data['image'].values),
+            'test_images': pd.DataFrame(np.asarray([i for i in sorted_test_data['image']])),
             'train_labels': pd.DataFrame(all_train_labels),
-            'test_labels': pd.DataFrame(sorted_test_data['label'].values),
+            'test_labels': pd.DataFrame(np.asarray([i for i in sorted_test_data['label']])),
             'train_names': pd.DataFrame(all_train_names),
             'train_dates': pd.DataFrame(all_train_dates),
             'test_names': pd.DataFrame(sorted_test_data['name'].values),
