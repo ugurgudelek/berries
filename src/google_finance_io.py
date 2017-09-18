@@ -20,7 +20,7 @@ def get_one_year_data(which_stock, start, end, verbose=False):
         print("retrieving {} {} data...".format(start_year, which_stock))
 
     # read raw data from google finance
-    df = pd.read_csv('http://www.google.com/finance/historical?q={stock_name}&'
+    df = pd.read_csv('http://finance.google.com/finance/historical?q={stock_name}&'
                      'startdate={start_month_abbv}+{start_day}%2C+{start_year}&'
                      'enddate={end_month_abbv}+{end_day}%2C+{end_year}&output=csv'
                      .format(stock_name=which_stock,
