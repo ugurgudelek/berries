@@ -315,6 +315,16 @@ def get_merged_images_and_labels_data(stock_names, read_path="../input/images_wi
                                                                all_train_labels.shape[1]))
         print("current test shape is {} and {} label ".format(pd.DataFrame(all_test_images).shape,
                                                               all_test_labels.shape[1]))
+    
+    print("Sorting train data by date and name...")
+    sorted_train_data = pd.DataFrame()
+    sorted_train_data['date'] = all_train_dates
+    sorted_train_data['name'] = all_train_names
+    sorted_train_data['image'] = [i for i in all_train_images]
+    sorted_train_data['label'] = all_train_labels
+    sorted_train_data = sorted_train_data.sort_values(by = ['date', 'name'])
+    
+    
     print("Sorting test data by date and name...")
     sorted_test_data = pd.DataFrame()
     sorted_test_data['date'] = all_test_dates
@@ -323,12 +333,12 @@ def get_merged_images_and_labels_data(stock_names, read_path="../input/images_wi
     sorted_test_data['label'] = all_test_labels
     sorted_test_data = sorted_test_data.sort_values(by = ['date', 'name'])
 
-    data = {'train_images': pd.DataFrame(all_train_images),
+    data = {'train_images': pd.DataFrame(np.asarray([i for i in sorted_train_data['image']])),
             'test_images': pd.DataFrame(np.asarray([i for i in sorted_test_data['image']])),
-            'train_labels': pd.DataFrame(all_train_labels),
+            'train_labels': pd.DataFrame(sorted_train_data['label'].values),
             'test_labels': pd.DataFrame(sorted_test_data['label'].values),
-            'train_names': pd.DataFrame(all_train_names),
-            'train_dates': pd.DataFrame(all_train_dates),
+            'train_names': pd.DataFrame(sorted_train_data['name'].values),
+            'train_dates': pd.DataFrame(sorted_train_data['date'].values),
             'test_names': pd.DataFrame(sorted_test_data['name'].values),
             'test_dates': pd.DataFrame(sorted_test_data['date'].values)
     }    
