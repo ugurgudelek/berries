@@ -104,12 +104,12 @@ def missing_value_fix(row):
 def download_data(stock_names, start_date, end_date, path="../input/raw_data", verbose=False):
     """Download raw data from google finance"""
 
-    if not os.path.exists(path):
+    if (path != "") and (not os.path.exists(path)):
         os.makedirs(path)
 
     for stock_name in stock_names:
 
-        if stock_name + ".csv" in os.listdir(path):
+        if (path != "") and (stock_name + ".csv" in os.listdir(path)):
             if verbose:
                 print(stock_name + " already exists.")
             continue
@@ -158,3 +158,4 @@ if "__name__" == "__main__":
 
 
 # http://www.google.com/finance/historical?q=NYSEARCA:SPY&startdate=Jun+13%2C+2010&enddate=Jun+12%2C+2017&num=30&output=csv
+
