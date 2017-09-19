@@ -141,7 +141,11 @@ def download_data(stock_names, start_date, end_date, path="../input/raw_data", v
             # save as a csv file
             if verbose:
                 print("creating {}.csv...".format(stock_name))
-            stock.to_csv(path + "/{}.csv".format(stock_name), index=False)
+
+            if path != "":
+                stock.to_csv(path + "/{}.csv".format(stock_name), index=False)
+            else:
+                return stock
 
 
 # web.DataReader(which_stock, 'yahoo', start=start, end=end)
