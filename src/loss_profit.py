@@ -91,7 +91,7 @@ def buy_sell_regr(stock_names, predictions_name, adj_close, initial_capital = 10
         if not higher_stocks.empty:
             
             highest_stock = predictions.iloc[predictions.loc[np.logical_and(predictions['Date'] == current_date.strftime("%Y-%m-%d"), predictions['Prediction'] > 0)]['Prediction'].idxmax()][['Name', 'Prediction']]
-            highest_price = float(adj_close[np.logical_and(adj_close['Date'] == current_date.strftime("%Y-%m-%d"), adj_close['Name'] == highest_stock['Name'])]['Adj_Close'])
+            highest_price = float(adj_close[np.logical_and(adj_close['Date'] == current_date.strftime("%Y-%m-%d"), adj_close['Name'] == highest_stock['Name'])]['Adj_Close'].iloc[0])
         
             # if we have enough capital to buy the highest_stock, buy it with all of our money
             if capital > highest_price + transaction_cost and type(highest_price) is float:
@@ -124,7 +124,7 @@ def buy_sell_regr(stock_names, predictions_name, adj_close, initial_capital = 10
                 if shares[lower_stock] > 0:
                     
                     # find the price of this stock on the current date
-                    lower_price = float(adj_close[np.logical_and(adj_close['Date'] == current_date.strftime("%Y-%m-%d"), adj_close['Name'] == lower_stock)]['Adj_Close'])
+                    lower_price = float(adj_close[np.logical_and(adj_close['Date'] == current_date.strftime("%Y-%m-%d"), adj_close['Name'] == lower_stock)]['Adj_Close'].iloc[0])
 
 
                     # sell this stock
@@ -161,7 +161,7 @@ def buy_sell_regr(stock_names, predictions_name, adj_close, initial_capital = 10
             for current_share in shares:
                 
                 # price of the share on the current date
-                current_share_price = float(adj_close[np.logical_and(adj_close['Date'] == current_date.strftime("%Y-%m-%d"), adj_close['Name'] == current_share)]['Adj_Close'])
+                current_share_price = float(adj_close[np.logical_and(adj_close['Date'] == current_date.strftime("%Y-%m-%d"), adj_close['Name'] == current_share)]['Adj_Close'].iloc[0])
                 
                 # sell this stock
                 current_amount = shares[current_share]
@@ -196,7 +196,7 @@ def buy_sell_regr(stock_names, predictions_name, adj_close, initial_capital = 10
                             
     return capital, shares, record_transactions_df, record_shares_df
 
-def buy_hold(stock_names, adj_close, initial_capital = 10000, start_date = "2015-03-24", verbose=True):
+def buy_hold(stock_names, adj_close, initial_capital = 10000, start_date = "", verbose=True):
     """This function buys stocks spending equal amount of money for each one (if possible)
     and sells all of the stocks at the end of the term."""
 
@@ -214,7 +214,7 @@ def buy_hold(stock_names, adj_close, initial_capital = 10000, start_date = "2015
     shares = {}    
     for stock in stock_names:
 
-        stock_start_price = float(adj_close.loc[np.logical_and(adj_close['Name'] == stock, adj_close['Date'] == start_date)]['Adj_Close'])
+        stock_start_price = float(adj_close.loc[np.logical_and(adj_close['Name'] == stock, adj_close['Date'] == start_date)]['Adj_Close'].iloc[0])
         stock_amount = money_per_stock // stock_start_price
         
         if stock_amount > 0:
@@ -239,7 +239,7 @@ def buy_hold(stock_names, adj_close, initial_capital = 10000, start_date = "2015
 
             # find the last date for the stock in adjusted close and the price on that date
             stock_last_date = adj_close.loc[adj_close['Name'] == stock]['Date'].iloc[-1]
-            stock_last_price = float(adj_close.loc[np.logical_and(adj_close['Name'] == stock, adj_close['Date'] == stock_last_date)]['Adj_Close'])
+            stock_last_price = float(adj_close.loc[np.logical_and(adj_close['Name'] == stock, adj_close['Date'] == stock_last_date)]['Adj_Close'].iloc[0])
             if verbose:
                 print("Selling {} amount of stock {} at price {}".format(str(shares[stock]), stock, str(stock_last_price)))
 
@@ -294,7 +294,7 @@ def buy_sell_class2(predictions_name, adj_close, initial_capital = 10000.0, tran
 
             for higher_stock in higher_stocks['Name']:
             
-                higher_price = float(adj_close[np.logical_and(adj_close['Date'] == current_date.strftime("%Y-%m-%d"), adj_close['Name'] == higher_stock)]['Adj_Close'])
+                higher_price = float(adj_close[np.logical_and(adj_close['Date'] == current_date.strftime("%Y-%m-%d"), adj_close['Name'] == higher_stock)]['Adj_Close'].iloc[0])
             
                 # if we have enough capital to buy the higher_stock, buy it with all of our money
                 if capital > higher_price + transaction_cost:
@@ -326,7 +326,7 @@ def buy_sell_class2(predictions_name, adj_close, initial_capital = 10000.0, tran
                 if shares[lower_stock] > 0:
                     
                     # find the price of this stock on the current date
-                    lower_price = float(adj_close[np.logical_and(adj_close['Date'] == current_date.strftime("%Y-%m-%d"), adj_close['Name'] == lower_stock)]['Adj_Close'])
+                    lower_price = float(adj_close[np.logical_and(adj_close['Date'] == current_date.strftime("%Y-%m-%d"), adj_close['Name'] == lower_stock)]['Adj_Close'].iloc[0])
 
                     # sell this stock
                     print("Stocks {} will go down, selling...".format(lower_stock))
@@ -360,7 +360,7 @@ def buy_sell_class2(predictions_name, adj_close, initial_capital = 10000.0, tran
             for current_share in shares:
                 
                 # price of the share on the current date
-                current_share_price = float(adj_close[np.logical_and(adj_close['Date'] == current_date.strftime("%Y-%m-%d"), adj_close['Name'] == current_share)]['Adj_Close'])
+                current_share_price = float(adj_close[np.logical_and(adj_close['Date'] == current_date.strftime("%Y-%m-%d"), adj_close['Name'] == current_share)]['Adj_Close'].iloc[0])
                 
                 # sell this stock
                 current_amount = shares[current_share]
@@ -437,7 +437,7 @@ def buy_sell_class3(predictions_name, adj_close, initial_capital = 10000.0, tran
 
             for higher_stock in higher_stocks['Name']:
             
-                higher_price = float(adj_close[np.logical_and(adj_close['Date'] == current_date.strftime("%Y-%m-%d"), adj_close['Name'] == higher_stock)]['Adj_Close'])
+                higher_price = float(adj_close[np.logical_and(adj_close['Date'] == current_date.strftime("%Y-%m-%d"), adj_close['Name'] == higher_stock)]['Adj_Close'].iloc[0])
             
                 # if we have enough capital to buy the higher_stock, buy it with all of our money
                 if capital > higher_price + transaction_cost:
@@ -469,7 +469,7 @@ def buy_sell_class3(predictions_name, adj_close, initial_capital = 10000.0, tran
                 if shares[lower_stock] > 0:
                     
                     # find the price of this stock on the current date
-                    lower_price = float(adj_close[np.logical_and(adj_close['Date'] == current_date.strftime("%Y-%m-%d"), adj_close['Name'] == lower_stock)]['Adj_Close'])
+                    lower_price = float(adj_close[np.logical_and(adj_close['Date'] == current_date.strftime("%Y-%m-%d"), adj_close['Name'] == lower_stock)]['Adj_Close'].iloc[0])
 
                     # sell this stock
                     print("Stocks {} will go down, selling...".format(lower_stock))
@@ -503,7 +503,7 @@ def buy_sell_class3(predictions_name, adj_close, initial_capital = 10000.0, tran
             for current_share in shares:
                 
                 # price of the share on the current date
-                current_share_price = float(adj_close[np.logical_and(adj_close['Date'] == current_date.strftime("%Y-%m-%d"), adj_close['Name'] == current_share)]['Adj_Close'])
+                current_share_price = float(adj_close[np.logical_and(adj_close['Date'] == current_date.strftime("%Y-%m-%d"), adj_close['Name'] == current_share)]['Adj_Close'].iloc[0])
                 
                 # sell this stock
                 current_amount = shares[current_share]

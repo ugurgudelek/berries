@@ -8,8 +8,6 @@ import google_finance_io
 import datetime
 import os
 
-from keras import backend as K
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 #import mlp_keras_regr as ms
 
 def main(create_model = False, model_type = "regression"):
@@ -25,10 +23,13 @@ def main(create_model = False, model_type = "regression"):
     # todo: fix problem encountered in 'ewu,qqq' etf - ugurgudelek
 
     if create_model == True:
+    
+        from keras import backend as K
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
         # 1.download data
         google_finance_io.download_data(stock_names, start_date=datetime.date(2000, 1, 3),
-                                        end_date=datetime.date(2016, 12, 31), verbose=True)
+                                        end_date=datetime.date(2017, 9, 28), verbose=True)
 
         # 2.calculate metric for available stocks and save them into csv file
         preprocessing.normalize_and_calculate_metrics(stock_names)
@@ -57,7 +58,7 @@ def main(create_model = False, model_type = "regression"):
             # 8. call CNN
             params = {"input_w": 28, "input_h": 28, "num_classes": 1, "batch_size": 1024, "epochs": 100}
             with K.get_session():
-                cs.start_cnn_session(data, params, model_save_name="model_regr_100epoch", model_read_name = "model_regr_100epoch_before_2017_07_19 21_47_40_106461")
+                cs.start_cnn_session(data, params, model_save_name="model_regr_100epoch", model_read_name = "")
             
         # for mlp
         #params = {"input_w": 28, "input_h": 28, "num_classes": 1, "batch_size": 1024, "epochs": 100}
@@ -75,7 +76,7 @@ def main(create_model = False, model_type = "regression"):
             data = preprocessing.get_merged_images_and_labels_data_cls(stock_names, last_image_col = -3, labels_ind = [-2, -1], train_test_ratio = 0.9)
             params = {"input_w": 28, "input_h": 28, "num_classes": 2, "batch_size": 1024, "epochs": 100}
             with K.get_session():
-                cscls.start_cnn_session(data, params, model_save_name="model_2class_100epoch", model_read_name = "model_2class_100epoch_before_2017_07_19 22_33_44_785205")
+                cscls.start_cnn_session(data, params, model_save_name="model_2class_100epoch", model_read_name = "")
 
         elif model_type == "classification-3":
 
@@ -89,7 +90,7 @@ def main(create_model = False, model_type = "regression"):
             params = {"input_w": 28, "input_h": 28, "num_classes": 3, "batch_size": 1024, "epochs": 100}
             
             with K.get_session():
-                cscls3.start_cnn_session(data, params, model_save_name="model_3class_100epoch", model_read_name = "model_3class_100epoch_before_2017_07_19 23_17_01_345010")
+                cscls3.start_cnn_session(data, params, model_save_name="model_3class_100epoch", model_read_name = "")
 
     else:
 
@@ -99,7 +100,7 @@ def main(create_model = False, model_type = "regression"):
         if model_type == "regression":
 
             print("Calculating final capital using prediction model...")
-            capital, shares,_,_ = loss_profit.buy_sell_regr(stock_names, predictions_name = 'predictions_model_regr_100epoch_qratio_0_2017_07_19 22_19_02_006504', adj_close = prices, buy_thr=0, sell_thr=0, transaction_cost=5)
+            capital, shares,_,_ = loss_profit.buy_sell_regr(stock_names, predictions_name = 'predictions_model_regr_100epoch_qratio_0_2017_09_29 19_00_08_803122', adj_close = prices, buy_thr=0, sell_thr=0, transaction_cost=5)
 
         elif model_type == "classification-2":
 
@@ -119,7 +120,10 @@ def main(create_model = False, model_type = "regression"):
         print("-----------------------------------------")
         print("Calculating final capital using buy & hold...")
         
-        buy_hold_final_capital, buy_hold_final_shares = loss_profit.buy_hold(stock_names, prices)
+        # find the start date of the test period
+        last_saved_data = pd.read_pickle("../input/last_saved_data/last_saved.pickle")
+        buy_hold_start_date = last_saved_data["test_dates"].iloc[0].values[0]
+        buy_hold_final_capital, buy_hold_final_shares = loss_profit.buy_hold(stock_names, prices, start_date = buy_hold_start_date)
         
         print("Final captial:")
         print(buy_hold_final_capital)
@@ -129,7 +133,7 @@ def main(create_model = False, model_type = "regression"):
 
 if __name__ == "__main__":
     
-    main(create_model = False, model_type = "classification-3")
+    main(create_model = False, model_type = "regression")
     
     # data = get_last_saved_data()
     # model = load_model("../model/model_regr_100epoch_before_2017_06_16 21_55_06_953896")
