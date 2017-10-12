@@ -133,7 +133,7 @@ def main(create_model = False, model_type = "regression"):
 
 if __name__ == "__main__":
     
-    main(create_model = False, model_type = "regression")
+    main(create_model = True, model_type = "regression")
     
     # data = get_last_saved_data()
     # model = load_model("../model/model_regr_100epoch_before_2017_06_16 21_55_06_953896")
