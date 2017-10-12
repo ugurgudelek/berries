@@ -4,7 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import preprocessing
 import sanity_cnn_train as sncs
-import sanity_get_train_data
+import sanity_preprocessing
 import datetime
 import os
 
@@ -30,14 +30,14 @@ def create_model():
     preprocessing.calculate_labels(stock_names)
     
     # 5.read sorted (via hierarchical clustering) feature names from file
-    sorted_cluster_names = pd.read_csv("../input/clustered_names.csv", header=None, squeeze=True).values.tolist()
+    sorted_cluster_names = pd.read_csv("../sanity_input/clustered_names.csv", header=None, squeeze=True).values.tolist()
     
     # 6. create flatten images with data and labels.
     preprocessing.create_images_from_data(stock_names, sorted_cluster_names, label_names=['label_day_tanh_regr'])
     
     # 7. merge all available data
     # data has 'images' and 'labels'
-    data = sanity_get_train_data.get_train_data(stock_names, labels_are_last=1)
+    data = sanity_preprocessing.get_train_data(stock_names, labels_are_last=1)
     
     # 8. call CNN
     params = {"input_w": 28, "input_h": 28, "num_classes": 1, "batch_size": 1024, "epochs": 100}

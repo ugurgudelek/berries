@@ -26,8 +26,6 @@ def construct_cnn(params):
                   metrics=['mse', 'mae'])
     return model
 
-
-
 def fit(model, data, params):
     train_images = data['train_images'].as_matrix()
     train_labels = data['train_labels'].as_matrix()
@@ -42,7 +40,7 @@ def fit(model, data, params):
 
     return model
 
-def start_cnn_session(data, params, model_save_name, model_path="../model", result_path = "../result", model_read_name = ""):
+def start_cnn_session(data, params, model_save_name, model_path="../sanity_model", result_path = "../sanity_result", model_read_name = ""):
     """Trains and evaluates CNN on the given train and test data, respectively."""
 
     # get date and clock info for model saving..
