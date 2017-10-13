@@ -29,7 +29,7 @@ def get_one_year_data(which_stock, start, end, verbose=False):
                              start_year=start_year,
                              end_month_abbv=end_month_abbv,
                              end_day=end_day,
-                             end_year=end_year,
+                             end_year=end_year
                              ))
     # change date formatting
     df.Date = df.Date.apply(lambda x: datetime.datetime.strptime(x, '%d-%b-%y').date())
