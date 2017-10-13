@@ -28,14 +28,23 @@ class TestModule:
         self.current_day = next(self._dates)
 
 
-    def get_next_day(self):
+    def get_next_day_data(self):
         """First it updates current_day then returns data_packet of updated day"""
         self.current_day = next(self._dates)
         return self.data[self.data['date'] == self.current_day]
 
-    def get_current_day(self):
+    def get_current_day_data(self):
         """:return data packet of current_day"""
         return self.data[self.data['date'] == self.current_day]
+
+    def get_current_day_data_dict(self):
+        """:return data packet of current_day dictionary"""
+        packet = self.data[self.data['date'] == self.current_day]
+        r = dict()
+        for row_tuple in packet.iterrows():
+            row = row_tuple[1]
+            r[row['name']] = row
+        return r
 
     def evalute(self, predictions, date):
         """:return evaluation result"""
@@ -47,15 +56,14 @@ class TestModule:
 
 
 
-
-# test
-stock_names = ['spy', 'xlf', 'xlu', 'xle',
-               'xlp', 'xli', 'xlv', 'xlk', 'ewj',
-               'xlb', 'xly', 'eww', 'dia', 'ewg',
-               'ewh', 'ewc', 'ewa']
-data = TestModule("../input/raw_data", stock_names)
-c_day = data.get_current_day()
-n_day = data.get_next_day()
-rand = (np.random.rand(17,1).reshape(17,) * 2 ) - 1
-result = data.evalute(rand, '2000-01-04')
-print(result)
+if __name__== "__main__":
+    # test
+    stock_names = ['spy', 'xlf', 'xlu', 'xle',
+                   'xlp', 'xli', 'xlv', 'xlk', 'ewj',
+                   'xlb', 'xly', 'eww', 'dia', 'ewg',
+                   'ewh', 'ewc', 'ewa']
+    data = TestModule("../input/raw_data", stock_names)
+    r_dict = data.get_current_day_data_dict()
+    rand = (np.random.rand(17,1).reshape(17,) * 2 ) - 1
+    result = data.evalute(rand, '2000-01-04')
+    print(result)

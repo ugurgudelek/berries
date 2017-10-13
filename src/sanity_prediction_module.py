@@ -26,16 +26,16 @@ def update_data_and_predict(next_day_data):
                    'xlb', 'xly', 'eww', 'dia', 'ewg',
                    'ewh', 'ewc', 'ewa']
 
-    raw_data_path = "../sanity_input/raw_data"
-    stock_with_metrics_path = "../sanity_input/stock_with_metrics"
+    raw_data_path = "../sanity_input/train/raw_data"
+    stock_with_metrics_path = "../sanity_input/train/stock_with_metrics"
     model_path = "../sanity_model"
     
     predictions_dict = {}
 
     # load the latest file as model
-    list_of_files = glob.glob("{}/*".format(model_path)) 
-    latest_file = max(list_of_files, key=os.path.getctime)
-    model = load_model(latest_file)
+    # list_of_files = glob.glob("{}/*".format(model_path))
+    # latest_file = max(list_of_files, key=os.path.getctime)
+    # model = load_model(latest_file)
 
     # model parameters
     params = {"input_w": 28, "input_h": 28, "num_classes": 1, "batch_size": 1024, "epochs": 100}
@@ -48,7 +48,12 @@ def update_data_and_predict(next_day_data):
         
         # get the lastest stock info
         fresh_stock = next_day_data[stock_name]
-        
+
+        filename = raw_data_path + "/{}.csv".format(stock_name)
+        old_stock = pd.read_csv(filename)
+        # todo: fix here
+        pd.concat((old_stock, fresh_stock), axis=1)
+
         # append it to raw_data
         with open(raw_data_path + "/{}.csv".format(stock_name), 'a') as f:
             fresh_stock.to_csv(f, header = False, index = None)

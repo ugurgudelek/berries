@@ -21,22 +21,22 @@ def create_model():
                    'ewh', 'ewc', 'ewa']
        
     # 2.calculate metric for available stocks and save them into csv file
-    preprocessing.normalize_and_calculate_metrics(stock_names, raw_data_path="../sanity_input/raw_data", path_to_save="../sanity_input/stock_with_metrics")
+    preprocessing.normalize_and_calculate_metrics(stock_names, raw_data_path="../sanity_input/train/raw_data", path_to_save="../sanity_input/train/stock_with_metrics")
     
     # 4.cluster features for available stocks and their features then save them into csv file
     preprocessing.cluster_features(stock_names, drop_this_cols=['date', 'low', 'close', 'high', 'open','adjusted_close'], \
-        stock_with_metric_path="../sanity_input/stock_with_metrics", save_path="../sanity_input/")
+        stock_with_metric_path="../sanity_input/train/stock_with_metrics", save_path="../sanity_input/train")
     
     # 3.calculate labels for available stocks and save them into csv file
-    preprocessing.calculate_labels(stock_names, stock_with_metric_path="../sanity_input/stock_with_metrics",
-                                   stock_with_labels_path="../sanity_input/stock_with_labels")
+    preprocessing.calculate_labels(stock_names, stock_with_metric_path="../sanity_input/train/stock_with_metrics",
+                                   stock_with_labels_path="../sanity_input/train/stock_with_labels")
     
     # 5.read sorted (via hierarchical clustering) feature names from file
-    sorted_cluster_names = pd.read_csv("../sanity_input/clustered_names.csv", header=None, squeeze=True).values.tolist()
+    sorted_cluster_names = pd.read_csv("../sanity_input/train/clustered_names.csv", header=None, squeeze=True).values.tolist()
     
     # 6. create flatten images with data and labels.
-    preprocessing.create_images_from_data(stock_names, sorted_cluster_names, label_names=['label_day_tanh_regr'], stock_with_labels_path="../sanity_input/stock_with_labels",
-                            save_path="../sanity_input/images_with_labels")
+    preprocessing.create_images_from_data(stock_names, sorted_cluster_names, label_names=['label_day_tanh_regr'], stock_with_labels_path="../sanity_input/train/stock_with_labels",
+                            save_path="../sanity_input/train/images_with_labels")
     
     # 7. merge all available data
     # data has 'images' and 'labels'
