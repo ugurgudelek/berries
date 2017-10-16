@@ -206,7 +206,7 @@ def create_images_from_data(stock_names, sorted_cluster_names, label_names, spli
         dates = []
         names = []
         # split image chunks
-        for i in range(split_period - 1, data.shape[0] - 1):
+        for i in range(split_period - 1, data.shape[0]):
             lower = i - split_period + 1
             upper = lower + split_period
 
