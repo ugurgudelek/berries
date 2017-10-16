@@ -11,7 +11,7 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 from keras import backend as K
 
-#import mlp_keras_regr as ms
+
 
 def create_model():
     
@@ -40,7 +40,7 @@ def create_model():
     
     # 7. merge all available data
     # data has 'images' and 'labels'
-    data = sanity_preprocessing.get_train_data(stock_names, labels_are_last=1)
+    data = sanity_preprocessing.get_train_data(stock_names, labels_are_last=1,  read_path="../sanity_input/train/images_with_labels", save_path="../sanity_input/train/last_saved_data")
     
     # 8. call CNN
     params = {"input_w": 28, "input_h": 28, "num_classes": 1, "batch_size": 1024, "epochs": 100}
