@@ -2,15 +2,15 @@ import numpy as np
 import pandas as pd
 import csv
 
-import keras
-from keras.models import Sequential, load_model
-from keras.layers import Dense, Dropout, Activation, Flatten
-from keras.layers import Conv2D, MaxPooling2D
-
 import datetime
 import os
 
 def construct_cnn(params):
+    import keras
+    from keras.layers import Dense, Dropout, Activation, Flatten
+    from keras.models import Sequential
+    from keras.layers import Conv2D, MaxPooling2D
+
     # CNN model
     model = Sequential()
     model.add(Conv2D(32, (3, 3), activation='relu', input_shape=(params["input_w"], params["input_h"], 1)))
@@ -42,6 +42,7 @@ def fit(model, data, params):
 
 def start_cnn_session(data, params, model_save_name, model_path="../sanity_model", result_path = "../sanity_result", model_read_name = ""):
     """Trains and evaluates CNN on the given train and test data, respectively."""
+    from keras.models import load_model
 
     # get date and clock info for model saving..
     now = str(datetime.datetime.now())

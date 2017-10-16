@@ -9,9 +9,6 @@ import os
 import shutil
 import glob
 
-from keras import backend as K
-from keras.models import Sequential, load_model
-import sanity_cnn_train as sncs
 
 """THIS MODULE UPDATES THE stock_with_metrics OF sanity INPUTS.
 FOR EACH GIVEN DAILY DATA FOR A STOCK, IT CALCULATES THE NEW METRICS AND CALCULATES THE NEW IMAGE.
