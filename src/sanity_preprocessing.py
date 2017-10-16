@@ -9,7 +9,7 @@ import time
 
 from helper import *
 
-def get_train_data(stock_names, read_path="../sanity_input/images_with_labels", labels_are_last=1, save_path="../sanity_input/last_saved_data"):
+def get_train_data(stock_names, read_path="../sanity_input/train/images_with_labels", labels_are_last=1, save_path="../sanity_input/train/last_saved_data"):
     
     if os.path.isfile(save_path+"/last_saved.pickle"):
         return pd.read_pickle(save_path+"/last_saved.pickle")
@@ -19,7 +19,7 @@ def get_train_data(stock_names, read_path="../sanity_input/images_with_labels", 
     all_train_names = []
     all_train_dates=[]
 
-    # todo: burada şu strig colon işini çöz
+    # todo: burada şu string colomn işini çöz
     for stock in stock_names:
         data_df = pd.read_csv(read_path + "/{}.csv".format(stock), header=None)
         names = data_df.iloc[:, 0] # first element
@@ -76,7 +76,7 @@ def get_train_data(stock_names, read_path="../sanity_input/images_with_labels", 
 
     return data
 
-def normalize_and_calculate_metrics(stock_name, raw_data_path="../sanity_input/raw_data", stock_with_metrics_path = "../sanity_input/stock_with_metrics"):
+def normalize_and_calculate_metrics(stock_name, raw_data_path="../sanity_input/train/raw_data", stock_with_metrics_path = "../sanity_input/train/stock_with_metrics"):
     
     # read stock csv
     stock = pd.read_csv(raw_data_path + "/{}.csv".format(stock_name))
@@ -109,7 +109,7 @@ def normalize_and_calculate_metrics(stock_name, raw_data_path="../sanity_input/r
     return fresh_stock_with_metrics
 
 def get_last_image(stock_name, label_names, split_period=28,
-                            stock_with_metrics_path="../sanity_input/stock_with_metrics"):
+                            stock_with_metrics_path="../sanity_input/train/stock_with_metrics"):
 
     # read stock_with_metrics
     stock_with_metrics = pd.read_csv(stock_with_metrics_path + "/{}.csv".format(stock_name))
