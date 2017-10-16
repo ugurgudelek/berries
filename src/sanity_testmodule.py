@@ -18,6 +18,7 @@ class TestModule:
         # reset index
         self.data = self.data.reset_index(drop=True)
 
+
         # store  days
         def date_gen(dates):
             for date in dates:
@@ -45,13 +46,22 @@ class TestModule:
             row = row_tuple[1]
             r[row['name']] = row
         return r
+    def update_current_day(self):
+        self.current_day = next(self._dates)
+        return self.current_day
 
-    def evalute(self, predictions, date):
+    def evalute(self, predictions):
         """:return evaluation result"""
         # todo: check pct_change_tanh
-        actuals = self.data[self.data['date'] == date]['pct_change_tanh']
-        res = [1 if a*p > 0 else 0 for (a,p) in zip(actuals, predictions)]
-        return sum(res) / len(res)
+        actuals = self.data[self.data['date'] == self.current_day][['name','pct_change_tanh']]
+        res = []
+        labels_dict = dict()
+        for key,value in predictions.items():
+            actual = actuals['pct_change_tanh'].loc[actuals['name'] == key].values[0]
+            res.append(actual * value)
+            labels_dict[key] = actual
+
+        return (np.sum(np.array(res)>0) / len(res),labels_dict)
 
 
 

@@ -76,6 +76,60 @@ def get_train_data(stock_names, read_path="../sanity_input/train/images_with_lab
 
     return data
 
+def fast_normalize_and_calculate_metrics(train_stock, fresh_stock):
+    train_stock.loc[:,'name'] = [''] * train_stock.shape[0]
+    train_stock.loc[:,'pct_change_tanh'] = [0.0] * train_stock.shape[0]
+
+    stock = train_stock.append(fresh_stock, ignore_index=True).drop(['name', 'pct_change_tanh'], axis=1)
+
+    # create data arr to hold all metric info
+    metric_data, metric_function_names = preprocessing.calculate_metrics(stock)
+
+    # assign nan value beginning of the data
+    metric_data = assign_null_into_data(arr=metric_data, length=len(stock['adjusted_close']))
+
+    # append data and metrics column-wise
+    stock = stack_data_and_metrics(stock, metric_data, metric_function_names)
+
+    # normalize price values before applying labels
+    # because we need to get rid of diversity among stocks
+    stock = preprocessing.apply_normalization_to_raw_data(stock)
+
+    return stock.iloc[-1]
+
+
+def fast_get_last_image(train_stock_with_metrics, split_period=28):
+
+
+    predictor_names = pd.read_csv("../sanity_input/train/clustered_names.csv", header=None,
+                                  squeeze=True).values.tolist()
+
+    # drop nan values for proper set
+    train_stock_with_metrics = train_stock_with_metrics.dropna()
+
+    # drop irrelevant features
+    stock_with_metrics = train_stock_with_metrics[['date'] + predictor_names]
+    # when i do this, later i can reach data with stock name and date
+
+    image_col_size = stock_with_metrics[predictor_names].shape[1]
+    image_row_size = split_period
+
+    if image_row_size != image_col_size:
+        raise Exception("image matrix must be square!")
+
+    # lower = num_records - split_period
+    # upper = lower + split_period
+
+    image = stock_with_metrics[predictor_names].iloc[-split_period:]
+    date = stock_with_metrics['date'].iloc[-split_period:]
+
+    # normalization for image.
+    image = (image - image.mean()) / image.std()
+    image_flat = image.values.flatten()  # image_flat'shape : image_row_size * image_col_size
+
+    return date, image_flat
+
+
 def normalize_and_calculate_metrics(stock_name, raw_data_path="../sanity_input/train/raw_data", stock_with_metrics_path = "../sanity_input/train/stock_with_metrics"):
     
     # read stock csv
@@ -108,24 +162,26 @@ def normalize_and_calculate_metrics(stock_name, raw_data_path="../sanity_input/t
     
     return fresh_stock_with_metrics
 
-def get_last_image(stock_name, label_names, split_period=28,
+def get_last_image(stock_name, split_period=28,
                             stock_with_metrics_path="../sanity_input/train/stock_with_metrics"):
 
     # read stock_with_metrics
     stock_with_metrics = pd.read_csv(stock_with_metrics_path + "/{}.csv".format(stock_name))
 
     # get the last 100 records
-    num_records = stock_with_metrics.shape[0]
-    stock_with_metrics = stock_with_metrics.iloc[num_records - 100 : num_records]
-    
-    predictor_names = ["volume", "rsi_15", "rsi_20", "rsi_25", "rsi_30", "sma_15", "sma_20", "sma_25", "sma_30", "macd_26_12", "macd_28_14", "macd_30_16", "macd_trigger_9_26_12", "macd_trigger_10_28_14", "macd_trigger_11_30_16", "willR_14", "willR_18", "willR_22", "kdHist_14", "kdHist_18", "kdHist_22", "ultimateOs_7_14_28", "ultimateOs_8_16_32", "ultimateOs_9_18_36", "mfIndex_14", "mfIndex_18", "mfIndex_22", "pct_change_tanh"]
-    
-    # drop irrelevant features
-    stock_with_metrics = stock_with_metrics[['date'] + predictor_names + label_names]
-    # when i do this, later i can reach data with stock name and date
-    
+    # num_records = stock_with_metrics.shape[0]
+    # stock_with_metrics = stock_with_metrics.iloc[num_records - 100 : num_records]
+
+    predictor_names = pd.read_csv("../sanity_input/train/clustered_names.csv", header=None, squeeze=True).values.tolist()
+
     # drop nan values for proper set
     stock_with_metrics = stock_with_metrics.dropna()
+
+    # drop irrelevant features
+    stock_with_metrics = stock_with_metrics[['date'] + predictor_names]
+    # when i do this, later i can reach data with stock name and date
+    
+
     
     image_col_size = stock_with_metrics[predictor_names].shape[1]
     image_row_size = split_period
@@ -133,11 +189,11 @@ def get_last_image(stock_name, label_names, split_period=28,
     if image_row_size != image_col_size:
         raise Exception("image matrix must be square!")
 
-    lower = numRecords - split_period
-    upper = lower + split_period
+    # lower = num_records - split_period
+    # upper = lower + split_period
     
-    image = stock_with_metrics[predictor_names].iloc[lower:upper]
-    date = stock_with_metrics['date'].iloc[upper-1]
+    image = stock_with_metrics[predictor_names].iloc[-split_period:]
+    date = stock_with_metrics['date'].iloc[-split_period:]
 
     # normalization for image.
     image = (image - image.mean()) / image.std()
