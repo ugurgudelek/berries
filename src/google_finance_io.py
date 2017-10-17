@@ -132,6 +132,7 @@ def download_data(stock_names, start_date, end_date, path="../input/raw_data", v
             stock.open = stock.open.fillna(method='pad')
             stock.volume = stock.volume.apply(lambda x: np.nan if x == 0 else x)
             stock.volume = stock.volume.fillna(method='pad')
+            stock = stock.drop_duplicates()
 
             # i found that stock.open and others are object dtype.
             # lets be sure that all are float
