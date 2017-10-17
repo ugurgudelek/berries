@@ -28,7 +28,7 @@ model_path = "../sanity_model"
 # model parameters
 params = {"input_w": 28, "input_h": 28, "num_classes": 1, "batch_size": 1024, "epochs": 100}
 
-model = load_model(model_path + "/model_regr_100epoch_before_2017_10_16 16_37_31_758941")
+model = load_model(model_path + "/model_regr_100epoch_before_2017_10_17 11_54_10_765826")
 # read the stock info from local database
 train_stocks = dict()
 train_stocks_with_metrics = dict()
@@ -125,7 +125,7 @@ def fast_update_data_and_predict(next_day_data):
 
 
         # calculate the metrics for the new data
-        fresh_stock_with_metrics = sanity_preprocessing.fast_normalize_and_calculate_metrics(train_stock[-50:], fresh_stock)
+        fresh_stock_with_metrics = sanity_preprocessing.fast_normalize_and_calculate_metrics(train_stock, fresh_stock)
 
         # update data
         train_stock = train_stock.append(fresh_stock).reset_index(drop=True)
