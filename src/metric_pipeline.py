@@ -60,6 +60,6 @@ def rsi(data, period=15):
 
     return RSI
 
-df = pd.read_csv("..\input\stock_with_metrics\spy.csv")
+df = pd.read_csv("../sanity_new/train/stock_with_metrics/spy.csv")
 
 print()
