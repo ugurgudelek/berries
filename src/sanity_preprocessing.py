@@ -101,7 +101,7 @@ def fast_normalize_and_calculate_metrics(train_stock, fresh_stock):
 def fast_get_last_image(train_stock_with_metrics, split_period=28):
 
 
-    predictor_names = pd.read_csv("../sanity_input/train/clustered_names.csv", header=None,
+    predictor_names = pd.read_csv("../sanity_new/clustered_names.csv", header=None,
                                   squeeze=True).values.tolist()
 
     # drop nan values for proper set

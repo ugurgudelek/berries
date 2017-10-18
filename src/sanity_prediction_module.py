@@ -21,14 +21,14 @@ stock_names = ['spy', 'xlf', 'xlu', 'xle',
                'xlp', 'xli', 'xlv', 'xlk', 'ewj',
                'xlb', 'xly', 'eww', 'dia', 'ewg',
                'ewh', 'ewc', 'ewa']
-raw_data_path = "../sanity_input/train/raw_data"
-stock_with_metrics_path = "../sanity_input/train/stock_with_metrics"
-model_path = "../sanity_model"
+raw_data_path = "../sanity_new/train/raw_data"
+stock_with_metrics_path = "../sanity_new/train/stock_with_metrics"
+model_path = "../sanity_new/model"
 
 # model parameters
 params = {"input_w": 28, "input_h": 28, "num_classes": 1, "batch_size": 1024, "epochs": 100}
 
-model = load_model(model_path + "/model_regr_100epoch_before_2017_10_17 11_54_10_765826")
+model = load_model(model_path + "/model_sanity_001")
 # read the stock info from local database
 train_stocks = dict()
 train_stocks_with_metrics = dict()
