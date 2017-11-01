@@ -6,5 +6,5 @@ stock_names = ['spy', 'xlf', 'xlu', 'xle',
                    'ewh', 'ewc', 'ewa']
 
 
-google_finance_io.download_data(stock_names, start_date=datetime.date(2005, 1,1),
-                                        end_date=datetime.date(2006, 12, 31), verbose=True, path="../sanity_input/test")
+google_finance_io.download_data(stock_names, start_date=datetime.date(2006, 1,1),
+                                        end_date=datetime.date(2006, 12, 31), verbose=True, path="../sanity_new2/test/raw_data")
