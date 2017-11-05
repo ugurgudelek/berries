@@ -2,9 +2,30 @@
 Difference from regular one is these metrics store previous states and we can feed them one by one."""
 
 import pandas as pd
+from utils import Bucket
+import random
+
 
 class Metric:
-    pass
+    def __init__(self):
+        self.metrics = dict()
+
+    def add(self, metric):
+        self.metrics[metric.uid] = metric
+
+    def feed(self, row):
+        """row should be a dict and should have 'date' and 'data' keys
+        row = dict('date','data')
+        """
+        data = row['data']
+        date = row['date']
+
+        calculation = pd.Series()
+        for (uid,metric) in self.metrics.items():
+            c = metric.feed(row)
+            calculation[uid] = c
+
+        return calculation
 
 class RSI:
     """Relative Strength Index (RSI)
@@ -12,6 +33,7 @@ class RSI:
 
     def __init__(self, period):
         self.period = period
+        self.uid = 'rsi_'+str(self.period)
 
         self.average_gain = 0.0
         self.average_loss = 0.0
@@ -36,8 +58,8 @@ class RSI:
         return self.data[-1]
 
     def feed(self, row):
-        """row should be a series and should have 'date' and 'data' columns
-        data = pd.Series('date','data')
+        """row should be a dict and should have 'date' and 'data' keys
+        row = dict('date','data')
         """
         data = row['data']
         date = row['date']
@@ -100,65 +122,94 @@ class RSI:
 
 
 class EMA:
-    pass
+    # todo: Implementation
+    def __init__(self, period):
+        self.period = period
+        self.uid = 'ema_'+str(self.period)
+
+    def feed(self, row):
+        return random.random()
 
 
 class MACD:
-    pass
+    # todo: Implementation
+    def __init__(self,period_long=26, period_short=12):
+        self.period_long = period_long
+        self.period_short = period_short
+        self.uid = 'macd_'+str(self.period_long)+'_'+str(self.period_short)
+
+    def feed(self, row):
+        return random.random()
 
 
 class MACD_Trigger:
-    pass
+    # todo: Implementation
+    def __init__(self, period_signal=9, period_long=26, period_short=12):
+        self.period_signal = period_signal
+        self.period_long = period_long
+        self.period_short = period_short
+        self.uid = 'macd_trig' \
+                   + '_' + str(self.period_signal) \
+                   + '_' + str(self.period_long) \
+                   + '_' + str(self.period_short)
+
+    def feed(self, row):
+        return random.random()
 
 
 class SMA:
-    pass
+    # todo: Implementation
+    def __init__(self, period):
+        self.period = period
+        self.uid = 'sma_'+str(self.period)
+
+    def feed(self, row):
+        return random.random()
 
 
 class WilliamR:
-    pass
+    # todo: Implementation
+    def __init__(self, period):
+        self.period = period
+        self.uid = 'wR_'+str(self.period)
+
+    def feed(self, row):
+        return random.random()
 
 
 class KDDiff:
-    pass
+    # todo: Implementation
+    def __init__(self, period):
+        self.period = period
+        self.uid = 'kddiff_'+str(self.period)
+
+    def feed(self, row):
+        return random.random()
 
 
 class UltimateOscillator:
-    pass
+    # todo: Implementation
+    def __init__(self, period1=7, period2=14, period3=28):
+        self.period1 = period1
+        self.period2 = period2
+        self.period3 = period3
+        self.uid = 'macd_trig' \
+                   + '_' + str(self.period1) \
+                   + '_' + str(self.period2) \
+                   + '_' + str(self.period3)
+
+    def feed(self, row):
+        return random.random()
 
 
 class MoneyFlowIndex:
-    pass
+    # todo: Implementation
+    def __init__(self, period):
+        self.period = period
+        self.uid = 'mfi_'+str(self.period)
+
+    def feed(self, row):
+        return random.random()
 
 
-class Bucket:
-    """This is variation of queue data structure.
-    It holds first few items. Whenever new item added, oldest will be deleted."""
 
-    def __init__(self, size):
-        self.size = size
-        self.container = []
-
-    def __len__(self):
-        return len(self.container)
-
-    def full(self):
-        return self.__len__() == self.size
-
-    def put(self, data):
-        if self.full():  # throw older item if full
-            self.container.pop(0)
-
-        # append new as last item
-        self.container.append(data)
-
-    def average(self):
-        return sum(self.container) / self.size
-
-    def __str__(self):
-        string = ""
-        string += str(self.container)
-        return string
-
-    def __repr__(self):
-        return self.__str__()
