@@ -6,12 +6,40 @@ from utils import Bucket
 import random
 
 
-class Metric:
+class MetricEngine:
     def __init__(self):
         self.metrics = dict()
 
     def add(self, metric):
         self.metrics[metric.uid] = metric
+
+    def add_default_metrics(self):
+        self.add(RSI(15))
+        self.add(RSI(20))
+        self.add(RSI(25))
+        self.add(RSI(30))
+        self.add(SMA(15))
+        self.add(SMA(20))
+        self.add(SMA(25))
+        self.add(SMA(30))
+        self.add(MACD(26, 12))
+        self.add(MACD(28, 14))
+        self.add(MACD(30, 16))
+        self.add(MACD_Trigger(9, 26, 12))
+        self.add(MACD_Trigger(10, 28, 14))
+        self.add(MACD_Trigger(11, 30, 16))
+        self.add(WilliamR(14))
+        self.add(WilliamR(18))
+        self.add(WilliamR(22))
+        self.add(KDDiff(14))
+        self.add(KDDiff(18))
+        self.add(KDDiff(22))
+        self.add(UltimateOscillator(7, 14, 28))
+        self.add(UltimateOscillator(8, 16, 32))
+        self.add(UltimateOscillator(9, 18, 36))
+        self.add(MoneyFlowIndex(14))
+        self.add(MoneyFlowIndex(18))
+        self.add(MoneyFlowIndex(22))
 
     def feed(self, row):
         """row should be a dict and should have 'date' and 'data' keys
@@ -26,6 +54,11 @@ class Metric:
             calculation[uid] = c
 
         return calculation
+
+class Metric:
+    def __init__(self):
+        pass
+
 
 class RSI:
     """Relative Strength Index (RSI)
