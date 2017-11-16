@@ -1,9 +1,12 @@
 """This files containes several function about label retrieval"""
 import datetime
 
-class Label:
-    def __init__(self):
+class LabelEngine:
+    def __init__(self,financeIO, make_stationary=True):
         self.labels = []
+        self.financeIO = financeIO
+
+        self.make_stationary = make_stationary
 
     def last_label(self):
         if self.__len__() == 0:
@@ -15,14 +18,15 @@ class Label:
 
 
 
-    def get_label_for(self, stock_name, date, finance_io, take_difference=False, current_close=None):
-        one_day_data = None
+    def get_label_for(self, stock_name, date, old_close=None):
 
-        while one_day_data is None:  # loop until finding propor day
-            date += datetime.timedelta(days=1)  # next day
-            one_day_data = finance_io.get_one_day_data(stock_name=stock_name, date=date)
+        one_day_data = self.financeIO.get_next_day_data(stock_name, date)
+        current_close = one_day_data['close'].values[0]
 
-        if take_difference:
-            return one_day_data['Close'].values[0] - current_close
+        if self.make_stationary:
+            if old_close is None:
+                raise Exception("if make_stationary is True then old_close should be passes.")
 
-        return one_day_data['Close'].values[0]
+            return (current_close - old_close) / current_close
+
+        return current_close
