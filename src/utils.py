@@ -34,6 +34,9 @@ class Bucket:
     def flush(self):
         self.container = []
 
+    def is_empty(self):
+        return self.__len__() == 0
+
     def __str__(self):
         string = ""
         string += str(self.container)
