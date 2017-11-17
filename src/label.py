@@ -1,12 +1,14 @@
 """This files containes several function about label retrieval"""
 import datetime
+import numpy as np
 
 class LabelEngine:
-    def __init__(self,financeIO, make_stationary=True):
+    def __init__(self,financeIO, make_stationary=True, apply_tanh=True):
         self.labels = []
         self.financeIO = financeIO
 
         self.make_stationary = make_stationary
+        self.apply_tanh = apply_tanh
 
     def last_label(self):
         if self.__len__() == 0:
@@ -27,6 +29,14 @@ class LabelEngine:
             if old_close is None:
                 raise Exception("if make_stationary is True then old_close should be passes.")
 
-            return (current_close - old_close) / current_close
+            stationary_close = (current_close - old_close) / current_close
+
+            if self.apply_tanh:
+                return np.tanh(stationary_close)
+            return stationary_close
 
         return current_close
+
+class Label:
+    """Store label related attributes and stationary methods."""
+    pass
