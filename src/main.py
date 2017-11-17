@@ -16,35 +16,44 @@ import engine
 # todo 7: test
 # todo 8: plot
 
-# todo:IMPORTANT!!!!
-# todo: fix metric engine. it should store wrt stock_names....
+# todo 9: make it parallel
+
+
+# done: fix metric engine. it should store wrt stock_names....
+# todo: make all stationary processes in financeIO.py
 
 DATE_FORMAT = '%d-%m-%Y'
-start_date = datetime.datetime.strptime('01-09-2015', DATE_FORMAT)
-end_date = datetime.datetime.strptime('01-12-2016', DATE_FORMAT)
-
-financeIO = LocalIO()
-metric_engine = metric.MetricEngine()
-metric_engine.add_default_metrics()
-label_engine = label.LabelEngine(financeIO=financeIO, make_stationary=True)
-image_engine = image.ImageEngine(split_period=28, normalize=True)
-params = {"input_w": 28, "input_h": 28, "num_classes": 1, "batch_size": 10, "epochs": 100}
-cnn_engine = cnn.CNNEngine(params=params)
-
-stock_names = ['spy', 'xlf', 'xlu', 'xle',
+START_DATE = datetime.datetime.strptime('01-01-2000', DATE_FORMAT).date()
+END_DATE = datetime.datetime.strptime('31-12-2014', DATE_FORMAT).date()
+STOCK_NAMES = ['spy', 'xlf', 'xlu', 'xle',
                'xlp', 'xli', 'xlv', 'xlk', 'ewj',
                'xlb', 'xly', 'eww', 'dia', 'ewg',
                'ewh', 'ewc', 'ewa']
+# STOCK_NAMES = ['spy']
+MAKE_STATIONARY = True
+NORMALIZE_IMAGE = True
+APPLY_TANH = True
+
+financeIO = LocalIO()
+metric_engine = metric.MetricEngine(stock_names=STOCK_NAMES)
+metric_engine.add_default_metrics()
+label_engine = label.LabelEngine(financeIO=financeIO, make_stationary=MAKE_STATIONARY, apply_tanh=APPLY_TANH)
+image_engine = image.ImageEngine(stock_names=STOCK_NAMES, split_period=28, normalize=NORMALIZE_IMAGE)
+params = {"input_w": 28, "input_h": 28, "num_classes": 1, "batch_size": 10, "epochs": 100}
+cnn_engine = cnn.CNNEngine(params=params, model_save_path='../model')
+
+
 
 main_engine = engine.Engine(financeIO=financeIO,
                             metric_engine=metric_engine,
                             label_engine=label_engine,
                             image_engine=image_engine,
                             cnn_engine=cnn_engine,
-                            stock_names=stock_names,
-                            make_stationary=True,
+                            stock_names=STOCK_NAMES,
+                            make_stationary=MAKE_STATIONARY,
+                            apply_tanh=APPLY_TANH,
                             verbose=True)
 
-main_engine.run(start_date=start_date, end_date=end_date)
+main_engine.run(start_date=START_DATE, end_date=END_DATE)
 
 print()
