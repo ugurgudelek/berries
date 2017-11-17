@@ -17,7 +17,7 @@ class ImageEngine:
 
         self.image_container = defaultdict(list).fromkeys(self.stock_names)
         for key, item in self.image_container.items():
-            self.image_buckets[key] = []
+            self.image_container[key] = []
 
     def feed(self, row):
         """row should be a dict and should have 'stock_name','date' and 'data' keys
