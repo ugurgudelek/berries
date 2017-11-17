@@ -152,6 +152,11 @@ class LocalIO(IO):
         return r
 
 
+class Data:
+    """Holds all data related method and attributes. i.e. tanh(close)"""
+    pass
+
+
 if __name__ == "__main__":
     # date = datetime.datetime.strptime('03-10-2016', '%d-%m-%Y')
     # google = GoogleFinanceIO()
