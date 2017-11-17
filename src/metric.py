@@ -4,56 +4,67 @@ Difference from regular one is these metrics store previous states and we can fe
 import pandas as pd
 from utils import Bucket
 import random
+from collections import defaultdict
 
 
 class MetricEngine:
-    def __init__(self):
-        self.metrics = dict()
+    def __init__(self, stock_names):
+        self.stock_names = stock_names
+        self.metrics = defaultdict(dict)  # self.metrics will store metrics with respect to first their stock_name and then uid.
 
-    def add(self, metric):
-        self.metrics[metric.uid] = metric
+    def add(self, stock_name, metric):
+        self.metrics[stock_name][metric.uid] = metric
 
     def add_default_metrics(self):
-        self.add(RSI(15))
-        self.add(RSI(20))
-        self.add(RSI(25))
-        self.add(RSI(30))
-        self.add(SMA(15))
-        self.add(SMA(20))
-        self.add(SMA(25))
-        self.add(SMA(30))
-        self.add(MACD(26, 12))
-        self.add(MACD(28, 14))
-        self.add(MACD(30, 16))
-        self.add(MACD_Trigger(9, 26, 12))
-        self.add(MACD_Trigger(10, 28, 14))
-        self.add(MACD_Trigger(11, 30, 16))
-        self.add(WilliamR(14))
-        self.add(WilliamR(18))
-        self.add(WilliamR(22))
-        self.add(KDDiff(14))
-        self.add(KDDiff(18))
-        self.add(KDDiff(22))
-        self.add(UltimateOscillator(7, 14, 28))
-        self.add(UltimateOscillator(8, 16, 32))
-        self.add(UltimateOscillator(9, 18, 36))
-        self.add(MoneyFlowIndex(14))
-        self.add(MoneyFlowIndex(18))
-        self.add(MoneyFlowIndex(22))
+        for stock_name in self.stock_names:
+            self.add(stock_name, RSI(15))
+            self.add(stock_name, RSI(20))
+            self.add(stock_name, RSI(25))
+            self.add(stock_name, RSI(30))
+            self.add(stock_name, SMA(15))
+            self.add(stock_name, SMA(20))
+            self.add(stock_name, SMA(25))
+            self.add(stock_name, SMA(30))
+            self.add(stock_name, MACD(26, 12))
+            self.add(stock_name, MACD(28, 14))
+            self.add(stock_name, MACD(30, 16))
+            self.add(stock_name, MACD_Trigger(9, 26, 12))
+            self.add(stock_name, MACD_Trigger(10, 28, 14))
+            self.add(stock_name, MACD_Trigger(11, 30, 16))
+            self.add(stock_name, WilliamR(14))
+            self.add(stock_name, WilliamR(18))
+            self.add(stock_name, WilliamR(22))
+            self.add(stock_name, KDDiff(14))
+            self.add(stock_name, KDDiff(18))
+            self.add(stock_name, KDDiff(22))
+            self.add(stock_name, UltimateOscillator(7, 14, 28))
+            self.add(stock_name, UltimateOscillator(8, 16, 32))
+            self.add(stock_name, UltimateOscillator(9, 18, 36))
+            self.add(stock_name, MoneyFlowIndex(14))
+            self.add(stock_name, MoneyFlowIndex(18))
+            self.add(stock_name, MoneyFlowIndex(22))
 
     def feed(self, row):
-        """row should be a dict and should have 'date' and 'data' keys
-        row = dict('date','data')
+        """row should be a dict and should have 'stock_name','date' and 'data' keys
+        row = dict('stock_name','date','data')
         """
+        stock_name = row['stock_name']
         data = row['data']
         date = row['date']
 
         calculation = pd.Series()
-        for (uid,metric) in self.metrics.items():
+        for (uid, metric) in self.metrics[stock_name].items():
             c = metric.feed(row)
             calculation[uid] = c
 
-        return calculation
+        if self.is_proper(calculation):
+            return calculation
+
+        return None
+
+    def is_proper(self, metric_data):
+        return not any(pd.isnull(metric_data)) # if metric_data has not any None
+
 
 class Metric:
     def __init__(self):
@@ -66,7 +77,7 @@ class RSI:
 
     def __init__(self, period):
         self.period = period
-        self.uid = 'rsi_'+str(self.period)
+        self.uid = 'rsi_' + str(self.period)
 
         self.average_gain = 0.0
         self.average_loss = 0.0
@@ -158,7 +169,7 @@ class EMA:
     # todo: Implementation
     def __init__(self, period):
         self.period = period
-        self.uid = 'ema_'+str(self.period)
+        self.uid = 'ema_' + str(self.period)
 
     def feed(self, row):
         return random.random()
@@ -166,10 +177,10 @@ class EMA:
 
 class MACD:
     # todo: Implementation
-    def __init__(self,period_long=26, period_short=12):
+    def __init__(self, period_long=26, period_short=12):
         self.period_long = period_long
         self.period_short = period_short
-        self.uid = 'macd_'+str(self.period_long)+'_'+str(self.period_short)
+        self.uid = 'macd_' + str(self.period_long) + '_' + str(self.period_short)
 
     def feed(self, row):
         return random.random()
@@ -194,7 +205,7 @@ class SMA:
     # todo: Implementation
     def __init__(self, period):
         self.period = period
-        self.uid = 'sma_'+str(self.period)
+        self.uid = 'sma_' + str(self.period)
 
     def feed(self, row):
         return random.random()
@@ -204,7 +215,7 @@ class WilliamR:
     # todo: Implementation
     def __init__(self, period):
         self.period = period
-        self.uid = 'wR_'+str(self.period)
+        self.uid = 'wR_' + str(self.period)
 
     def feed(self, row):
         return random.random()
@@ -214,7 +225,7 @@ class KDDiff:
     # todo: Implementation
     def __init__(self, period):
         self.period = period
-        self.uid = 'kddiff_'+str(self.period)
+        self.uid = 'kddiff_' + str(self.period)
 
     def feed(self, row):
         return random.random()
@@ -239,10 +250,7 @@ class MoneyFlowIndex:
     # todo: Implementation
     def __init__(self, period):
         self.period = period
-        self.uid = 'mfi_'+str(self.period)
+        self.uid = 'mfi_' + str(self.period)
 
     def feed(self, row):
         return random.random()
-
-
-
