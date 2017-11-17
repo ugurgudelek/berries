@@ -11,10 +11,13 @@ from keras.losses import mean_squared_error
 from keras.optimizers import Adadelta
 
 
-class CNNEngine:
-    def __init__(self, params):
 
+
+class CNNEngine:
+    def __init__(self, params, model_save_path, verbose=True):
         self.params = params
+        self.model_save_path = model_save_path
+        self.verbose = verbose
         self.model = self.construct_cnn()
 
         self.X_bucket = Bucket(size=self.params['batch_size'])
@@ -23,10 +26,17 @@ class CNNEngine:
         self.X = []
         self.y = []
 
+    def save_model(self):
+        if not os.path.exists(self.model_save_path):
+            os.makedirs(self.model_save_path)
+        self.model.save(filepath=self.model_save_path)
+
+
     def feed(self, row):
 
         image = row['image']
         label = row['label']
+        date = row['date']
         self.X.append(image)
         self.y.append(label)
 
@@ -39,16 +49,23 @@ class CNNEngine:
             images = images.reshape(images.shape[0], self.params["input_w"], self.params["input_h"], 1)
             labels = np.array(self.y_bucket.get_all_bucket())
 
-            self.model.fit(x=images, y=labels, verbose=1, validation_data=None, epochs=1)
+            history = self.model.fit(x=images, y=labels, validation_data=None, epochs=1, verbose=False)
 
+            if self.verbose:
+                print('date: {}  ||  MSE: {}'.format(date, history.history['mean_squared_error']))
+
+            # flush all bucket because we need to be prepared for next batch
             self.X_bucket.flush()
             self.y_bucket.flush()
 
     def retrain(self):
+        if self.verbose:
+            print("Starting retraining...")
+
         X = np.array(self.X)
         X = X.reshape(X.shape[0], self.params["input_w"], self.params["input_h"], 1)
         y = np.array(self.y)
-        self.model.fit(x=X, y=y, verbose=1, validation_data=None, batch_size=self.params['batch_size'],
+        self.model.fit(x=X, y=y, verbose=self.verbose, validation_data=None, batch_size=self.params['batch_size'],
                        epochs=self.params['epochs'] - 1)
 
     def construct_cnn(self):
@@ -70,6 +87,7 @@ class CNNEngine:
         return self.model
 
     def test(self, data, q_ratio=0.38):
+        raise Exception("Not implemented yet!")
         test_images = data['test_images']
         test_labels = data['test_labels']
         test_names = data['test_names']
@@ -137,6 +155,7 @@ class CNNEngine:
         # return model, history
 
     def custom_test_on_batch(self, image, label, q_ratio=0.38):
+        raise Exception("Not implemented yet!")
         prediction = self.model.predict(image)
         mse = (label - prediction) ** 2
         p_q = quantize(prediction, q_ratio)
