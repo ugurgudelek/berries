@@ -95,8 +95,8 @@ class Engine:
                         # but we need train this model again later for other epochs
                         row = {'date': current_date,'stock_name': stock_name, 'image': current_image, 'label': current_label}
                         self.cnn_engine.feed(row=row)
-                        
 
+                        
                 self.old_closes[stock_name] = current_day_data['close'].values[0]  # update old close
 
 

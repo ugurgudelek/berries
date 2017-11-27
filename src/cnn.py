@@ -30,7 +30,7 @@ class CNNEngine:
     def save_model(self):
         if not os.path.exists(self.model_save_path):
             os.makedirs(self.model_save_path)
-        self.model.save(filepath=self.model_save_path+'.retrained')
+        self.model.save(filepath=self.model_save_path+'.h5py')
 
     def save_Xy(self):
         if not os.path.exists(self.model_save_path):
