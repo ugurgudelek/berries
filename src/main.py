@@ -1,5 +1,5 @@
 import metric
-from financeIO import LocalIO
+from financeIO import LocalIO,GoogleFinanceIO
 import datetime
 import pandas as pd
 import label
