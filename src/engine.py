@@ -47,7 +47,12 @@ class Engine:
             data.day_data = current_day_data
 
             if current_day_data is not None:  # if current day is business day
-                row = {'stock_name': stock_name, 'date': current_date, 'data': current_day_data['close'].values[0]}
+                row = {'stock_name': stock_name,
+                       'date': current_date,
+                       'close': current_day_data['close'].values[0],
+                       'high': current_day_data['high'].values[0],
+                       'low': current_day_data['low'].values[0],
+                       'volume': current_day_data['volume'].values[0]}
                 current_metric_data = self.metric_engine.feed(row=row)  # try to calculate metrics
                 data.metric_data = current_metric_data
                 if current_metric_data is not None:
