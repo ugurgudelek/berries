@@ -41,6 +41,8 @@ class Engine:
         data.date = current_date
 
         for stock_name in self.stock_names:
+            if self.verbose:
+                print("Name: {}".format(stock_name))
             data.stock_name = stock_name
 
             current_day_data = self.financeIO.get_one_day_data(stock_name=stock_name, date=current_date)
@@ -93,6 +95,7 @@ class Engine:
                         # but we need train this model again later for other epochs
                         row = {'date': current_date,'stock_name': stock_name, 'image': current_image, 'label': current_label}
                         self.cnn_engine.feed(row=row)
+                        
 
                 self.old_closes[stock_name] = current_day_data['close'].values[0]  # update old close
 
@@ -119,6 +122,9 @@ class Engine:
 
         # save the trained model
         self.cnn_engine.save_model()
+
+        # save X and y file
+        self.cnn_engine.save_Xy()
 
         # save all containers in engines
         # self.financeIO.save_containers()

@@ -4,6 +4,7 @@ import os
 import numpy as np
 from utils import quantize
 from utils import Bucket
+import pickle
 
 from keras.models import Sequential, load_model
 from keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, MaxPooling2D
@@ -29,7 +30,16 @@ class CNNEngine:
     def save_model(self):
         if not os.path.exists(self.model_save_path):
             os.makedirs(self.model_save_path)
-        self.model.save(filepath=self.model_save_path)
+        self.model.save(filepath=self.model_save_path+'.retrained')
+
+    def save_Xy(self):
+        if not os.path.exists(self.model_save_path):
+            os.makedirs(self.model_save_path)
+        with open(self.model_save_path+'.X', 'wb') as x_file:
+            pickle.dump(x_file, self.model_save_path+'.X')
+        with open(self.model_save_path+'.y', 'wb') as y_file:
+            pickle.dump(y_file, self.model_save_path+'.y')
+
 
 
     def feed(self, row):
