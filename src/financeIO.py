@@ -22,6 +22,11 @@ class IO:
             return None
 
         data['name'] = stock_name
+        data['open'] = data['open'].astype(float)
+        data['high'] = data['high'].astype(float)
+        data['low'] = data['low'].astype(float)
+        data['close'] = data['close'].astype(float)
+        data['volume'] = data['volume'].astype(int)
 
         return data[['name', 'date', 'open', 'high', 'low', 'close', 'volume']]
 
