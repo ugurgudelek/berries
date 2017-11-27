@@ -15,7 +15,6 @@ import engine
 # todo 6: train & validation
 # todo 7: test
 # todo 8: plot
-
 # todo 9: make it parallel
 
 
