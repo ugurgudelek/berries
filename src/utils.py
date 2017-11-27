@@ -31,6 +31,13 @@ class Bucket:
     def average(self):
         return sum(self.container) / self.size
 
+    def max(self):
+        return max(self.container)
+
+    def min(self):
+        return min(self.container)
+
+
     def flush(self):
         self.container = []
 
