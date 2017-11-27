@@ -37,6 +37,9 @@ class Bucket:
     def min(self):
         return min(self.container)
 
+    def sum(self):
+        return sum(self.container)
+
 
     def flush(self):
         self.container = []
