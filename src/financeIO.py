@@ -22,11 +22,16 @@ class IO:
             return None
 
         data['name'] = stock_name
-        data['open'] = data['open'].astype(float)
-        data['high'] = data['high'].astype(float)
-        data['low'] = data['low'].astype(float)
         data['close'] = data['close'].astype(float)
         data['volume'] = data['volume'].astype(int)
+        try:  # invalid data. generally contains '-'
+            data['open'] = data['open'].astype(float)
+            data['high'] = data['high'].astype(float)
+            data['low'] = data['low'].astype(float)
+        except:
+            data['open'] = data['close']
+            data['high'] = data['close']
+            data['low'] = data['close']
 
         return data[['name', 'date', 'open', 'high', 'low', 'close', 'volume']]
 
@@ -68,13 +73,16 @@ class GoogleFinanceIO(IO):
                                 end_year=end_date.year
                                 )
 
-        # todo: maybe implement data fix
         data = pd.read_csv(q).iloc[::-1]  # reverse
-        data = data.rename(columns=lambda x:x.lower())
+        data = data.rename(columns=lambda x: x.lower())
         data['date'] = data['date'].apply(lambda x: datetime.datetime.strptime(x, '%d-%b-%y'))
+        # todo: maybe implement data fix
+
+
         return data
 
-    def download_data(self, stock_names, start_date, end_date, path="../input/raw_input", redownload=False, verbose=False):
+    def download_data(self, stock_names, start_date, end_date, path="../input/raw_input", redownload=False,
+                      verbose=False):
         """Download raw data from google finance"""
 
         if not os.path.exists(path):  # check if path exists
@@ -83,7 +91,7 @@ class GoogleFinanceIO(IO):
         save_start_date = start_date
         for stock_name in stock_names:  # for each stock
             if not redownload:  # do not download if file exists
-                if os.path.exists(os.path.join(path, stock_name+".csv")):
+                if os.path.exists(os.path.join(path, stock_name + ".csv")):
                     if verbose:
                         print("Skipping {}...".format(stock_name))
                     continue
@@ -106,7 +114,7 @@ class GoogleFinanceIO(IO):
                 # day + 1 to not download same day again
                 start_date = next_year_start_date.replace(day=next_year_start_date.day + 1)
 
-            stock_data.to_csv(os.path.join(path,stock_name + ".csv"), index=False)
+            stock_data.to_csv(os.path.join(path, stock_name + ".csv"), index=False)
 
 
 class YahooFinanceIO(IO):
@@ -181,4 +189,3 @@ if __name__ == "__main__":
     google.download_data(stock_names=stock_names,
                          start_date=datetime.datetime.strptime('01-01-2000', DATE_FORMAT).date(),
                          end_date=datetime.datetime.strptime('31-12-2016', DATE_FORMAT).date(), verbose=True)
-
