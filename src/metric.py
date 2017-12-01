@@ -5,13 +5,18 @@ import pandas as pd
 from utils import Bucket
 import random
 from collections import defaultdict
-
+import pickle
 
 class MetricEngine:
     def __init__(self, stock_names):
         self.stock_names = stock_names
         self.metrics = defaultdict(
             dict)  # self.metrics will store metrics with respect to first their stock_name and then uid.
+
+    def save_instance(self, filepath, run_number):
+        filename = filepath+'/{}_metric_engine.pkl'.format(run_number)
+        with open(filename, 'wb') as f:
+            pickle.dump(self, f)
 
     def add(self, stock_name, metric):
         self.metrics[stock_name][metric.uid] = metric

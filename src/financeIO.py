@@ -3,11 +3,17 @@
 import pandas as pd
 import datetime
 import os
+import pickle
 
 
 class IO:
     def __init__(self):
         pass
+
+    def save_instance(self, filepath, run_number):
+        filename = filepath+'/{}_financeIO.pkl'.format(run_number)
+        with open(filename, 'wb') as f:
+            pickle.dump(self, f)
 
     def get_one_day_data(self, stock_name, date):
         """

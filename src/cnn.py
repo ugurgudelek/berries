@@ -15,10 +15,11 @@ from keras.optimizers import Adadelta
 
 
 class CNNEngine:
-    def __init__(self, params, model_save_path, verbose=True):
+    def __init__(self, params, model_save_path, run_number,verbose=True):
         self.params = params
         self.model_save_path = model_save_path
         self.verbose = verbose
+        self.model_name = '{}_model.h5py'.format(run_number)
         self.model = self.construct_cnn()
 
         self.X_bucket = Bucket(size=self.params['batch_size'])
@@ -27,10 +28,15 @@ class CNNEngine:
         self.X = []
         self.y = []
 
+    def save_instance(self, filepath, run_number):
+        filename = filepath+'/{}_cnn_engine.pkl'.format(run_number)
+        with open(filename, 'wb') as f:
+            pickle.dump(self, f)
+
     def save_model(self):
         if not os.path.exists(self.model_save_path):
             os.makedirs(self.model_save_path)
-        self.model.save(filepath=self.model_save_path+'/model.h5py')
+        self.model.save(filepath=self.model_save_path+'/'+self.model_name)
 
     def save_Xy(self):
         if not os.path.exists(self.model_save_path):
@@ -40,6 +46,8 @@ class CNNEngine:
         with open(self.model_save_path+'/model.y', 'wb') as y_file:
             pickle.dump(y_file, self.model_save_path+'/model.y')
 
+    def load_model(self):
+        self.model = load_model(filepath=self.model_save_path+'/'+self.model_name)
 
 
     def feed(self, row):

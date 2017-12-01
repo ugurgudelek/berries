@@ -2,7 +2,7 @@
 import datetime
 import pandas as pd
 import numpy as np
-
+import os
 from data import Data
 
 from tqdm import tqdm
@@ -10,7 +10,14 @@ from tqdm import tqdm
 
 class Engine:
     def __init__(self, financeIO, metric_engine, label_engine, image_engine, cnn_engine, stock_names,
+                 instance_path,run_number,
                  make_stationary=True, apply_tanh=True, verbose=False):
+        self.instance_path = instance_path
+        self.run_number = run_number
+        if self.maybe_forget_to_increment_run_number():
+            raise Exception("Do not forget to increment run_number!")
+
+
         self.financeIO = financeIO
         self.metric_engine = metric_engine
         self.label_engine = label_engine
@@ -25,6 +32,14 @@ class Engine:
         self.apply_tanh = apply_tanh
 
         self.verbose = verbose
+
+
+    def maybe_forget_to_increment_run_number(self):
+        instance_list = os.listdir(self.instance_path)
+        last_filename = sorted(instance_list)[-1]
+        last_run_number = int(last_filename[0])
+        return last_run_number >= self.run_number
+
 
     def feed(self, current_date):
         """This is the core method.
@@ -91,8 +106,8 @@ class Engine:
 
                     if current_image is not None:
                         # all None checks has passed and we have proper image now
-                        # so we can train our model now.
-                        # but we need train this model again later for other epochs
+                        # so we can train our model.
+                        # but here we've trained only 1 epoch, so model need to be trained again later for other epochs
                         row = {'date': current_date, 'stock_name': stock_name, 'image': current_image,
                                'label': current_label}
                         self.cnn_engine.feed(row=row)
@@ -120,11 +135,20 @@ class Engine:
         self.cnn_engine.save_model()
 
         # save X and y file
-        self.cnn_engine.save_Xy()
+        # self.cnn_engine.save_Xy()
 
-        # save all containers in engines
-        # self.financeIO.save_containers()
-        # self.metric_engine.save_containers()
-        # self.label_engine.save_containers()
-        # self.image_engine.save_containers()
-        # self.cnn_engine.save_containers()
+        # save all instances in engines
+        self.save_instance()
+
+    def save_instance(self):
+        if not os.path.exists(self.instance_path):
+            os.makedirs(self.instance_path)
+
+        self.financeIO.save_instance(filepath=self.instance_path, run_number=self.run_number)
+        self.metric_engine.save_instance(filepath=self.instance_path, run_number=self.run_number)
+        self.label_engine.save_instance(filepath=self.instance_path, run_number=self.run_number)
+        self.image_engine.save_instance(filepath=self.instance_path, run_number=self.run_number)
+
+        #todo: fix TypeError: can't pickle _thread.lock objects
+        # self.cnn_engine.save_instance(filepath=self.instance_path, run_number=self.run_number)
+

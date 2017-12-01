@@ -1,6 +1,7 @@
 """This files containes several function about label retrieval"""
 import datetime
 import numpy as np
+import pickle
 
 class LabelEngine:
     def __init__(self,financeIO, make_stationary=True, apply_tanh=True):
@@ -9,6 +10,11 @@ class LabelEngine:
 
         self.make_stationary = make_stationary
         self.apply_tanh = apply_tanh
+
+    def save_instance(self, filepath, run_number):
+        filename = filepath+'/{}_label_engine.pkl'.format(run_number)
+        with open(filename, 'wb') as f:
+            pickle.dump(self, f)
 
     def last_label(self):
         if self.__len__() == 0:
