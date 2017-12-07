@@ -28,10 +28,7 @@ class CNNEngine:
         self.X = []
         self.y = []
 
-    def save_instance(self, filepath, run_number):
-        filename = filepath+'/{}_cnn_engine.pkl'.format(run_number)
-        with open(filename, 'wb') as f:
-            pickle.dump(self, f)
+
 
     def save_model(self):
         if not os.path.exists(self.model_save_path):
@@ -48,7 +45,6 @@ class CNNEngine:
 
     def load_model(self):
         self.model = load_model(filepath=self.model_save_path+'/'+self.model_name)
-
 
     def feed(self, row):
 
@@ -103,6 +99,18 @@ class CNNEngine:
                            metrics=['mse', 'mae'])
 
         return self.model
+
+
+    def train(self, X,y):
+        # todo: implement
+        X = np.array(X)
+        X.reshape(X.shape[0], self.params["input_w"], self.params["input_h"], 1)
+        y = np.array(y)
+
+
+        self.model.fit(X, y, batch_size=self.params["batch_size"], epochs=self.params["epochs"], verbose=1,
+                  validation_data=None)
+        pass
 
     def test(self, data, q_ratio=0.38):
         raise Exception("Not implemented yet!")
