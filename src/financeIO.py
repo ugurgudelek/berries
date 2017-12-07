@@ -15,6 +15,11 @@ class IO:
         with open(filename, 'wb') as f:
             pickle.dump(self, f)
 
+    def load_instance(self, filepath, run_number):
+        filename = filepath+'/{}_financeIO.pkl'.format(run_number)
+        with open(filename, 'rb') as f:
+            self = pickle.load(f)
+
     def get_one_day_data(self, stock_name, date):
         """
 

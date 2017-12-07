@@ -16,6 +16,11 @@ class LabelEngine:
         with open(filename, 'wb') as f:
             pickle.dump(self, f)
 
+    def load_instance(self, filepath, run_number):
+        filename = filepath+'/{}_label_engine.pkl'.format(run_number)
+        with open(filename, 'rb') as f:
+            self = pickle.load(f)
+
     def last_label(self):
         if self.__len__() == 0:
             return None

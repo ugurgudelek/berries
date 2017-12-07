@@ -24,6 +24,11 @@ class ImageEngine:
         with open(filename, 'wb') as f:
             pickle.dump(self, f)
 
+    def load_instance(self, filepath, run_number):
+        filename = filepath+'/{}_image_engine.pkl'.format(run_number)
+        with open(filename, 'rb') as f:
+            self = pickle.load(f)
+
     def feed(self, row):
         """row should be a dict and should have 'stock_name','date' and 'data' keys
         row = dict('date','data','stock_name')
