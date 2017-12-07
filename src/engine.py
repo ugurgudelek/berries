@@ -3,7 +3,7 @@ import datetime
 import pandas as pd
 import numpy as np
 import os
-from data import Data
+from data import Data,DataHolder
 
 from tqdm import tqdm
 
@@ -17,7 +17,7 @@ class Engine:
         if self.maybe_forget_to_increment_run_number():
             raise Exception("Do not forget to increment run_number!")
 
-
+        self.dataholder = DataHolder()
         self.financeIO = financeIO
         self.metric_engine = metric_engine
         self.label_engine = label_engine
@@ -110,7 +110,13 @@ class Engine:
                         # but here we've trained only 1 epoch, so model need to be trained again later for other epochs
                         row = {'date': current_date, 'stock_name': stock_name, 'image': current_image,
                                'label': current_label}
-                        self.cnn_engine.feed(row=row)
+
+                        # maybe we do not want to train the model here.
+                        if self.cnn_engine is not None:
+                            self.cnn_engine.feed(row=row)
+
+                        # save the proper data
+                        self.dataholder.append(data)
 
                 self.old_closes[stock_name] = current_day_data['close'].values[0]  # update old close
 
@@ -148,6 +154,12 @@ class Engine:
         self.metric_engine.save_instance(filepath=self.instance_path, run_number=self.run_number)
         self.label_engine.save_instance(filepath=self.instance_path, run_number=self.run_number)
         self.image_engine.save_instance(filepath=self.instance_path, run_number=self.run_number)
+        
+    def load_instance(self):
+        self.financeIO.load_instance(filepath=self.instance_path, run_number=self.run_number)
+        self.metric_engine.load_instance(filepath=self.instance_path, run_number=self.run_number)
+        self.label_engine.load_instance(filepath=self.instance_path, run_number=self.run_number)
+        self.image_engine.load_instance(filepath=self.instance_path, run_number=self.run_number)
 
         #todo: fix TypeError: can't pickle _thread.lock objects
         # self.cnn_engine.save_instance(filepath=self.instance_path, run_number=self.run_number)
