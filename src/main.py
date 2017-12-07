@@ -33,7 +33,7 @@ STOCK_NAMES = ['spy', 'xlf', 'xlu', 'xle',
 MAKE_STATIONARY = True
 NORMALIZE_IMAGE = True
 APPLY_TANH = True
-RUN_NUMBER = 4
+RUN_NUMBER = 5
 
 financeIO = LocalIO()
 metric_engine = metric.MetricEngine(stock_names=STOCK_NAMES)
@@ -41,8 +41,8 @@ metric_engine.add_default_metrics()
 label_engine = label.LabelEngine(financeIO=financeIO, make_stationary=MAKE_STATIONARY, apply_tanh=APPLY_TANH)
 image_engine = image.ImageEngine(stock_names=STOCK_NAMES, split_period=28, normalize=NORMALIZE_IMAGE)
 params = {"input_w": 28, "input_h": 28, "num_classes": 1, "batch_size": 10, "epochs": 100}
-cnn_engine = cnn.CNNEngine(params=params, model_save_path='../model', run_number=RUN_NUMBER)
-
+# cnn_engine = cnn.CNNEngine(params=params, model_save_path='../model', run_number=RUN_NUMBER)
+cnn_engine = None
 
 
 main_engine = engine.Engine(financeIO=financeIO,
