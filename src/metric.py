@@ -18,6 +18,11 @@ class MetricEngine:
         with open(filename, 'wb') as f:
             pickle.dump(self, f)
 
+    def load_instance(self, filepath, run_number):
+        filename = filepath+'/{}_metric_engine.pkl'.format(run_number)
+        with open(filename, 'rb') as f:
+            self = pickle.load(f)
+
     def add(self, stock_name, metric):
         self.metrics[stock_name][metric.uid] = metric
 
