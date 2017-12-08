@@ -13,6 +13,8 @@ class Engine:
                  instance_path,run_number,
                  make_stationary=True, apply_tanh=True, verbose=False):
         self.instance_path = instance_path
+        if not os.path.exists(self.instance_path):
+            os.makedirs(self.instance_path)
         self.run_number = run_number
         if self.maybe_forget_to_increment_run_number():
             raise Exception("Do not forget to increment run_number!")
@@ -36,6 +38,8 @@ class Engine:
 
     def maybe_forget_to_increment_run_number(self):
         instance_list = os.listdir(self.instance_path)
+        if len(instance_list) == 0:
+            return False
         last_filename = sorted(instance_list)[-1]
         last_run_number = int(last_filename[0])
         return last_run_number >= self.run_number
@@ -52,12 +56,14 @@ class Engine:
         if self.verbose:
             print("Date: {}".format(current_date))
 
-        data = Data()
-        data.date = current_date
+
 
         for stock_name in self.stock_names:
             if self.verbose:
                 print("Name: {}".format(stock_name))
+
+            data = Data()
+            data.date = current_date
             data.stock_name = stock_name
 
             current_day_data = self.financeIO.get_one_day_data(stock_name=stock_name, date=current_date)
@@ -74,11 +80,13 @@ class Engine:
                 data.metric_data = current_metric_data
                 if current_metric_data is not None:
 
+
                     # get label for next business day
-                    current_label = self.label_engine.get_label_for(stock_name=stock_name, date=current_date,
-                                                                    old_close=current_day_data['close'].values[0])
+                    (current_label,raw_label) = self.label_engine.get_label_for(stock_name=stock_name, date=current_date,
+                                                                                old_close=current_day_data['close'].values[0])
 
                     data.label = current_label
+                    data.raw_label = raw_label
 
                     # create new image
                     current_feature_data = current_metric_data
@@ -134,21 +142,25 @@ class Engine:
                 # update progress bar
                 progress_bar.update(n=1)
 
-        # now lets train our model for other epochs
-        self.cnn_engine.retrain()
+        # maybe we do not want to train the model here.
+        if self.cnn_engine is not None:
+            # now lets train our model for other epochs
+            self.cnn_engine.retrain()
 
-        # save the trained model
-        self.cnn_engine.save_model()
+            # save the trained model
+            self.cnn_engine.save_model()
 
-        # save X and y file
-        # self.cnn_engine.save_Xy()
+            # save X and y file
+            # self.cnn_engine.save_Xy()
 
         # save all instances in engines
         self.save_instance()
 
+        # save dataholder
+        self.dataholder.save("../input/dataholder.csv")
+
     def save_instance(self):
-        if not os.path.exists(self.instance_path):
-            os.makedirs(self.instance_path)
+
 
         self.financeIO.save_instance(filepath=self.instance_path, run_number=self.run_number)
         self.metric_engine.save_instance(filepath=self.instance_path, run_number=self.run_number)

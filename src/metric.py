@@ -23,6 +23,7 @@ class MetricEngine:
         with open(filename, 'rb') as f:
             self = pickle.load(f)
 
+
     def add(self, stock_name, metric):
         self.metrics[stock_name][metric.uid] = metric
 

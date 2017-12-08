@@ -35,6 +35,7 @@ class LabelEngine:
 
         one_day_data = self.financeIO.get_next_day_data(stock_name, date)
         current_close = one_day_data['close'].values[0]
+        raw_label = current_close
 
         if self.make_stationary:
             if old_close is None:
@@ -43,10 +44,10 @@ class LabelEngine:
             stationary_close = (current_close - old_close) / current_close
 
             if self.apply_tanh:
-                return np.tanh(stationary_close)
-            return stationary_close
+                return np.tanh(stationary_close),raw_label
+            return stationary_close,raw_label
 
-        return current_close
+        return (current_close,raw_label)
 
 class Label:
     """Store label related attributes and stationary methods."""

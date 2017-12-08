@@ -25,7 +25,7 @@ import engine
 
 DATE_FORMAT = '%d-%m-%Y'
 START_DATE = datetime.datetime.strptime('01-01-2000', DATE_FORMAT).date()
-END_DATE = datetime.datetime.strptime('31-12-2014', DATE_FORMAT).date()
+END_DATE = datetime.datetime.strptime('08-04-2000', DATE_FORMAT).date()
 STOCK_NAMES = ['spy', 'xlf', 'xlu', 'xle',
                'xlp', 'xli', 'xlv', 'xlk', 'ewj',
                'xlb', 'xly', 'eww', 'dia', 'ewg',
