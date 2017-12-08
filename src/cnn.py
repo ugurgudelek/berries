@@ -10,6 +10,7 @@ from keras.models import Sequential, load_model
 from keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, MaxPooling2D
 from keras.losses import mean_squared_error
 from keras.optimizers import Adadelta
+import keras.backend as K
 
 
 
@@ -96,7 +97,7 @@ class CNNEngine:
         self.model.add(Dense(self.params["num_classes"]))
         self.model.compile(loss=mean_squared_error,
                            optimizer=Adadelta(),
-                           metrics=['mse', 'mae'])
+                           metrics=['mse', 'mae', self.custom_metric])
 
         return self.model
 
@@ -179,6 +180,26 @@ class CNNEngine:
         return pred_df
         # history = {'prediction': predictions, 'loss': losses, 'acc': accuracies }
         # return model, history
+
+
+
+    def mean_pred(self, y_true, y_pred):
+        return K.mean(y_pred)
+
+    def dice(self, y_true, y_pred):
+        # Symbolically compute the intersection
+        y_int = y_true * y_pred
+        # Technically this is the negative of the Sorensen-Dice index. This is done for
+        # minimization purposes
+        return -(2 * K.sum(y_int) / (K.sum(y_true) + K.sum(y_pred)))
+
+    def custom_metric(self, y_true, y_pred):
+        q_ratio = 0.38
+
+        mul = y_true * y_pred
+
+        K.greater_equal(mul, K.constant(0))
+    #     todo: implement new custom metric here
 
     def custom_test_on_batch(self, image, label, q_ratio=0.38):
         raise Exception("Not implemented yet!")
