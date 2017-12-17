@@ -2,10 +2,11 @@
 Difference from regular one is these metrics store previous states and we can feed them one by one."""
 
 import pandas as pd
-from utils import Bucket
+from utils import Bucket,rolling_apply
 import random
 from collections import defaultdict
 import pickle
+import numpy as np
 
 class MetricEngine:
     def __init__(self, stock_names):
@@ -76,6 +77,24 @@ class MetricEngine:
 
     def is_proper(self, metric_data):
         return not any(pd.isnull(metric_data))  # if metric_data has not any None
+
+    def feed_chunk(self, data):
+        """row should be a dict and should have 'stock_name','date' and 'close' keys
+        row = dict('stock_name','date','close')
+        """
+
+
+        dic_outer = dict()
+        for (stock_name, data) in data.items():
+
+            dic_inner = dict()
+            for (uid, metric) in self.metrics[stock_name].items():
+                dic_inner[uid] = metric.feed_chunk(data=data)
+
+            dic_outer[stock_name] = dic_inner
+
+        return dic_outer
+
 
 
 class Metric:
@@ -176,6 +195,41 @@ class RSI:
                 df[key] = item
 
         return df
+
+    def feed_chunk(self, data):
+        """ this function does not use class related attributes or function except self.period
+        # todo: maybe implement more class related function
+        data is a dataframe and should have date key
+        :arg data(pd.DataFrame)
+        http://stockcharts.com/school/doku.php?id=chart_school:technical_indicators:relative_strength_index_rsi
+        """
+
+        data = pd.DataFrame(data)
+        df = pd.DataFrame()
+        df['date'] = data['date']
+        df['close'] = data['close']
+        df['close_diff'] = df['close'].diff(periods=1)
+        df['gains'] = np.maximum(df['close_diff'], 0.0)
+        df['losses'] = np.maximum(-df['close_diff'], 0.0)
+        df.index = df.date # set index to date for more precise test
+        alpha = 1 - (self.period - 1)/self.period # calculate alpha for exponential moving average
+        avg_gain_df = rolling_apply(df, on='gains', window=self.period,
+                                       func=lambda x, previous: alpha * x + (1 - alpha) * previous,
+                                       init_func=lambda x: x.sum() / x.shape[0])
+        df['avg_gain'] = avg_gain_df['rolled']
+
+        avg_loss_df = rolling_apply(df, on='losses', window=self.period,
+                                       func=lambda x, previous: alpha * x + (1 - alpha) * previous,
+                                       init_func=lambda x: x.sum() / x.shape[0])
+
+        df['avg_loss'] = avg_loss_df['rolled']
+
+        df['rs'] = df['avg_gain'] / df['avg_loss']
+        df['rsi'] = 100 - (100 / (1 + df['rs']))
+
+        return df['rsi']
+
+
 
 
 class EMA:
@@ -608,6 +662,49 @@ class MoneyFlowIndex:
 
 
 if __name__ == "__main__":
+    def my_rolling_apply(dataframe, on, window, func, init_func=None):
+
+        new = pd.DataFrame(dataframe.index)  # create empty dataframe
+        new.index = dataframe.index  # set index to general index - in our case 'date'
+        new['orig'] = dataframe[on]
+        new['rolled'] = [0] * new.shape[0]  # create new rolled column
+        for enum, index in enumerate(dataframe.index):
+            if enum < window - 1:  # not enough data to calculate
+                new.loc[index, 'rolled'] = np.nan
+            elif enum == window - 1:
+                if init_func is None:
+                    new.loc[index, 'rolled'] = np.nan
+                else:
+                    new.loc[index, 'rolled'] = init_func(dataframe[on].iloc[enum + 1 - window:enum + 1])
+            else:
+                new.loc[index, 'rolled'] = func(dataframe.loc[index, on], new['rolled'].iloc[enum - 1])
+
+        return new
+
+
+    data = pd.DataFrame()
+    data['date'] = ['01-01', '02-01', '03-01', '04-01', '05-01', '06-01', '07-01', '08-01']
+    data['close'] = [3, 2, 0, -5, 7, 10, -10, 8]
+    data = pd.DataFrame(data)
+    df = pd.DataFrame()
+    df['date'] = data['date']
+    df['close'] = data['close']
+    df['close_diff'] = df['close'].diff(periods=1)
+    df['gains'] = np.maximum(df['close_diff'], 0.0)
+    df['losses'] = np.maximum(-df['close_diff'], 0.0)
+    df.index = df.date
+
+    avg_gain_df = my_rolling_apply(df, on='gains', window=4,
+                     func=lambda x, prev: 0.25 * x + (1 - 0.25) * prev,
+                     init_func=lambda x: x.sum() / x.shape[0])
+    df['avg_gain'] = avg_gain_df['rolled']
+
+    avg_loss_df = my_rolling_apply(df, on='losses', window=4,
+                     func=lambda x, prev: 0.25 * x + (1 - 0.25) * prev,
+                     init_func=lambda x: x.sum() / x.shape[0])
+
+    df['avg_loss'] = avg_gain_df['rolled']
+
     # ema = MACD_Trigger(period_long=26, period_short=12, period_signal=9)
     # ema.feed({'date': '19.02.2013', 'close': 459.99})
     # ema.feed({'date': '20.02.2013', 'close': 448.85})
@@ -741,37 +838,37 @@ if __name__ == "__main__":
     # uos.feed({'date': '30.Kas.10', 'high': 60.21, 'low': 58.26, 'close': 59.68})
     # uos.feed({'date': '1.Kas.10', 'high': 61.70, 'low': 60.58, 'close': 61.48})
 
-    mfi = MoneyFlowIndex(period=14)
-
-    mfi.feed({'date': '3-Dec-10', 'high': 24.83, 'low': 24.32, 'volume': 18730, 'close': 24.75})
-    mfi.feed({'date': '6-Dec-10', 'high': 24.76, 'low': 24.60, 'volume': 12272, 'close': 24.71})
-    mfi.feed({'date': '7-Dec-10', 'high': 25.16, 'low': 24.78, 'volume': 24691, 'close': 25.04})
-    mfi.feed({'date': '8-Dec-10', 'high': 25.58, 'low': 24.95, 'volume': 18358, 'close': 25.55})
-    mfi.feed({'date': '9-Dec-10', 'high': 25.68, 'low': 24.81, 'volume': 22964, 'close': 25.07})
-    mfi.feed({'date': '10-Dec-10', 'high': 25.34, 'low': 25.06, 'volume': 15919, 'close': 25.11})
-    mfi.feed({'date': '13-Dec-10', 'high': 25.29, 'low': 24.85, 'volume': 16067, 'close': 24.89})
-    mfi.feed({'date': '14-Dec-10', 'high': 25.13, 'low': 24.75, 'volume': 16568, 'close': 25.00})
-    mfi.feed({'date': '15-Dec-10', 'high': 25.28, 'low': 24.93, 'volume': 16019, 'close': 25.05})
-    mfi.feed({'date': '16-Dec-10', 'high': 25.39, 'low': 25.03, 'volume': 9774, 'close': 25.34})
-    mfi.feed({'date': '17-Dec-10', 'high': 25.54, 'low': 25.05, 'volume': 22573, 'close': 25.06})
-    mfi.feed({'date': '20-Dec-10', 'high': 25.60, 'low': 25.06, 'volume': 12987, 'close': 25.45})
-    mfi.feed({'date': '21-Dec-10', 'high': 25.74, 'low': 25.54, 'volume': 10907, 'close': 25.56})
-    mfi.feed({'date': '22-Dec-10', 'high': 25.72, 'low': 25.46, 'volume': 5799, 'close': 25.56})
-    mfi.feed({'date': '23-Dec-10', 'high': 25.67, 'low': 25.29, 'volume': 7395, 'close': 25.41})
-    mfi.feed({'date': '27-Dec-10', 'high': 25.45, 'low': 25.17, 'volume': 5818, 'close': 25.37})
-    mfi.feed({'date': '28-Dec-10', 'high': 25.32, 'low': 24.92, 'volume': 7165, 'close': 25.04})
-    mfi.feed({'date': '29-Dec-10', 'high': 25.26, 'low': 24.91, 'volume': 5673, 'close': 24.92})
-    mfi.feed({'date': '30-Dec-10', 'high': 25.04, 'low': 24.83, 'volume': 5625, 'close': 24.88})
-    mfi.feed({'date': '31-Dec-10', 'high': 25.01, 'low': 24.71, 'volume': 5023, 'close': 24.97})
-    mfi.feed({'date': '3-Jan-11', 'high': 25.31, 'low': 25.03, 'volume': 7457, 'close': 25.05})
-    mfi.feed({'date': '4-Jan-11', 'high': 25.12, 'low': 24.34, 'volume': 11798, 'close': 24.45})
-    mfi.feed({'date': '5-Jan-11', 'high': 24.69, 'low': 24.27, 'volume': 12366, 'close': 24.57})
-    mfi.feed({'date': '6-Jan-11', 'high': 24.55, 'low': 23.89, 'volume': 13295, 'close': 24.02})
-    mfi.feed({'date': '7-Jan-11', 'high': 24.27, 'low': 23.78, 'volume': 9257, 'close': 23.88})
-    mfi.feed({'date': '10-Jan-11', 'high': 24.27, 'low': 23.72, 'volume': 9691, 'close': 24.20})
-    mfi.feed({'date': '11-Jan-11', 'high': 24.60, 'low': 24.20, 'volume': 8870, 'close': 24.28})
-    mfi.feed({'date': '12-Jan-11', 'high': 24.48, 'low': 24.24, 'volume': 7169, 'close': 24.33})
-    mfi.feed({'date': '13-Jan-11', 'high': 24.56, 'low': 23.43, 'volume': 11356, 'close': 24.44})
-    mfi.feed({'date': '14-Jan-11', 'high': 25.16, 'low': 24.27, 'volume': 13379, 'close': 25.00})
+    # mfi = MoneyFlowIndex(period=14)
+    #
+    # mfi.feed({'date': '3-Dec-10', 'high': 24.83, 'low': 24.32, 'volume': 18730, 'close': 24.75})
+    # mfi.feed({'date': '6-Dec-10', 'high': 24.76, 'low': 24.60, 'volume': 12272, 'close': 24.71})
+    # mfi.feed({'date': '7-Dec-10', 'high': 25.16, 'low': 24.78, 'volume': 24691, 'close': 25.04})
+    # mfi.feed({'date': '8-Dec-10', 'high': 25.58, 'low': 24.95, 'volume': 18358, 'close': 25.55})
+    # mfi.feed({'date': '9-Dec-10', 'high': 25.68, 'low': 24.81, 'volume': 22964, 'close': 25.07})
+    # mfi.feed({'date': '10-Dec-10', 'high': 25.34, 'low': 25.06, 'volume': 15919, 'close': 25.11})
+    # mfi.feed({'date': '13-Dec-10', 'high': 25.29, 'low': 24.85, 'volume': 16067, 'close': 24.89})
+    # mfi.feed({'date': '14-Dec-10', 'high': 25.13, 'low': 24.75, 'volume': 16568, 'close': 25.00})
+    # mfi.feed({'date': '15-Dec-10', 'high': 25.28, 'low': 24.93, 'volume': 16019, 'close': 25.05})
+    # mfi.feed({'date': '16-Dec-10', 'high': 25.39, 'low': 25.03, 'volume': 9774, 'close': 25.34})
+    # mfi.feed({'date': '17-Dec-10', 'high': 25.54, 'low': 25.05, 'volume': 22573, 'close': 25.06})
+    # mfi.feed({'date': '20-Dec-10', 'high': 25.60, 'low': 25.06, 'volume': 12987, 'close': 25.45})
+    # mfi.feed({'date': '21-Dec-10', 'high': 25.74, 'low': 25.54, 'volume': 10907, 'close': 25.56})
+    # mfi.feed({'date': '22-Dec-10', 'high': 25.72, 'low': 25.46, 'volume': 5799, 'close': 25.56})
+    # mfi.feed({'date': '23-Dec-10', 'high': 25.67, 'low': 25.29, 'volume': 7395, 'close': 25.41})
+    # mfi.feed({'date': '27-Dec-10', 'high': 25.45, 'low': 25.17, 'volume': 5818, 'close': 25.37})
+    # mfi.feed({'date': '28-Dec-10', 'high': 25.32, 'low': 24.92, 'volume': 7165, 'close': 25.04})
+    # mfi.feed({'date': '29-Dec-10', 'high': 25.26, 'low': 24.91, 'volume': 5673, 'close': 24.92})
+    # mfi.feed({'date': '30-Dec-10', 'high': 25.04, 'low': 24.83, 'volume': 5625, 'close': 24.88})
+    # mfi.feed({'date': '31-Dec-10', 'high': 25.01, 'low': 24.71, 'volume': 5023, 'close': 24.97})
+    # mfi.feed({'date': '3-Jan-11', 'high': 25.31, 'low': 25.03, 'volume': 7457, 'close': 25.05})
+    # mfi.feed({'date': '4-Jan-11', 'high': 25.12, 'low': 24.34, 'volume': 11798, 'close': 24.45})
+    # mfi.feed({'date': '5-Jan-11', 'high': 24.69, 'low': 24.27, 'volume': 12366, 'close': 24.57})
+    # mfi.feed({'date': '6-Jan-11', 'high': 24.55, 'low': 23.89, 'volume': 13295, 'close': 24.02})
+    # mfi.feed({'date': '7-Jan-11', 'high': 24.27, 'low': 23.78, 'volume': 9257, 'close': 23.88})
+    # mfi.feed({'date': '10-Jan-11', 'high': 24.27, 'low': 23.72, 'volume': 9691, 'close': 24.20})
+    # mfi.feed({'date': '11-Jan-11', 'high': 24.60, 'low': 24.20, 'volume': 8870, 'close': 24.28})
+    # mfi.feed({'date': '12-Jan-11', 'high': 24.48, 'low': 24.24, 'volume': 7169, 'close': 24.33})
+    # mfi.feed({'date': '13-Jan-11', 'high': 24.56, 'low': 23.43, 'volume': 11356, 'close': 24.44})
+    # mfi.feed({'date': '14-Jan-11', 'high': 25.16, 'low': 24.27, 'volume': 13379, 'close': 25.00})
 
 

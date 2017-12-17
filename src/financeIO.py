@@ -56,6 +56,9 @@ class IO:
         return one_day_data
 
 
+
+
+
 class GoogleFinanceIO(IO):
     def __init__(self):
         IO.__init__(self)
@@ -142,6 +145,7 @@ class LocalIO(IO):
     def __init__(self, filepath="../input/raw_input"):
         IO.__init__(self)
         self.filepath = filepath
+        self.DATE_FORMAT = '%Y-%m-%d'
 
         def remove_extension(filename):
             return filename.split('.')[0]
@@ -152,7 +156,7 @@ class LocalIO(IO):
             for filename in filenames:
                 full_filename = os.path.join(self.filepath, filename)
                 df = pd.read_csv(full_filename, index_col=None)
-                df['date'] = df['date'].apply(lambda x: datetime.datetime.strptime(x, '%Y-%m-%d'))
+                df['date'] = df['date'].apply(lambda x: datetime.datetime.strptime(x, self.DATE_FORMAT))
                 dic[remove_extension(filename)] = df
             return dic
 
@@ -175,6 +179,13 @@ class LocalIO(IO):
 
         return r
 
+    def query_all(self, start_date, end_date):
+        """similar to query but this does not need stock_name so it returns all localdata"""
+        dic = dict()
+        for (stock_name, data) in self.localdata.items():
+            dic[stock_name] = self.query(stock_name,start_date,end_date)
+        return dic
+
 
 class Data:
     """Holds all data related method and attributes. i.e. tanh(close)"""
@@ -187,16 +198,17 @@ if __name__ == "__main__":
     # print(google.get_one_day_data('spy', date))
     # print(google.get_next_day_data('spy', date))
     #
-    # local = LocalIO(filepath="../input/raw_input")
+    local = LocalIO(filepath="../input/raw_input")
+    print()
     # print(local.get_one_day_data('spy', date))
     # print(local.get_next_day_data('spy', date))
 
-    DATE_FORMAT = '%d-%m-%Y'
-    google = GoogleFinanceIO()
-    stock_names = ['spy', 'xlf', 'xlu', 'xle',
-                   'xlp', 'xli', 'xlv', 'xlk', 'ewj',
-                   'xlb', 'xly', 'eww', 'dia', 'ewg',
-                   'ewh', 'ewc', 'ewa']
-    google.download_data(stock_names=stock_names,
-                         start_date=datetime.datetime.strptime('01-01-2000', DATE_FORMAT).date(),
-                         end_date=datetime.datetime.strptime('31-12-2016', DATE_FORMAT).date(), verbose=True)
+    # DATE_FORMAT = '%d-%m-%Y'
+    # google = GoogleFinanceIO()
+    # stock_names = ['spy', 'xlf', 'xlu', 'xle',
+    #                'xlp', 'xli', 'xlv', 'xlk', 'ewj',
+    #                'xlb', 'xly', 'eww', 'dia', 'ewg',
+    #                'ewh', 'ewc', 'ewa']
+    # google.download_data(stock_names=stock_names,
+    #                      start_date=datetime.datetime.strptime('01-01-2000', DATE_FORMAT).date(),
+    #                      end_date=datetime.datetime.strptime('31-12-2016', DATE_FORMAT).date(), verbose=True)

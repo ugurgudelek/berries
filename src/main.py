@@ -57,6 +57,7 @@ main_engine = engine.Engine(financeIO=financeIO,
                             instance_path='../instance',
                             run_number=RUN_NUMBER)
 
-main_engine.run(start_date=START_DATE, end_date=END_DATE)
+main_engine.feed_chunk(start_date=START_DATE, end_date=END_DATE)
+# main_engine.run(start_date=START_DATE, end_date=END_DATE)
 
 print()

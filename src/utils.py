@@ -1,5 +1,6 @@
 """Utility methods"""
 import numpy as np
+import pandas as pd
 
 class Bucket:
     """This is variation of queue data structure.
@@ -54,6 +55,29 @@ class Bucket:
 
     def __repr__(self):
         return self.__str__()
+
+def rolling_apply(dataframe, on, window, func, init_func=None, skip=1):
+
+    new = pd.DataFrame(dataframe.index)  # create empty dataframe
+    new.index = dataframe.index  # set index to general index - in our case 'date'
+    new['orig'] = dataframe[on]
+    new['rolled'] = [0] * new.shape[0]  # create new rolled column
+    for enum, index in enumerate(dataframe.index):
+        if skip > 0:
+            new.loc[index, 'rolled'] = np.nan
+            skip -= 1
+            continue
+        if enum < window:  # not enough data to calculate
+            new.loc[index, 'rolled'] = np.nan
+        elif enum == window:
+            if init_func is None:
+                new.loc[index, 'rolled'] = func(dataframe.loc[index, on], 0)
+            else:
+                new.loc[index, 'rolled'] = init_func(dataframe[on].iloc[enum + 1 - window:enum + 1])
+        else:
+            new.loc[index, 'rolled'] = func(dataframe.loc[index, on], new['rolled'].iloc[enum - 1])
+
+    return new
 
 def normalize_column_based(image):
     """Requires 2D image"""

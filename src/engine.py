@@ -176,3 +176,9 @@ class Engine:
         #todo: fix TypeError: can't pickle _thread.lock objects
         # self.cnn_engine.save_instance(filepath=self.instance_path, run_number=self.run_number)
 
+    def feed_chunk(self, start_date, end_date):
+        data = self.financeIO.query_all(start_date,end_date)
+        self.metric_engine.feed_chunk(data=data)
+
+
+
