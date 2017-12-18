@@ -25,7 +25,7 @@ import engine
 
 DATE_FORMAT = '%d-%m-%Y'
 START_DATE = datetime.datetime.strptime('01-01-2000', DATE_FORMAT).date()
-END_DATE = datetime.datetime.strptime('31-12-2016', DATE_FORMAT).date()
+END_DATE = datetime.datetime.strptime('25-12-2016', DATE_FORMAT).date()
 STOCK_NAMES = ['spy', 'xlf', 'xlu', 'xle',
                'xlp', 'xli', 'xlv', 'xlk', 'ewj',
                'xlb', 'xly', 'eww', 'dia', 'ewg',
@@ -57,7 +57,7 @@ main_engine = engine.Engine(financeIO=financeIO,
                             instance_path='../instance',
                             run_number=RUN_NUMBER)
 
-main_engine.feed_chunk(start_date=START_DATE, end_date=END_DATE)
-# main_engine.run(start_date=START_DATE, end_date=END_DATE)
+# main_engine.feed_chunk(start_date=START_DATE, end_date=END_DATE)
+main_engine.run(start_date=START_DATE, end_date=END_DATE)
 
 print()

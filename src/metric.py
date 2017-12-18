@@ -2,11 +2,12 @@
 Difference from regular one is these metrics store previous states and we can feed them one by one."""
 
 import pandas as pd
-from utils import Bucket,rolling_apply
+from utils import Bucket, rolling_apply
 import random
 from collections import defaultdict
 import pickle
 import numpy as np
+
 
 class MetricEngine:
     def __init__(self, stock_names):
@@ -15,15 +16,14 @@ class MetricEngine:
             dict)  # self.metrics will store metrics with respect to first their stock_name and then uid.
 
     def save_instance(self, filepath, run_number):
-        filename = filepath+'/{}_metric_engine.pkl'.format(run_number)
+        filename = filepath + '/{}_metric_engine.pkl'.format(run_number)
         with open(filename, 'wb') as f:
             pickle.dump(self, f)
 
     def load_instance(self, filepath, run_number):
-        filename = filepath+'/{}_metric_engine.pkl'.format(run_number)
+        filename = filepath + '/{}_metric_engine.pkl'.format(run_number)
         with open(filename, 'rb') as f:
             self = pickle.load(f)
-
 
     def add(self, stock_name, metric):
         self.metrics[stock_name][metric.uid] = metric
@@ -83,7 +83,6 @@ class MetricEngine:
         row = dict('stock_name','date','close')
         """
 
-
         dic_outer = dict()
         for (stock_name, data) in data.items():
 
@@ -96,7 +95,6 @@ class MetricEngine:
         return dic_outer
 
 
-
 class Metric:
     def __init__(self):
         pass
@@ -106,7 +104,8 @@ class RSI:
     """Relative Strength Index (RSI)
     http://stockcharts.com/school/doku.php?id=chart_school:technical_indicators:relative_strength_index_rsi"""
 
-    def __init__(self, period):
+    def __init__(self, period, store=False):
+        self.store = store
         self.period = period
         self.uid = 'rsi_' + str(self.period)
 
@@ -171,11 +170,12 @@ class RSI:
                 self.RS = 9999
                 self.RSI = 100
 
-        # store attributes
-        self.average_gains.append(self.average_gain)
-        self.average_losses.append(self.average_loss)
-        self.RSIs.append(self.RSI)
-        self.RSs.append(self.RS)
+        if self.store:
+            # store attributes
+            self.average_gains.append(self.average_gain)
+            self.average_losses.append(self.average_loss)
+            self.RSIs.append(self.RSI)
+            self.RSs.append(self.RS)
 
         return self.RSI
 
@@ -211,16 +211,16 @@ class RSI:
         df['close_diff'] = df['close'].diff(periods=1)
         df['gains'] = np.maximum(df['close_diff'], 0.0)
         df['losses'] = np.maximum(-df['close_diff'], 0.0)
-        df.index = df.date # set index to date for more precise test
-        alpha = 1 - (self.period - 1)/self.period # calculate alpha for exponential moving average
+        df.index = df.date  # set index to date for more precise test
+        alpha = 1 - (self.period - 1) / self.period  # calculate alpha for exponential moving average
         avg_gain_df = rolling_apply(df, on='gains', window=self.period,
-                                       func=lambda x, previous: alpha * x + (1 - alpha) * previous,
-                                       init_func=lambda x: x.sum() / x.shape[0])
+                                    func=lambda x, previous: alpha * x + (1 - alpha) * previous,
+                                    init_func=lambda x: x.sum() / x.shape[0])
         df['avg_gain'] = avg_gain_df['rolled']
 
         avg_loss_df = rolling_apply(df, on='losses', window=self.period,
-                                       func=lambda x, previous: alpha * x + (1 - alpha) * previous,
-                                       init_func=lambda x: x.sum() / x.shape[0])
+                                    func=lambda x, previous: alpha * x + (1 - alpha) * previous,
+                                    init_func=lambda x: x.sum() / x.shape[0])
 
         df['avg_loss'] = avg_loss_df['rolled']
 
@@ -229,13 +229,55 @@ class RSI:
 
         return df['rsi']
 
+    def rsi_old(data, period=15):
+        """relative strength index
+        :param data: adjusted_close
+        :type data: np.array
+        :param period: period_in_days
+        :type period: int
+        :rtype: np.array
+        """
+        data = data['adjusted_close'].values
+        # period kadar data kaybedeceğiz cünkü;
+        # yesterday_price hesaplanırken 1 tane gidiyor.
+        # rsi hesaplanırken de period - 1 tane gidiyor.
 
+        p_n_list = []
+        yesterday_price = data[0]
+        # drop first periodth data
+        for datum in data[1:]:
+            today_price = datum
+            p_n_list.append(today_price - yesterday_price)
+            yesterday_price = today_price
+
+        gain = []
+        loss = []
+
+        for datum in p_n_list:
+            if datum >= 0:
+                gain.append(datum)
+                loss.append(0)
+            else:
+                loss.append(-datum)
+                gain.append(0)
+
+        # first period's data
+        gain_ema = ema(gain, period)
+        loss_ema = ema(loss, period)
+
+        RS = np.divide(gain_ema, loss_ema)
+
+        RSI = np.subtract(100, np.divide(100, np.add(1, RS)))
+        # RSI = 100 - (100 / (1 + RS))
+
+        return RSI
 
 
 class EMA:
     """http://stockcharts.com/school/doku.php?id=chart_school:technical_indicators:moving_averages"""
 
-    def __init__(self, period):
+    def __init__(self, period, store=False):
+        self.store = store
         self.period = period
         self.uid = 'ema_' + str(self.period)
 
@@ -268,16 +310,48 @@ class EMA:
 
         # store current ema for next calculation
         self.previous_ema = self.EMA
-        self.EMAs.append(self.EMA)
+        if self.store:
+            self.EMAs.append(self.EMA)
 
         return self.EMA
+
+    def feed_chunk(self, data):
+        """ this function does not use class related attributes or function except self.period
+                # todo: maybe implement more class related function
+                data is a dataframe and should have date key
+                :arg data(pd.DataFrame)
+        """
+        data = pd.DataFrame(data)
+        df = pd.DataFrame()
+        df['date'] = data['date']
+        df['close'] = data['close']
+
+        df['rolled'] = rolling_apply(df, on='close', window=self.period,
+                                     func=lambda x, previous: self.smoothing_constant * x + (
+                                             1 - self.smoothing_constant) * previous,
+                                     init_func=lambda x: SMA(self.period).feed(x))
+
+    def ema_old(data, period):
+        """exponentially smoothing moving average"""
+        # data needs to be just one column not whole data
+        EMA = []
+
+        previous_avg = np.mean(data[0:period])
+        EMA.append(previous_avg)
+        for datum in data[period:]:
+            curr = (previous_avg * (period - 1) + datum) / period
+            EMA.append(curr)
+            previous_avg = curr
+
+        return EMA
 
 
 class MACD:
     """Tested:
     http://investexcel.net/how-to-calculate-macd-in-excel/"""
 
-    def __init__(self, period_long=26, period_short=12):
+    def __init__(self, period_long=26, period_short=12, store=False):
+        self.store = store
         if period_long <= period_short:
             raise ValueError("period_long should be bigger than period_short")
 
@@ -308,16 +382,29 @@ class MACD:
         else:
             self.MACD = ema_short - ema_long
 
-        self.MACDs.append(self.MACD)
+        if self.store:
+            self.MACDs.append(self.MACD)
 
         return self.MACD
+
+    def macd_old(data, period_long=26, period_short=12):
+        """moving average convergence divergence"""
+
+        if period_long <= period_short:
+            raise ValueError("period_long should be bigger than period_short")
+
+        ema_long = ema(data['adjusted_close'], period=period_long)
+        ema_short = ema(data['adjusted_close'], period=period_short)[(period_long - period_short):]
+
+        return np.subtract(ema_short, ema_long)
 
 
 class MACD_Trigger:
     """Tested:
     http://investexcel.net/how-to-calculate-macd-in-excel/"""
 
-    def __init__(self, period_signal=9, period_long=26, period_short=12):
+    def __init__(self, period_signal=9, period_long=26, period_short=12, store=False):
+        self.store = store
         self.period_signal = period_signal
         self.period_long = period_long
         self.period_short = period_short
@@ -350,13 +437,31 @@ class MACD_Trigger:
         else:
             self.MACD_HISTOGRAM = None
 
-        self.MACD_HISTOGRAMs.append(self.MACD_HISTOGRAM)
+        if self.store:
+            self.MACD_HISTOGRAMs.append(self.MACD_HISTOGRAM)
 
         return self.MACD_HISTOGRAM
 
+    # macd trigger custom
+    # http://stockcharts.com/school/doku.php?id=chart_school:technical_indicators:moving_average_convergence_divergence_macd
+    def macd_trigger_old(data, period_signal=9, period_long=26, period_short=12):
+
+        macd_line = macd(data, period_long, period_short)
+        signal_line = ema(macd_line, period_signal)
+        macd_histogram = np.subtract(macd_line[period_signal - 1:], signal_line)
+
+        #    plt.plot(macd_line[period_signal-1:100], c='b')
+        #    plt.plot(signal_line[0:100], c='r')
+        #    plt.bar(left=list(range(100)),height=macd_histogram[0:100], color='g')
+
+        #    plt.show()
+
+        return macd_histogram
+
 
 class SMA:
-    def __init__(self, period):
+    def __init__(self, period, store=False):
+        self.store = store
         self.period = period
         self.uid = 'sma_' + str(self.period)
 
@@ -386,15 +491,44 @@ class SMA:
         else:
             self.SMA = None
 
-        self.SMAs.append(self.SMA)
+        if self.store:
+            self.SMAs.append(self.SMA)
         return self.SMA
+
+    def feed_chunk(self, data):
+
+        df = pd.DataFrame()
+        df['date'] = data['date']
+        df['close'] = data['close']
+        df.index = data.index
+        sma_df = rolling_apply(df, on='close', window=self.period,
+                               func=lambda x, _: x.mean(), skip=0)
+
+        return df
+
+    def sma_old(data, period=15):
+        """simple moving average"""
+
+        data = data['adjusted_close'].values
+        lower = 0
+        upper = period
+
+        SMA = []
+
+        for i in data[period - 1:]:
+            SMA.append(np.mean(data[lower:upper]))
+            lower += 1
+            upper += 1
+
+        return np.asarray(SMA)
 
 
 class WilliamR:
     """Calculates the Williams %R indicator.
     Tested: previous data"""
 
-    def __init__(self, period):
+    def __init__(self, period, store=False):
+        self.store = store
         self.period = period
         self.uid = 'wR_' + str(self.period)
 
@@ -427,9 +561,29 @@ class WilliamR:
         else:
             self.R = None
 
-        self.Rs.append(self.R)
+        if self.store:
+            self.Rs.append(self.R)
 
         return self.R
+
+    def williamsR_old(data, period_in_days=14):
+        "Calculates the Williams %R indicator."
+
+        result = []
+
+        for curInd in range(period_in_days - 1, data['adjusted_close'].shape[0]):
+            # current close
+            curClose = data['close'].values[curInd]
+
+            # find the highest high and the lowest low in the period
+            highestHigh = np.amax(data['high'].values[curInd - period_in_days + 1: curInd + 1])
+            lowestLow = np.amin(data['low'].values[curInd - period_in_days + 1: curInd + 1])
+
+            # calculate %R
+            wR = (highestHigh - curClose) / (highestHigh - lowestLow) * (-100)
+            result.append(wR)
+
+        return np.asarray(result)
 
 
 class KDDifference:
@@ -443,7 +597,8 @@ class KDDifference:
     Highest High = highest high for the look-back period
     %K is multiplied by 100 to move the decimal point two places"""
 
-    def __init__(self, period, sma_period=3):
+    def __init__(self, period, sma_period=3, store=False):
+        self.store = store
         self.period = period
         self.sma_period = sma_period
         self.uid = 'kddiff_' + str(self.period)
@@ -489,11 +644,37 @@ class KDDifference:
             self.D = None
             self.KD_diff = None
 
-        self.Ks.append(self.K)
-        self.Ds.append(self.D)
-        self.KD_diffs.append(self.KD_diff)
+        if self.store:
+            self.Ks.append(self.K)
+            self.Ds.append(self.D)
+            self.KD_diffs.append(self.KD_diff)
 
         return self.KD_diff
+
+    def kdDiff_old(data, period_in_days=14):
+        "Calculates the difference between %K and %D."
+
+        Kpc = []
+        Dpc = []
+
+        dpcPeriod = 3
+
+        # calculate %K
+        for curInd in range(period_in_days - 1, data['adjusted_close'].shape[0]):
+            # current close
+            curClose = data['close'].values[curInd]
+
+            # find the highest high and the lowest low in the period
+            highestHigh = np.amax(data['high'].values[curInd - period_in_days + 1: curInd + 1])
+            lowestLow = np.amin(data['low'].values[curInd - period_in_days + 1: curInd + 1])
+
+            Kpc.append((highestHigh - curClose) / (highestHigh - lowestLow) * 100)
+
+        # calculate %D
+        for curInd in range(dpcPeriod - 1, len(Kpc)):
+            Dpc.append(np.mean(Kpc[curInd - dpcPeriod + 1: curInd]))
+
+        return np.subtract(Kpc[dpcPeriod - 1: len(Kpc)], Dpc)
 
 
 class UltimateOscillator:
@@ -511,7 +692,8 @@ class UltimateOscillator:
     UO = 100 x [(4 x Average7)+(2 x Average14)+Average28]/(4+2+1)
 """
 
-    def __init__(self, period1=7, period2=14, period3=28):
+    def __init__(self, period1=7, period2=14, period3=28, store=False):
+        self.store = store
         self.period1 = period1
         self.period2 = period2
         self.period3 = period3
@@ -575,12 +757,58 @@ class UltimateOscillator:
 
             if (average_period1 is not None) and (average_period2 is not None) and (average_period3 is not None):
                 self.UO = 100 * (
-                    (self.w1 * average_period1) + (self.w2 * average_period2) + (self.w3 * average_period3)) / (
-                              self.w1 + self.w2 + self.w3)
+                        (self.w1 * average_period1) + (self.w2 * average_period2) + (self.w3 * average_period3)) / (
+                                  self.w1 + self.w2 + self.w3)
 
         self.prior_close = close  # set prior_close for next iteration
-        self.UOs.append(self.UO)
+
+        if self.store:
+            self.UOs.append(self.UO)
         return self.UO
+
+    def ulOs_old(data, period1=7, period2=14, period3=28):
+        "Calculates the ultimate oscillator. Periods should be from low to high."
+
+        bp = []  # buying pressure
+        tr = []  # true range
+        uos = []  # ultimate oscillator
+        weight1 = period3 / period1
+        weight2 = period3 / period2
+        weight3 = period3 / period3
+
+        # calculate buying pressure and true range
+        for curInd in range(1, data['adjusted_close'].shape[0]):
+            curClose = data['close'].values[curInd]
+            prClose = data['close'].values[curInd - 1]
+            curLow = data['low'].values[curInd]
+            curHigh = data['high'].values[curInd]
+
+            bp.append(curClose - np.amin([curLow, prClose]))
+            tr.append(np.amax([curHigh, prClose]) - np.amin([curLow, prClose]))
+
+            # calculate the averages and the ultimate oscillator
+        for curInd in range(1, data['adjusted_close'].shape[0]):
+
+            avg1value = 0
+            avg2value = 0
+            avg3value = 0
+            uosvalue = 0
+
+            # zeros will be appended if the index is lower than period3
+
+            if curInd >= period1:
+                avg1value = np.sum(bp[curInd - period1 + 1: curInd + 1]) / np.sum(tr[curInd - period1 + 1: curInd + 1])
+
+            if curInd >= period2:
+                avg2value = np.sum(bp[curInd - period2 + 1: curInd + 1]) / np.sum(tr[curInd - period2 + 1: curInd + 1])
+
+            if curInd >= period3:
+                avg3value = np.sum(bp[curInd - period3 + 1: curInd + 1]) / np.sum(tr[curInd - period3 + 1: curInd + 1])
+                uosvalue = 100 * ((weight1 * avg1value) + (weight2 * avg2value) + (weight3 * avg3value)) / (
+                        weight1 + weight2 + weight3)
+                uos.append(uosvalue)
+
+        return np.asarray(uos)
 
 
 class MoneyFlowIndex:
@@ -596,7 +824,9 @@ class MoneyFlowIndex:
     Money Flow Index = 100 - 100/(1 + Money Flow Ratio)
     """
 
-    def __init__(self, period):
+    def __init__(self, period, store=False):
+        self.store = store
+
         self.period = period
         self.uid = 'mfi_' + str(self.period)
 
@@ -657,53 +887,47 @@ class MoneyFlowIndex:
 
         self.prior_typical_price = self.typical_price
 
-        self.MFIs.append(self.MFI)
+        if self.store:
+            self.MFIs.append(self.MFI)
         return self.MFI
+
+    def mfi_old(data, period_in_days=14):
+        """Calculates the money flow index for the given period."""
+
+        prmf = [0]  # positive raw money flow
+        nrmf = [0]  # negative raw money flow
+        mfr = []  # money flow ratio
+
+        # calculate raw money flow
+        for curInd in range(1, data['adjusted_close'].shape[0]):
+
+            prTypicalPrice = (data['high'].values[curInd - 1] + data['low'].values[curInd - 1] + data['close'].values[
+                curInd - 1]) / 3
+            curTypicalPrice = (data['high'].values[curInd] + data['low'].values[curInd] + data['close'].values[
+                curInd]) / 3
+
+            if curTypicalPrice < prTypicalPrice:
+                nrmf.append(curTypicalPrice * data['volume'].values[curInd])
+                prmf.append(0)
+            else:
+                prmf.append(curTypicalPrice * data['volume'].values[curInd])
+                nrmf.append(0)
+
+        # calculate money flow ratio
+        for curInd in range(period_in_days, data['adjusted_close'].shape[0]):
+            sumPosFlow = np.sum(prmf[curInd - period_in_days + 1: curInd + 1])
+            sumNegFlow = np.sum(nrmf[curInd - period_in_days + 1: curInd + 1])
+            if sumNegFlow == 0:
+                mfr.append(float("Inf"))
+            else:
+                mfr.append(sumPosFlow / sumNegFlow)
+
+        # calculate and return money flow index
+        return np.subtract(100, np.divide(100, np.add(1, mfr)))
 
 
 if __name__ == "__main__":
-    def my_rolling_apply(dataframe, on, window, func, init_func=None):
-
-        new = pd.DataFrame(dataframe.index)  # create empty dataframe
-        new.index = dataframe.index  # set index to general index - in our case 'date'
-        new['orig'] = dataframe[on]
-        new['rolled'] = [0] * new.shape[0]  # create new rolled column
-        for enum, index in enumerate(dataframe.index):
-            if enum < window - 1:  # not enough data to calculate
-                new.loc[index, 'rolled'] = np.nan
-            elif enum == window - 1:
-                if init_func is None:
-                    new.loc[index, 'rolled'] = np.nan
-                else:
-                    new.loc[index, 'rolled'] = init_func(dataframe[on].iloc[enum + 1 - window:enum + 1])
-            else:
-                new.loc[index, 'rolled'] = func(dataframe.loc[index, on], new['rolled'].iloc[enum - 1])
-
-        return new
-
-
-    data = pd.DataFrame()
-    data['date'] = ['01-01', '02-01', '03-01', '04-01', '05-01', '06-01', '07-01', '08-01']
-    data['close'] = [3, 2, 0, -5, 7, 10, -10, 8]
-    data = pd.DataFrame(data)
-    df = pd.DataFrame()
-    df['date'] = data['date']
-    df['close'] = data['close']
-    df['close_diff'] = df['close'].diff(periods=1)
-    df['gains'] = np.maximum(df['close_diff'], 0.0)
-    df['losses'] = np.maximum(-df['close_diff'], 0.0)
-    df.index = df.date
-
-    avg_gain_df = my_rolling_apply(df, on='gains', window=4,
-                     func=lambda x, prev: 0.25 * x + (1 - 0.25) * prev,
-                     init_func=lambda x: x.sum() / x.shape[0])
-    df['avg_gain'] = avg_gain_df['rolled']
-
-    avg_loss_df = my_rolling_apply(df, on='losses', window=4,
-                     func=lambda x, prev: 0.25 * x + (1 - 0.25) * prev,
-                     init_func=lambda x: x.sum() / x.shape[0])
-
-    df['avg_loss'] = avg_gain_df['rolled']
+    print()
 
     # ema = MACD_Trigger(period_long=26, period_short=12, period_signal=9)
     # ema.feed({'date': '19.02.2013', 'close': 459.99})
@@ -870,5 +1094,3 @@ if __name__ == "__main__":
     # mfi.feed({'date': '12-Jan-11', 'high': 24.48, 'low': 24.24, 'volume': 7169, 'close': 24.33})
     # mfi.feed({'date': '13-Jan-11', 'high': 24.56, 'low': 23.43, 'volume': 11356, 'close': 24.44})
     # mfi.feed({'date': '14-Jan-11', 'high': 25.16, 'low': 24.27, 'volume': 13379, 'close': 25.00})
-
-

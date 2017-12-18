@@ -11,7 +11,8 @@ from tqdm import tqdm
 class Engine:
     def __init__(self, financeIO, metric_engine, label_engine, image_engine, cnn_engine, stock_names,
                  instance_path,run_number,
-                 make_stationary=True, apply_tanh=True, verbose=False):
+                 make_stationary=True, apply_tanh=True, verbose=False, save_each_year=True):
+        self.save_each_year = save_each_year
         self.instance_path = instance_path
         if not os.path.exists(self.instance_path):
             os.makedirs(self.instance_path)
@@ -131,9 +132,19 @@ class Engine:
     def run(self, start_date, end_date):
 
         current_date = start_date
+        current_year = current_date.year
 
         with tqdm((end_date - start_date).days) as progress_bar:  # create progress bar
             while current_date <= end_date:  # loop for each date
+                if self.save_each_year:
+                    if current_year != current_date.year: # when we move to next year
+                        # save 1 year data
+                        self.dataholder.save("../input/dataholder_{}.csv".format(current_year))
+                        self.dataholder.reset_storage() # reset storage
+
+                        current_year = current_date.year
+
+
                 self.feed(current_date=current_date)
 
                 # now we can increment to next day
@@ -156,9 +167,12 @@ class Engine:
         # save all instances in engines
         self.save_instance()
 
-        # save dataholder
-        self.dataholder.save("../input/dataholder.csv")
-
+        if not self.save_each_year:
+            # save dataholder
+            self.dataholder.save("../input/dataholder.csv")
+        else:
+            # save last year
+            self.dataholder.save("../input/dataholder_{}.csv".format(current_year))
     def save_instance(self):
 
 
