@@ -1,6 +1,26 @@
 """Utility methods"""
 import numpy as np
 import pandas as pd
+from functools import partial
+import time
+
+
+
+# timeit(argument)(method)
+def timeit(argument):
+    def real_timeit(method):
+        def timed(*args, **kw):
+            ts = time.time()
+            result = method(*args, **kw)
+            te = time.time()
+            if te != ts:
+                print('{} {} {} msec'.format(argument, method.__name__, (te - ts)*1000))
+            return result
+        return timed
+    return real_timeit
+
+
+
 
 class Bucket:
     """This is variation of queue data structure.
