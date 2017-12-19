@@ -1,6 +1,6 @@
 """Image construction"""
 
-from utils import Bucket,normalize_column_based
+from utils import Bucket,normalize_column_based, timeit
 import numpy as np
 import pandas as pd
 from collections import defaultdict
@@ -29,16 +29,17 @@ class ImageEngine:
         with open(filename, 'rb') as f:
             self = pickle.load(f)
 
+    # @timeit('image')
     def feed(self, row):
         """row should be a dict and should have 'stock_name','date' and 'data' keys
         row = dict('date','data','stock_name')
         """
-        data = row['data']
-        date = row['date']
-        stock_name = row['stock_name']
+
+        date = row.date
+        stock_name = row.name
 
         image_bucket = self.image_buckets[stock_name]
-        image_bucket.put(data=data)
+        image_bucket.put(data=row.features)
 
         if image_bucket.full():
             image = pd.DataFrame(image_bucket.get_all_bucket())

@@ -1,18 +1,10 @@
 import pandas as pd
 class Data:
     def __init__(self):
-        self.date = None
-        self.stock_name = None
-        self.day_data = None
-        self.metric_data = None
-        self.label = None
-        self.raw_label = None
-        self.feature_data = None
-        self.image = None
-
-        self.series = pd.Series()
+        pass
 
     def to_series(self):
+        """Deprecated"""
         self.series = pd.Series()
         self.series = self.series.append(self.day_data.iloc[0])
         self.series['label'] = self.raw_label
@@ -30,24 +22,23 @@ class Data:
 
 class DataHolder:
     def __init__(self):
-        self.storage = []
-
-        self.dataframe = pd.DataFrame()
+        self.storage = pd.DataFrame()
 
     def append(self, data):
-
-        self.storage.append(data)
+        self.storage = self.storage.append(data, ignore_index=True)
 
     def save(self, path):
-        self.to_dataframe()
         print("Saving to the {}".format(path))
-        self.dataframe.to_csv(path)
+        self.storage.to_csv(path)
 
     def reset_storage(self):
-        self.storage = []
+        self.storage = pd.DataFrame()
+
 
     def to_dataframe(self):
+        """Deprecated"""
         print("Constructing dataframe ...")
+        self.dataframe = pd.DataFrame()
         for i,data in enumerate(self.storage):
             print(i,len(self.storage))
             if self.dataframe.shape[0] == 0: # it is empty

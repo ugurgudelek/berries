@@ -2,7 +2,7 @@
 Difference from regular one is these metrics store previous states and we can feed them one by one."""
 
 import pandas as pd
-from utils import Bucket, rolling_apply
+from utils import Bucket, rolling_apply, timeit
 import random
 from collections import defaultdict
 import pickle
@@ -57,13 +57,14 @@ class MetricEngine:
             self.add(stock_name, MoneyFlowIndex(18))
             self.add(stock_name, MoneyFlowIndex(22))
 
+
     def feed(self, row):
         """row should be a dict and should have 'stock_name','date' and 'close' keys
         row = dict('stock_name','date','close')
         """
-        stock_name = row['stock_name']
-        data = row['close']
-        date = row['date']
+        stock_name = row.name
+        data = row.close
+        date = row.date
 
         calculation = pd.Series()
         for (uid, metric) in self.metrics[stock_name].items():
@@ -75,8 +76,9 @@ class MetricEngine:
 
         return None
 
+
     def is_proper(self, metric_data):
-        return not any(pd.isnull(metric_data))  # if metric_data has not any None
+        return not any(metric_data.isnull())  # if metric_data has not any None
 
     def feed_chunk(self, data):
         """row should be a dict and should have 'stock_name','date' and 'close' keys
@@ -136,8 +138,8 @@ class RSI:
         """row should be a dict and should have 'date' and 'close' keys
         row = dict('date','close')
         """
-        data = row['close']
-        date = row['date']
+        data = row.close
+        date = row.date
 
         # calculate gain and loss
         if self.__len__() == 0:  # first data
@@ -294,8 +296,12 @@ class EMA:
         """row should be a dict and should have 'date' and 'close' keys
                 row = dict('date','close')
                 """
-        data = row['close']
-        date = row['date']
+        if type(row) is dict:
+            data = row['close']
+            date = row['date']
+        else:
+            data = row.close
+            date = row.date
 
         self.data.append(data)
         sma = self.sma.feed(row=row)
@@ -370,8 +376,8 @@ class MACD:
         """row should be a dict and should have 'date' and 'close' keys
                         row = dict('date','close')
                         """
-        data = row['close']
-        date = row['date']
+        data = row.close
+        date = row.date
         self.data.append(data)
 
         ema_long = self.ema_long.feed(row=row)
@@ -425,8 +431,8 @@ class MACD_Trigger:
         """row should be a dict and should have 'date' and 'close' keys
                                 row = dict('date','close')
                                 """
-        data = row['close']
-        date = row['date']
+        data = row.close
+        date = row.date
         self.data.append(data)
 
         macd_line = self.macd_line.feed(row=row)
@@ -478,8 +484,12 @@ class SMA:
         """row should be a dict and should have 'date' and 'close' keys
                 row = dict('date','close')
                 """
-        data = row['close']
-        date = row['date']
+        if type(row) is dict:
+            data = row['close']
+            date = row['date']
+        else:
+            data = row.close
+            date = row.date
 
         self.data.append(data)
 
@@ -544,10 +554,10 @@ class WilliamR:
                         row = dict('date','high','low','close')
                         """
 
-        date = row['date']
-        high = row['high']
-        low = row['low']
-        close = row['close']
+        date = row.date
+        high = row.high
+        low = row.low
+        close = row.close
 
         self.row_contaioner.append(row)
 
@@ -622,10 +632,10 @@ class KDDifference:
                                 row = dict('date','high','low','close')
                                 """
 
-        date = row['date']
-        high = row['high']
-        low = row['low']
-        close = row['close']
+        date = row.date
+        high = row.high
+        low = row.low
+        close = row.close
 
         self.row_contaioner.append(row)
 
@@ -731,10 +741,10 @@ class UltimateOscillator:
                                 row = dict('date','high','low','close')
                                 """
 
-        date = row['date']
-        high = row['high']
-        low = row['low']
-        close = row['close']
+        date = row.date
+        high = row.high
+        low = row.low
+        close = row.close
 
         self.row_contaioner.append(row)
         self.UO = None  # init current UO
@@ -854,11 +864,11 @@ class MoneyFlowIndex:
                                 row = dict('date','high','low','close')
                                 """
 
-        date = row['date']
-        high = row['high']
-        low = row['low']
-        close = row['close']
-        volume = row['volume']
+        date = row.date
+        high = row.high
+        low = row.low
+        close = row.close
+        volume = row.volume
 
         self.row_contaioner.append(row)
 

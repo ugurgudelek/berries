@@ -4,6 +4,7 @@ import pandas as pd
 import datetime
 import os
 import pickle
+from utils import timeit
 
 
 class IO:
@@ -20,6 +21,7 @@ class IO:
         with open(filename, 'rb') as f:
             self = pickle.load(f)
 
+    # @timeit('oneday')
     def get_one_day_data(self, stock_name, date):
         """
 
@@ -32,20 +34,9 @@ class IO:
         if data.shape[0] == 0:
             return None
 
-        data['name'] = stock_name
-        data['close'] = data['close'].astype(float)
-        data['volume'] = data['volume'].astype(int)
-        try:  # invalid data. generally contains '-'
-            data['open'] = data['open'].astype(float)
-            data['high'] = data['high'].astype(float)
-            data['low'] = data['low'].astype(float)
-        except:
-            data['open'] = data['close']
-            data['high'] = data['close']
-            data['low'] = data['close']
+        return data
 
-        return data[['name', 'date', 'open', 'high', 'low', 'close', 'volume']]
-
+    # @timeit('nextday')
     def get_next_day_data(self, stock_name, date):
         one_day_data = None
 
@@ -151,19 +142,48 @@ class LocalIO(IO):
             return filename.split('.')[0]
 
         def read_all_files(filepath):
+
             dic = dict()
             filenames = os.listdir(filepath)
             for filename in filenames:
                 full_filename = os.path.join(self.filepath, filename)
                 df = pd.read_csv(full_filename, index_col=None)
-                df['date'] = df['date'].apply(lambda x: datetime.datetime.strptime(x, self.DATE_FORMAT))
-                dic[remove_extension(filename)] = df
+                stock_name = remove_extension(filename)
+
+                df['name'] = stock_name
+                df['date'] = df['date'].apply(lambda x: datetime.datetime.strptime(x, self.DATE_FORMAT).date())
+                df['open'] = pd.to_numeric(df['open'], errors='coarce')
+                df['high'] = pd.to_numeric(df['high'], errors='coarce')
+                df['low'] = pd.to_numeric(df['low'], errors='coarce')
+                df['close'] = pd.to_numeric(df['close'], errors='coarce')
+                df['volume'] = pd.to_numeric(df['volume'], errors='coarce')
+
+                # drop NAN values
+                df.dropna(axis='rows', inplace=True)
+                # replace wrong 0.0 open values with avg(high,low)
+                df['open'] = df.apply(lambda row:(row['high']+row['low'])/2 if row['open']==0.0 else row['open'], axis='columns')
+                df.index = df.date # for faster data retrieval
+                dic[stock_name] = df
             return dic
+
+        # data['name'] = stock_name
+        # data['close'] = data['close'].astype(float)
+        # data['volume'] = data['volume'].astype(int)
+        # try:  # invalid data. generally contains '-'
+        #     data['open'] = data['open'].astype(float)
+        #     data['high'] = data['high'].astype(float)
+        #     data['low'] = data['low'].astype(float)
+        # except:
+        #     data['open'] = data['close']
+        #     data['high'] = data['close']
+        #     data['low'] = data['close']
 
         self.localdata = read_all_files(self.filepath)
 
     def query(self, stock_name, start_date, end_date):
         """Query function is the parameterized version of api itself.
+        requires all dataframe has date index.
+
         :param str stock_name: stock name
         :param datetime.datetime start_date: start of closed interval
         :param datetime.datetime end_date: end of closed interval
@@ -173,11 +193,19 @@ class LocalIO(IO):
         Date,Open,High,Low,Close,Volume
         """
 
-        stockdata = pd.DataFrame(self.localdata[stock_name])
+        stockdata = self.localdata[stock_name]
 
-        r = stockdata.loc[((stockdata['date'] >= start_date) & (stockdata['date'] <= end_date))]
+        # if start_date == end_date: # we can skip & operator here
+        #     # requires date index
+        #     if start_date in stockdata.index:
+        #         return stockdata.loc[start_date]
+        #     return None
 
-        return r
+        # else return interval
+        return stockdata.loc[start_date : end_date]
+            # stockdata.loc[((stockdata['date'] >= start_date) & (stockdata['date'] <= end_date))]
+
+
 
     def query_all(self, start_date, end_date):
         """similar to query but this does not need stock_name so it returns all localdata"""

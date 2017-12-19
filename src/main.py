@@ -4,7 +4,7 @@ import datetime
 import pandas as pd
 import label
 import image
-import cnn
+# import cnn
 import engine
 
 # done 1: download 1-day data
@@ -33,7 +33,7 @@ STOCK_NAMES = ['spy', 'xlf', 'xlu', 'xle',
 MAKE_STATIONARY = True
 NORMALIZE_IMAGE = True
 APPLY_TANH = True
-RUN_NUMBER = 5
+RUN_NUMBER = 7
 
 financeIO = LocalIO()
 metric_engine = metric.MetricEngine(stock_names=STOCK_NAMES)
@@ -53,7 +53,7 @@ main_engine = engine.Engine(financeIO=financeIO,
                             stock_names=STOCK_NAMES,
                             make_stationary=MAKE_STATIONARY,
                             apply_tanh=APPLY_TANH,
-                            verbose=True,
+                            verbose=False,
                             instance_path='../instance',
                             run_number=RUN_NUMBER)
 

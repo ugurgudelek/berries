@@ -49,9 +49,9 @@ class CNNEngine:
 
     def feed(self, row):
 
-        image = row['image']
-        label = row['label']
-        date = row['date']
+        image = row.image
+        label = row.label
+        date = row.date
         self.X.append(image)
         self.y.append(label)
 
