@@ -1,6 +1,7 @@
 import pandas as pd
 class Data:
     def __init__(self):
+        # todo: implement attributes later
         pass
 
     def to_series(self):
