@@ -22,6 +22,7 @@ class CNNEngine:
         self.verbose = verbose
         self.model_name = '{}_model.h5py'.format(run_number)
         self.model = self.construct_cnn()
+        self.history = None
 
         self.X_bucket = Bucket(size=self.params['batch_size'])
         self.y_bucket = Bucket(size=self.params['batch_size'])
@@ -83,6 +84,8 @@ class CNNEngine:
         self.model.fit(x=X, y=y, verbose=self.verbose, validation_data=None, batch_size=self.params['batch_size'],
                        epochs=self.params['epochs'] - 1)
 
+
+
     def construct_cnn(self):
         # CNN model
         self.model = Sequential()
@@ -97,21 +100,26 @@ class CNNEngine:
         self.model.add(Dense(self.params["num_classes"]))
         self.model.compile(loss=mean_squared_error,
                            optimizer=Adadelta(),
-                           metrics=['mse', 'mae', self.custom_metric])
+                           metrics=['mse', 'mae'])
 
         return self.model
 
+    def train_direct(self, X, y):
+        """
 
-    def train(self, X,y):
-        # todo: implement
-        X = np.array(X)
-        X.reshape(X.shape[0], self.params["input_w"], self.params["input_h"], 1)
-        y = np.array(y)
+        :param X: (numpy.array) flatten X
+        :param y: (numpy.array) label
+        :return: history
+        """
+        # reshape X to fit cnn model
+        X = X.reshape(X.shape[0], self.params["input_w"], self.params["input_h"], 1)
 
+        # fit and return history
+        self.history = self.model.fit(X, y, batch_size=self.params["batch_size"], epochs=self.params["epochs"], verbose=1,
+                  validation_split=0.2)
 
-        self.model.fit(X, y, batch_size=self.params["batch_size"], epochs=self.params["epochs"], verbose=1,
-                  validation_data=None)
-        pass
+        return self.history
+
 
     def test(self, data, q_ratio=0.38):
         raise Exception("Not implemented yet!")
