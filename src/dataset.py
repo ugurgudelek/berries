@@ -19,6 +19,12 @@ class Dataset:
         #todo: make this before dataset creation
         self.dataframe['flabel'] = self.label_normalization(self.dataframe['flabel'])
 
+        # todo: DELETE BELOW
+        test_cols = ['ulos_7_14_28','ulos_8_16_32','ulos_9_18_36']
+        self.dataframe[test_cols] = self.dataframe[test_cols].shift(-28)
+        self.dataframe.dropna(axis=0, inplace=True)
+        # todo: DELETE ABOVE
+
     def train_test_split(self, date):
         # get 784px flatten image
         self.X_train = self.dataframe.loc[(self.dataframe['date'] <= date)].iloc[:,:784]
@@ -38,13 +44,16 @@ class Dataset:
     def label_normalization(self,y):
         return (y - y.mean()) / y.std()
 
-if __name__ == "__main__":
+def main():
     dataset = Dataset()
     dataset.load(path="../input/dataholder/dataholder.h5py")
     dataset.train_test_split('2014-12-31')
     dataset.transformXy()
 
     params = {"input_w": 28, "input_h": 28, "num_classes": 1, "batch_size": 10, "epochs": 100}
-    cnnengine = cnn.CNNEngine(params=params, model_save_path='../model', run_number='7')
+    cnnengine = cnn.CNNEngine(params=params, model_save_path='../model', run_number='8')
     cnnengine.train_direct(dataset.X_train, dataset.y_train)
     cnnengine.save_model()
+if __name__ == "__main__":
+    main()
+    
