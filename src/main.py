@@ -29,13 +29,14 @@ def main(create_model = False, model_type = "regression"):
 
         # 1.download data
         google_finance_io.download_data(stock_names, start_date=datetime.date(2000, 1, 3),
-                                        end_date=datetime.date(2017, 9, 28), verbose=True)
+                                        end_date=datetime.date(2016, 12, 31), verbose=True)
 
         # 2.calculate metric for available stocks and save them into csv file
         preprocessing.normalize_and_calculate_metrics(stock_names)
 
         # 4.cluster features for available stocks and their features then save them into csv file
-        preprocessing.cluster_features(stock_names, drop_this_cols=['date', 'low', 'close', 'high', 'open','adjusted_close'])
+        #todo: uncomment below
+        # preprocessing.cluster_features(stock_names, drop_this_cols=['date', 'low', 'close', 'high', 'open','adjusted_close'])
 
         if model_type == "regression":
 
@@ -49,16 +50,17 @@ def main(create_model = False, model_type = "regression"):
             sorted_cluster_names = pd.read_csv("../input/clustered_names.csv", header=None, squeeze=True).values.tolist()
             
             # 6. create flatten images with data and labels.
-            preprocessing.create_images_from_data(stock_names, sorted_cluster_names, label_names=['label_day_tanh_regr'])
+            preprocessing.create_images_from_data(stock_names, sorted_cluster_names, label_names=['label_day_tanh_regr'], split_period=24)
             
             # 7. merge all available data
             # data has 'images' and 'labels'
             data = preprocessing.get_merged_images_and_labels_data(stock_names, labels_are_last=1, train_test_ratio=0.9)
             
             # 8. call CNN
-            params = {"input_w": 28, "input_h": 28, "num_classes": 1, "batch_size": 1024, "epochs": 100}
+            params = {"input_w": 24, "input_h": 24, "num_classes": 1, "batch_size": 1024, "epochs": 50,
+                      "model_name": "dropped_uos_50_epoch"}
             with K.get_session():
-                cs.start_cnn_session(data, params, model_save_name="model_regr_100epoch", model_read_name = "")
+                cs.start_cnn_session(data, params, model_save_name=params['model_name'], model_read_name = "")
             
         # for mlp
         #params = {"input_w": 28, "input_h": 28, "num_classes": 1, "batch_size": 1024, "epochs": 100}
@@ -133,7 +135,7 @@ def main(create_model = False, model_type = "regression"):
 
 if __name__ == "__main__":
     
-    main(create_model = False, model_type = "regression")
+    main(create_model = True, model_type = "regression")
     
     # data = get_last_saved_data()
     # model = load_model("../model/model_regr_100epoch_before_2017_06_16 21_55_06_953896")

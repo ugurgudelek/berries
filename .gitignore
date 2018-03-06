@@ -1,9 +1,9 @@
-
+*.pkl
 *.csv
 *.iml
 *.xml
 *.pyc
 *.xml___jb_tmp___
-
+src/logs/*
 input
 model
