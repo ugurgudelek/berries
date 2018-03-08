@@ -16,19 +16,43 @@ import os
 
 
 
-class Config:
+class InnerDataset(Dataset):
     """
 
     """
-    def __init__(self):
-        self.stocks_dir = '../input/raw_data'
+    def __init__(self, dataset, adj_close_colnum):
+        self.adj_close_colnum = adj_close_colnum
+        self.dataset = dataset
+
+    def __len__(self):
+        return self.dataset.shape[0] - self.dataset.shape[1] - 1
+
+    def __getitem__(self, ix):
+        data = self.dataset[ix: ix + self.dataset.shape[1], :]
+        label_close = self.dataset[ix + self.dataset.shape[1], self.adj_close_colnum]
+        datalast_close = data[-1, self.adj_close_colnum]
+
+        # # extract trend
+        # if label_close > datalast_close:
+        #     label = 1  # increasing trend
+        # else:
+        #     label = 0  # decreasing trend
+
+        # normalize
+        data = (data - data.mean(axis=0)) / data.std(axis=0)
+
+        return self._reshape(data), label_close
+
+    def _reshape(self, data):
+        # (in_channels, width, height)
+        return data.reshape((1, data.shape[0], data.shape[1]))
 
 class IndicatorDataset(Dataset):
     """
 
     """
 
-    def __init__(self, config, stock_names=None):
+    def __init__(self, config, stock_names=None, row_len=28):
         self.stocks_dir = config.stocks_dir
 
         self.stocks = self._read_dir(self.stocks_dir)
@@ -44,6 +68,48 @@ class IndicatorDataset(Dataset):
 
 
 
+        # dropna
+        for stock_name, data in self.dataset.items():
+            self.dataset[stock_name] = data.dropna(axis=0)
+
+        # filter features
+        for stock_name, data in self.dataset.items():
+            self.dataset[stock_name] = data.drop(['date', 'open', 'high', 'low', 'close'], axis=1)
+
+        # check shape
+        for stock_name, data in self.dataset.items():
+            assert data.shape[1] == row_len
+
+        # check adjusted_close for label assignment in __getitem__
+        for stock_name, data in self.dataset.items():
+            assert data.columns[1] == 'adjusted_close'
+        self.adj_close_colnum = 1
+
+
+        # todo: fix below
+        self.dataset = self.dataset['spy'].values
+
+
+        self.images = []
+        # generate images
+
+        for low in range(self.dataset.shape[0] - row_len):
+            image2d = self.dataset[low:low+row_len, :]
+            image2d = (image2d - image2d.mean(axis=0)) / image2d.std(axis=0)  # normalize
+            image1d = image2d.flatten()
+            self.images.append(image1d)
+
+        self.images = np.array(self.images)
+
+        self.labels = self.images[:, (row_len-1)*row_len + 1][1:]  # get label from last day's adjusted close
+        self.images = self.images[:-1]  # drop last image cuz it does not have any label
+
+        self.dataset = np.concatenate(self.images, self.labels)
+
+        train_len = int(self.dataset.shape[0] * 0.9)
+        self.train_dataset = InnerDataset(self.dataset[:train_len], adj_close_colnum=self.adj_close_colnum)
+        self.valid_dataset = InnerDataset(self.dataset[train_len:], adj_close_colnum=self.adj_close_colnum)
+
     def _read_dir(self, stocks_dir):
         stocks = dict()
         for fullfilename in os.listdir(stocks_dir):
@@ -53,11 +119,9 @@ class IndicatorDataset(Dataset):
 
         return stocks
 
-    def __len__(self):
-        pass
 
-    def __getitem__(self, ix):
-        pass
+
+
 
 
     @staticmethod
@@ -133,12 +197,9 @@ class IndicatorDataset(Dataset):
         return dataframe
 
 
-
-
 if __name__ == "__main__":
     config = Config()
 
     dataset = IndicatorDataset(config=config, stock_names=['spy'])
+    print(dataset.__getitem__(0))
 
-    print(dataset.stocks.keys())
-    print(dataset.stocks)
