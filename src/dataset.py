@@ -104,6 +104,7 @@ class IndicatorDataset(Dataset):
         self.labels = self.images[:, (row_len-1)*row_len + 1][1:]  # get label from last day's adjusted close
         self.images = self.images[:-1]  # drop last image cuz it does not have any label
 
+        #fixme
         self.dataset = np.concatenate(self.images, self.labels)
 
         train_len = int(self.dataset.shape[0] * 0.9)
