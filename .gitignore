@@ -4,11 +4,15 @@
 *.xml
 *.pyc
 *.xml___jb_tmp___
+*.pickle
+*.h5py
 
 src/logs/*
 
 
 paper
-input
+!/input/raw_data/*
+
 model
 *.pkl
+
