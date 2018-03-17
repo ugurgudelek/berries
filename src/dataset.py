@@ -13,6 +13,8 @@ from talib import RSI, SMA, MACD, WILLR, ULTOSC, MFI, STOCH
 
 import os
 
+from config import Config
+
 
 
 
@@ -52,12 +54,19 @@ class IndicatorDataset(Dataset):
 
     """
 
-    def __init__(self, config, stock_names=None, row_len=28):
+    def __init__(self, config, stock_names=None, label_after=1, row_len=28):
         self.stocks_dir = config.stocks_dir
 
         self.stocks = self._read_dir(self.stocks_dir)
 
-        # if stock_names are assigned, drop some stock
+
+
+
+        for stock_name, stock_data in self.stocks.items():
+            self.stocks[stock_name]['label'] = stock_data.loc[:, 'close'].shift(-label_after)
+
+
+        # drop unnecessary stocks
         if stock_names is not None:
             keys = list(self.stocks.keys())
             for stock_name in keys:
@@ -112,6 +121,14 @@ class IndicatorDataset(Dataset):
         self.valid_dataset = InnerDataset(self.dataset[train_len:], adj_close_colnum=self.adj_close_colnum)
 
     def _read_dir(self, stocks_dir):
+        """
+
+        Args:
+            stocks_dir:
+
+        Returns: (dict of pd.DataFrame) stock dictionary
+
+        """
         stocks = dict()
         for fullfilename in os.listdir(stocks_dir):
             filename, extension = fullfilename.split('.')
@@ -201,6 +218,6 @@ class IndicatorDataset(Dataset):
 if __name__ == "__main__":
     config = Config()
 
-    dataset = IndicatorDataset(config=config, stock_names=['spy'])
+    dataset = IndicatorDataset(config=config, stock_names=['spy'], label_after=7)
     print(dataset.__getitem__(0))
 
