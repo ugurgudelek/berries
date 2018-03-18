@@ -12,38 +12,48 @@ import numpy as np
 from talib import RSI, SMA, MACD, WILLR, ULTOSC, MFI, STOCH
 
 import os
+from sklearn import preprocessing
 
 from config import Config
 
-
+import matplotlib.pyplot as plt
 
 
 class InnerDataset(Dataset):
     """
 
+    Args:
+        dataset(pd.DataFrame):
     """
-    def __init__(self, dataset, adj_close_colnum):
-        self.adj_close_colnum = adj_close_colnum
+    def __init__(self, dataset):
+
         self.dataset = dataset
 
+        self.X = self.dataset.drop(['label'], axis=1)
+        self.y = self.dataset[['label']]
+
+        self.image_width = self.X.shape[1]
+
     def __len__(self):
-        return self.dataset.shape[0] - self.dataset.shape[1] - 1
+        return self.dataset.shape[0] - self.image_width - 1
 
     def __getitem__(self, ix):
-        data = self.dataset[ix: ix + self.dataset.shape[1], :]
-        label_close = self.dataset[ix + self.dataset.shape[1], self.adj_close_colnum]
-        datalast_close = data[-1, self.adj_close_colnum]
+        X = self.X.iloc[ix: ix + self.image_width, :]
+        y = self.y.iloc[ix + self.image_width - 1]
 
-        # # extract trend
-        # if label_close > datalast_close:
-        #     label = 1  # increasing trend
-        # else:
-        #     label = 0  # decreasing trend
+        # # normalize
+        # norm_factor_close = X.iloc[0].loc['adjusted_close']
+        # need_norm_colnames = ['volume', 'adjusted_close', 'sma_15', 'sma_20', 'sma_25', 'sma_30']
+        # X[need_norm_colnames] = (X[need_norm_colnames] / X[need_norm_colnames].iloc[0]) - 1
+        # y = (y / norm_factor_close) - 1
 
-        # normalize
-        data = (data - data.mean(axis=0)) / data.std(axis=0)
+        # change type to numpy
+        X = X.values
+        y = y.values.flatten()
 
-        return self._reshape(data), label_close
+
+        X = np.expand_dims(X, axis=0)
+        return (X,y)
 
     def _reshape(self, data):
         # (in_channels, width, height)
@@ -59,11 +69,9 @@ class IndicatorDataset(Dataset):
 
         self.stocks = self._read_dir(self.stocks_dir)
 
-
-
-
+        # get labels
         for stock_name, stock_data in self.stocks.items():
-            self.stocks[stock_name]['label'] = stock_data.loc[:, 'close'].shift(-label_after)
+            self.stocks[stock_name]['label'] = stock_data.loc[:, 'adjusted_close'].shift(-label_after)
 
 
         # drop unnecessary stocks
@@ -75,50 +83,92 @@ class IndicatorDataset(Dataset):
 
         self.dataset = IndicatorDataset.stocks_to_dataset(self.stocks)
 
-
-
-        # dropna
         for stock_name, data in self.dataset.items():
-            self.dataset[stock_name] = data.dropna(axis=0)
+            # change values to percentage change
+            data.loc[:, 'adjusted_close'] = data.loc[:, 'adjusted_close'].pct_change()
+            data.loc[:, 'label'] = data.loc[:, 'label'].pct_change()
+            data.loc[:, 'sma_15'] = data.loc[:, 'sma_15'].pct_change()
+            data.loc[:, 'sma_20'] = data.loc[:, 'sma_20'].pct_change()
+            data.loc[:, 'sma_25'] = data.loc[:, 'sma_25'].pct_change()
+            data.loc[:, 'sma_30'] = data.loc[:, 'sma_30'].pct_change()
+            data.loc[:, 'volume'] = data.loc[:, 'volume'].pct_change()
 
-        # filter features
-        for stock_name, data in self.dataset.items():
-            self.dataset[stock_name] = data.drop(['date', 'open', 'high', 'low', 'close'], axis=1)
+            # dropna
+            data = data.dropna(axis=0)
+
+            # filter features
+            indexes = data.index
+            dates = data['date']
+
+            self.dataset[stock_name] = data = data.drop(['date', 'open', 'high', 'low', 'close'], axis=1)
+
+            scaler = preprocessing.StandardScaler().fit(data)
+            data = scaler.transform(data)
+
+            self.dataset[stock_name].iloc[:, :] = data
+
+            # assign fall,rise and hold labels
+            label_split_threshold = 0.27
+            label_pct = self.dataset[stock_name].copy().loc[:, 'label']
+
+
+            self.dataset[stock_name].loc[(label_pct <= -label_split_threshold), 'label'] = 0 # fall
+            self.dataset[stock_name].loc[(label_pct >= label_split_threshold), 'label'] = 2 # rise
+            self.dataset[stock_name].loc[((-label_split_threshold < label_pct) & (label_pct < label_split_threshold)), 'label'] = 1 # steady
+
+            # self.dataset[stock_name].loc[(-label_split_threshold <= label_pct), 'label_fall'] = 1
+            # self.dataset[stock_name].loc[(-label_split_threshold >= label_pct), 'label_rise'] = 1
+            # self.dataset[stock_name].loc[((-label_split_threshold < label_pct) & (label_pct < label_split_threshold)), 'label_steady'] = 1
+            #
+            # # fillna discrete label with 0
+            # self.dataset[stock_name].loc[:, ['label_fall', 'label_rise', 'label_steady']] = self.dataset[stock_name].loc[:, ['label_fall', 'label_rise', 'label_steady']].fillna(0)
+            #
+            # # drop continuous label
+            # self.dataset[stock_name] = self.dataset[stock_name].drop(['label'], axis=1)
+
+
+            # set multiindex(index,date)
+            self.dataset[stock_name].index = pd.MultiIndex.from_tuples(list(zip(*[indexes, dates])),
+                                                                       names=['index', 'date'])
+
+
+
+
+
 
         # check shape
-        for stock_name, data in self.dataset.items():
-            assert data.shape[1] == row_len
+        # for stock_name, data in self.dataset.items():
+        #     assert data.shape[1] == row_len
 
-        # check adjusted_close for label assignment in __getitem__
-        for stock_name, data in self.dataset.items():
-            assert data.columns[1] == 'adjusted_close'
-        self.adj_close_colnum = 1
+        # todo: fix below - below is test only
+        self.dataset = self.dataset['spy']
 
 
-        # todo: fix below
-        self.dataset = self.dataset['spy'].values
+        # self.images = []
+        # # generate images
+        #
+        # for low in range(self.dataset.shape[0] - row_len):
+        #     image2d = self.dataset[low:low+row_len, :]
+        #     image2d = (image2d - image2d.mean(axis=0)) / image2d.std(axis=0)  # normalize
+        #     image1d = image2d.flatten()
+        #     self.images.append(image1d)
+
+        # self.images = np.array(self.images)
+        #
+        # self.labels = self.images[:, (row_len-1)*row_len + 1][1:]  # get label from last day's adjusted close
+        # self.images = self.images[:-1]  # drop last image cuz it does not have any label
+        #
+        # #fixme
+        # self.dataset = np.concatenate(self.images, self.labels)
+
+        # plt.plot(list(zip(*self.dataset.index.values))[1], self.dataset['adjusted_close'].values)
+        # plt.show()
 
 
-        self.images = []
-        # generate images
-
-        for low in range(self.dataset.shape[0] - row_len):
-            image2d = self.dataset[low:low+row_len, :]
-            image2d = (image2d - image2d.mean(axis=0)) / image2d.std(axis=0)  # normalize
-            image1d = image2d.flatten()
-            self.images.append(image1d)
-
-        self.images = np.array(self.images)
-
-        self.labels = self.images[:, (row_len-1)*row_len + 1][1:]  # get label from last day's adjusted close
-        self.images = self.images[:-1]  # drop last image cuz it does not have any label
-
-        #fixme
-        self.dataset = np.concatenate(self.images, self.labels)
 
         train_len = int(self.dataset.shape[0] * 0.9)
-        self.train_dataset = InnerDataset(self.dataset[:train_len], adj_close_colnum=self.adj_close_colnum)
-        self.valid_dataset = InnerDataset(self.dataset[train_len:], adj_close_colnum=self.adj_close_colnum)
+        self.train_dataset = InnerDataset(self.dataset.iloc[:train_len, :])
+        self.valid_dataset = InnerDataset(self.dataset.iloc[train_len:, :])
 
     def _read_dir(self, stocks_dir):
         """
@@ -137,15 +187,10 @@ class IndicatorDataset(Dataset):
 
         return stocks
 
-
-
-
-
-
     @staticmethod
     def stocks_to_dataset(stocks):
         """
-
+        Wrapper for indicator calculation
         Args:
             stocks:
 
@@ -173,10 +218,10 @@ class IndicatorDataset(Dataset):
         close = dataframe['adjusted_close'].values.astype(np.float)
         volume = dataframe['volume'].values.astype(np.float)
 
-        dataframe['rsi_15'] = RSI(close, timeperiod=15)
-        dataframe['rsi_20'] = RSI(close, timeperiod=20)
-        dataframe['rsi_25'] = RSI(close, timeperiod=25)
-        dataframe['rsi_30'] = RSI(close, timeperiod=30)
+        dataframe['rsi_15'] = RSI(close, timeperiod=15)/100
+        dataframe['rsi_20'] = RSI(close, timeperiod=20)/100
+        dataframe['rsi_25'] = RSI(close, timeperiod=25)/100
+        dataframe['rsi_30'] = RSI(close, timeperiod=30)/100
 
         dataframe['sma_15'] = SMA(close, timeperiod=15)
         dataframe['sma_20'] = SMA(close, timeperiod=20)
@@ -190,17 +235,17 @@ class IndicatorDataset(Dataset):
         dataframe['macd_16'], macdsignal, dataframe['macdhist_16'] = MACD(close, fastperiod=16, slowperiod=30,
                                                                           signalperiod=11)
 
-        dataframe['willR_14'] = WILLR(high, low, close, timeperiod=14)
-        dataframe['willR_18'] = WILLR(high, low, close, timeperiod=18)
-        dataframe['willR_22'] = WILLR(high, low, close, timeperiod=22)
+        dataframe['willR_14'] = WILLR(high, low, close, timeperiod=14)/100
+        dataframe['willR_18'] = WILLR(high, low, close, timeperiod=18)/100
+        dataframe['willR_22'] = WILLR(high, low, close, timeperiod=22)/100
 
-        dataframe['ultimate_osc_7'] = ULTOSC(high, low, close, timeperiod1=7, timeperiod2=14, timeperiod3=28)
-        dataframe['ultimate_osc_8'] = ULTOSC(high, low, close, timeperiod1=8, timeperiod2=16, timeperiod3=32)
-        dataframe['ultimate_osc_9'] = ULTOSC(high, low, close, timeperiod1=9, timeperiod2=18, timeperiod3=36)
+        dataframe['ultimate_osc_7'] = ULTOSC(high, low, close, timeperiod1=7, timeperiod2=14, timeperiod3=28)/100
+        dataframe['ultimate_osc_8'] = ULTOSC(high, low, close, timeperiod1=8, timeperiod2=16, timeperiod3=32)/100
+        dataframe['ultimate_osc_9'] = ULTOSC(high, low, close, timeperiod1=9, timeperiod2=18, timeperiod3=36)/100
 
-        dataframe['mfi_14'] = MFI(high, low, close, volume, timeperiod=14)
-        dataframe['mfi_18'] = MFI(high, low, close, volume, timeperiod=18)
-        dataframe['mfi_22'] = MFI(high, low, close, volume, timeperiod=22)
+        dataframe['mfi_14'] = MFI(high, low, close, volume, timeperiod=14)/100
+        dataframe['mfi_18'] = MFI(high, low, close, volume, timeperiod=18)/100
+        dataframe['mfi_22'] = MFI(high, low, close, volume, timeperiod=22)/100
 
         slowk, slowd = STOCH(high, low, close, fastk_period=14, slowk_period=3, slowk_matype=0, slowd_period=3,
                              slowd_matype=0)
@@ -218,6 +263,6 @@ class IndicatorDataset(Dataset):
 if __name__ == "__main__":
     config = Config()
 
-    dataset = IndicatorDataset(config=config, stock_names=['spy'], label_after=7)
-    print(dataset.__getitem__(0))
+    dataset = IndicatorDataset(config=config, stock_names=['spy'], label_after=30)
+    print(dataset.train_dataset.__getitem__(0))
 

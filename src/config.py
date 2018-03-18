@@ -12,7 +12,7 @@ class Config:
     """
 
     def __init__(self):
-        self.stocks_dir = '../input/raw_input'
+        self.stocks_dir = '../input/raw_data'
 
 
 def main():
