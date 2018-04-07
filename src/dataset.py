@@ -41,12 +41,6 @@ class InnerDataset(Dataset):
         X = self.X.iloc[ix: ix + self.image_width, :]
         y = self.y.iloc[ix + self.image_width - 1]
 
-        # # normalize
-        # norm_factor_close = X.iloc[0].loc['adjusted_close']
-        # need_norm_colnames = ['volume', 'adjusted_close', 'sma_15', 'sma_20', 'sma_25', 'sma_30']
-        # X[need_norm_colnames] = (X[need_norm_colnames] / X[need_norm_colnames].iloc[0]) - 1
-        # y = (y / norm_factor_close) - 1
-
         # change type to numpy
         X = X.values
         y = y.values.flatten()
@@ -64,7 +58,7 @@ class IndicatorDataset(Dataset):
 
     """
 
-    def __init__(self, config, stock_names=None, label_after=1, row_len=28):
+    def __init__(self, config, stock_names=None, label_after=20, row_len=28):
         self.stocks_dir = config.stocks_dir
 
         # read only necessary stocks
@@ -108,25 +102,20 @@ class IndicatorDataset(Dataset):
             # data = scaler.transform(data)
             # self.dataset[stock_name].iloc[:, :] = data
 
-
-
             # assign fall,rise and hold labels
             # label_split_threshold = 0.27
             # label_pct = self.dataset[stock_name].copy().loc[:, 'label']
-            #
-            #
+
             # self.dataset[stock_name].loc[(label_pct <= -label_split_threshold), 'label'] = 0 # fall
             # self.dataset[stock_name].loc[(label_pct >= label_split_threshold), 'label'] = 2 # rise
             # self.dataset[stock_name].loc[((-label_split_threshold < label_pct) & (label_pct < label_split_threshold)), 'label'] = 1 # steady
-
-
 
             # set multiindex(index,date)
             self.dataset[stock_name].index = pd.MultiIndex.from_tuples(list(zip(*[indexes, dates])),
                                                                        names=['index', 'date'])
 
             # check shape
-            assert data.shape[1] == row_len
+            assert data.shape[1] == row_len + 1  # +1 for label
 
 
         # todo: fix below - below is test only
@@ -226,10 +215,10 @@ class IndicatorDataset(Dataset):
         close = dataframe['adjusted_close'].values
         volume = dataframe['volume'].values
 
-        dataframe['rsi_15'] = RSI(close, timeperiod=15)/100
-        dataframe['rsi_20'] = RSI(close, timeperiod=20)/100
-        # dataframe['rsi_25'] = RSI(close, timeperiod=25)/100
-        dataframe['rsi_30'] = RSI(close, timeperiod=30)/100
+        dataframe['rsi_15'] = RSI(close, timeperiod=15)/50 - 1
+        dataframe['rsi_20'] = RSI(close, timeperiod=20)/50 - 1
+        # dataframe['rsi_25'] = RSI(close, timeperiod=25)/50 - 1
+        dataframe['rsi_30'] = RSI(close, timeperiod=30)/50 - 1
 
         # dataframe['sma_15'] = SMA(close, timeperiod=15)
         dataframe['sma_20'] = SMA(close, timeperiod=20)
@@ -243,17 +232,17 @@ class IndicatorDataset(Dataset):
         dataframe['macd_16'], macdsignal, dataframe['macdhist_16'] = MACD(close, fastperiod=16, slowperiod=30,
                                                                           signalperiod=11)
 
-        dataframe['willR_14'] = WILLR(high, low, close, timeperiod=14)/100
-        # dataframe['willR_18'] = WILLR(high, low, close, timeperiod=18)/100
-        dataframe['willR_22'] = WILLR(high, low, close, timeperiod=22)/100
+        dataframe['willR_14'] = WILLR(high, low, close, timeperiod=14)/50 + 1
+        # dataframe['willR_18'] = WILLR(high, low, close, timeperiod=18)/50 + 1
+        dataframe['willR_22'] = WILLR(high, low, close, timeperiod=22)/50 + 1
 
-        dataframe['ultimate_osc_7'] = ULTOSC(high, low, close, timeperiod1=7, timeperiod2=14, timeperiod3=28)/100
-        # dataframe['ultimate_osc_8'] = ULTOSC(high, low, close, timeperiod1=8, timeperiod2=16, timeperiod3=32)/100
-        dataframe['ultimate_osc_9'] = ULTOSC(high, low, close, timeperiod1=9, timeperiod2=18, timeperiod3=36)/100
+        dataframe['ultimate_osc_7'] = ULTOSC(high, low, close, timeperiod1=7, timeperiod2=14, timeperiod3=28)/50 - 1
+        # dataframe['ultimate_osc_8'] = ULTOSC(high, low, close, timeperiod1=8, timeperiod2=16, timeperiod3=32)/50 - 1
+        dataframe['ultimate_osc_9'] = ULTOSC(high, low, close, timeperiod1=9, timeperiod2=18, timeperiod3=36)/50 - 1
 
-        dataframe['mfi_14'] = MFI(high, low, close, volume, timeperiod=14)/100
-        dataframe['mfi_18'] = MFI(high, low, close, volume, timeperiod=18)/100
-        dataframe['mfi_22'] = MFI(high, low, close, volume, timeperiod=22)/100
+        dataframe['mfi_14'] = MFI(high, low, close, volume, timeperiod=14)/50 - 1
+        dataframe['mfi_18'] = MFI(high, low, close, volume, timeperiod=18)/50 - 1
+        dataframe['mfi_22'] = MFI(high, low, close, volume, timeperiod=22)/50 - 1
 
         slowk, slowd = STOCH(high, low, close, fastk_period=14, slowk_period=3, slowk_matype=0, slowd_period=3,
                              slowd_matype=0)
