@@ -58,8 +58,8 @@ class IndicatorDataset(Dataset):
 
     """
 
-    def __init__(self, config, stock_names=None, label_after=20, row_len=28):
-        self.stocks_dir = config.stocks_dir
+    def __init__(self, stocks_dir, stock_names=None, label_after=20, row_len=28):
+        self.stocks_dir = stocks_dir
 
         # read only necessary stocks
         self.stocks = self._read_dir(self.stocks_dir, stock_names)
