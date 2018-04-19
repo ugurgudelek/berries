@@ -25,6 +25,7 @@ class History:
             # init for what_to_store
             for w in storage_names:
                 self.container[epoch]['train'][w] = np.array([])
+                self.container[epoch]['valid'][w] = np.array([])
 
 
     def append(self, epoch, phase, name, value):
@@ -33,7 +34,9 @@ class History:
         if name not in self.storage_names:
             raise Exception('key:{} not available in history'.format(name))
 
-        self.container[epoch][phase][name].append(value)
+        data = self.container[epoch][phase][name]
+        self.container[epoch][phase][name] = np.append(data, value)
+
 
     def set(self, epoch, phase, name, value):
         """
