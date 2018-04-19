@@ -31,19 +31,25 @@ class Estimator:
     def run_epoch(self, epoch):
 
         # Train
-        # tobecontinued...
+        toutputs , tlosses = np.array([]), np.array([])
         for i, (timage, tlabel) in enumerate(self.train_dataloader):
             timage, tlabel = Variable(timage.float()), Variable(tlabel.float())
 
             toutput, tloss = self.train_on_batch(timage, tlabel)
 
+            toutputs = np.append(toutputs, toutput.data.numpy())
+            tlosses = np.append(tlosses, tloss.data.numpy())
 
         # Validate
+        voutputs, vlosses = np.array([]), np.array([])
         for i, (vimage, vlabel) in enumerate(self.valid_dataloader):
             vimage, vlabel = Variable(vimage.float()), Variable(vlabel.float())
             voutput, vloss = self.validate_on_batch(vimage, vlabel)
 
-        return (toutput, tloss, voutput, vloss)
+            voutputs = np.append(voutputs, voutput.data.numpy())
+            vlosses = np.append(vlosses, vloss.data.numpy())
+
+        return (toutputs, tlosses.mean(), voutputs, vlosses.mean())
 
 
 
