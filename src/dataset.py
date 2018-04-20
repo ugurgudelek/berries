@@ -6,6 +6,7 @@ ugurgudelek
 finance-cnn
 """
 import torch
+from torchvision import transforms
 from torch.utils.data import Dataset
 import pandas as pd
 import numpy as np
@@ -29,10 +30,13 @@ class InnerDataset(Dataset):
 
         self.dataset = dataset
 
-        self.X = self.dataset.drop(['label'], axis=1)
+        self.X = self.dataset.drop(['label','name'], axis=1)
         self.y = self.dataset[['label']]
+        self.name = self.dataset[['name']]
 
         self.image_width = self.X.shape[1]
+
+        self.transform = transforms.Compose([transforms.ToTensor()])
 
     def __len__(self):
         return self.dataset.shape[0] - self.image_width - 1
@@ -45,8 +49,12 @@ class InnerDataset(Dataset):
         X = X.values
         y = y.values.flatten()
 
+        X = X.astype(float)
+        y = y.astype(float)
+
 
         X = np.expand_dims(X, axis=0)
+
         return (X,y)
 
     def _reshape(self, data):
@@ -118,30 +126,14 @@ class IndicatorDataset(Dataset):
             assert data.shape[1] == row_len + 1  # +1 for label
 
 
-        # todo: fix below - below is test only
-        self.dataset = self.dataset['spy']
+        # merged all stocks into one big chunk of data
+        merged = np.empty(shape=(0,data.shape[1] + 1))
+        for stock_name, stock_df in self.dataset.items():
+            stock_df['name'] = stock_name
+            merged = np.vstack((merged, stock_df.values))
 
-
-        # self.images = []
-        # # generate images
-        #
-        # for low in range(self.dataset.shape[0] - row_len):
-        #     image2d = self.dataset[low:low+row_len, :]
-        #     image2d = (image2d - image2d.mean(axis=0)) / image2d.std(axis=0)  # normalize
-        #     image1d = image2d.flatten()
-        #     self.images.append(image1d)
-
-        # self.images = np.array(self.images)
-        #
-        # self.labels = self.images[:, (row_len-1)*row_len + 1][1:]  # get label from last day's adjusted close
-        # self.images = self.images[:-1]  # drop last image cuz it does not have any label
-        #
-        # #fixme
-        # self.dataset = np.concatenate(self.images, self.labels)
-
-        # plt.plot(list(zip(*self.dataset.index.values))[1], self.dataset['adjusted_close'].values)
-        # plt.show()
-
+        col_names = self.dataset['spy'].columns
+        self.dataset = pd.DataFrame(merged, columns=col_names)
 
 
         train_len = int(self.dataset.shape[0] * 0.9)
