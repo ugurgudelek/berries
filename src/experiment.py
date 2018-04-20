@@ -22,7 +22,11 @@ from checkpoint import Checkpointer
 from estimator import Estimator
 from visualize import Visualizer
 
-from tqdm import tqdm
+#todo: add logger
+# todo: add reporter
+# todo: plot and save graph
+
+
 
 class Experiment:
     """
@@ -84,13 +88,14 @@ class Experiment:
         return experiment
 
     def do(self):
-        for epoch in tqdm(range(self.epoch, self.config.epoch_size)):
+        for epoch in range(self.epoch, self.config.epoch_size):
             # Estimate - Train & Validate
             (toutputs, tloss, voutputs, vloss) = self.estimator.run_epoch(epoch)
             # Visualize
             self.visualizer.append_data('tloss', tloss)
             self.visualizer.append_data('vloss', vloss)
             self.visualizer.visualize()
+            self.visualizer.report()
             # Save
             self.history.append(epoch=epoch, phase='train', name='loss', value=tloss)
             self.history.append(epoch=epoch, phase='valid', name='loss', value=vloss)
