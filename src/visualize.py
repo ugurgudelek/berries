@@ -34,6 +34,10 @@ class Visualizer:
         plt.pause(0.01)
         self.fig.canvas.draw()
 
+    def report(self):
+        for key,value in self.container.items():
+            print('key:{} - value:{}'.format(key, value))
+
 
 def display_errors(history):
 
