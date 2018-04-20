@@ -15,7 +15,12 @@ class Config:
 
     def __init__(self):
         self.stocks_dir = '../input/raw_data'
-        self.stock_names = ['spy']
+        self.stock_names = ['dia','ewa','ewc','ewg',
+                            'ewh','ewj','eww','spy',
+                            'xlb','xle','xlf','xli',
+                            'xlk','xlp','xlu','xlv','xly']
+
+        # self.stock_names = ['spy']
         self.label_after = 20
 
         self.input_size = 28
@@ -23,8 +28,8 @@ class Config:
         self.num_layers = 1
         self.out_size = 1
 
-        self.train_batch_size = 100
-        self.valid_batch_size = 100
+        self.train_batch_size = 1000
+        self.valid_batch_size = 1000
 
         self.train_shuffle = True
         self.valid_shuffle = False
