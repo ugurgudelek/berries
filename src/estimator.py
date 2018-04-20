@@ -4,7 +4,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 
 from torch.autograd import Variable
-
+from tqdm import tqdm
 import numpy as np
 class Estimator:
     """
@@ -32,7 +32,7 @@ class Estimator:
 
         # Train
         toutputs , tlosses = np.array([]), np.array([])
-        for i, (timage, tlabel) in enumerate(self.train_dataloader):
+        for i, (timage, tlabel) in tqdm(enumerate(self.train_dataloader)):
             timage, tlabel = Variable(timage.float()), Variable(tlabel.float())
 
             toutput, tloss = self.train_on_batch(timage, tlabel)
