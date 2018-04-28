@@ -18,13 +18,35 @@ import matplotlib.pyplot as plt
 import torch.nn.functional as F
 
 from history import History
-from checkpoint import Checkpointer
+from checkpoint import Checkpoint
 from estimator import Estimator
 from visualize import Visualizer
+
+from loaddataset import LoadFullDataset
 
 #todo: add logger
 # todo: add reporter
 # todo: plot and save graph
+
+# import torch
+# from torch.autograd import Variable
+# from torch import nn
+# from torch.utils.data import DataLoader
+# from torch import optim
+#
+# import pandas as pd
+# import numpy as np
+# import matplotlib.pyplot as plt
+# import time
+# import os
+# import dill  # dill extends python’s pickle module for serializing and de-serializing python objects
+# import shutil  # high level os functionality
+#
+# import gc
+#
+# from collections import defaultdict
+
+# if we seed random func, they will generate same output everytime.
 
 
 
@@ -32,76 +54,86 @@ class Experiment:
     """
 
     """
-    def __init__(self, config, dataset, estimator, experiment_dir, history, checkpointer, visualizer, epoch):
+    def __init__(self, config, dataset, estimator, history, visualizer, epoch):
         self.config = config
         self.dataset = dataset
         self.estimator = estimator
-        self.experiment_dir = experiment_dir
         self.history = history
-        self.checkpointer = checkpointer
         self.visualizer = visualizer
         self.epoch = epoch
 
+        if config.RANDOM_SEED is not None:
+            torch.manual_seed(config.RANDOM_SEED)
+            np.random.seed(config.RANDOM_SEED)
+
     @classmethod
-    def start_over(cls):
-        config = Config()
-        dataset = IndicatorDataset(stocks_dir=config.stocks_dir, stock_names=config.stock_names,
-                                   label_after=config.label_after)
+    def start_over(cls, config):
+
+        dataset = LoadFullDataset(csv_path=config.INPUT_PATH,
+                                  train_valid_ratio=config.TRAIN_VALID_RATIO,
+                                  train_day=config.TRAIN_DAY,
+                                  seq_length=config.SEQ_LENGTH)
+
         estimator = Estimator(dataset=dataset,
-                              model_config={'input_size': config.input_size,
-                                            'seq_length': config.seq_length,
-                                            'num_layers': config.num_layers,
-                                            'out_size': config.out_size},
-                              dataloader_config={'train_batch_size': config.train_batch_size,
-                                                 'train_shuffle': config.train_shuffle,
-                                                 'valid_batch_size': config.valid_batch_size,
-                                                 'valid_shuffle': config.valid_shuffle})
+                              model_config={'input_size': config.INPUT_SIZE,
+                                            'seq_length': config.SEQ_LENGTH,
+                                            'num_layers': config.NUM_LAYERS,
+                                            'out_size': config.OUTPUT_SIZE},
+                              dataloader_config={'train_batch_size': config.TRAIN_BATCH_SIZE,
+                                                 'train_shuffle': config.TRAIN_SHUFFLE,
+                                                 'valid_batch_size': config.VALID_BATCH_SIZE,
+                                                 'valid_shuffle': config.VALID_SHUFFLE})
 
-        # todo: fix below
-        experiment_dir = '../experiment/2'
 
-        history = History(config.epoch_size, config.storage_names)
-        checkpointer = Checkpointer(experiment_dir=experiment_dir)
+        history = History(config.EPOCH_SIZE, config.STORAGE_NAMES)
         visualizer = Visualizer()
 
         epoch = 0
 
-        return Experiment(config, dataset, estimator, experiment_dir, history, checkpointer, visualizer, epoch)
+        return Experiment(config, dataset, estimator, history, visualizer, epoch)
 
     @classmethod
-    def resume(self, experiment_path):
-        ckpt_path = Checkpointer.get_latest_checkpoint(experiment_path)
+    def resume(self, experiment_path, config):
+        ckpt_path = Checkpoint.get_latest_checkpoint(experiment_path)
 
-        (model, optimizer, epoch, history) = Checkpointer.load(ckpt_path)
+        ckpt = Checkpoint.load(ckpt_path)
 
-        experiment = Experiment.start_over()
 
-        experiment.estimator.model = model
-        experiment.estimator.optimizer = optimizer
-        experiment.epoch = epoch
-        experiment.history = history
+        experiment = Experiment.start_over(config)
+
+        experiment.estimator.model = ckpt.model
+        experiment.estimator.optimizer = ckpt.optimizer
+        experiment.epoch = ckpt.epoch + 1
+        experiment.history = ckpt.history
 
         # todo: improve with more proper way
-        experiment.visualizer.container['tloss'] = experiment.history.container[epoch]['train']['loss']
-        experiment.visualizer.container['vloss'] = experiment.history.container[epoch]['valid']['loss']
+        # experiment.visualizer.container['tloss'] = experiment.history.container[epoch]['train']['loss']
+        # experiment.visualizer.container['vloss'] = experiment.history.container[epoch]['valid']['loss']
 
         return experiment
 
     def do(self):
-        for epoch in range(self.epoch, self.config.epoch_size):
+        for self.epoch in range(self.epoch, self.config.EPOCH_SIZE):
+            print('epoch : {}'.format(self.epoch))
+
             # Estimate - Train & Validate
-            (toutputs, tloss, voutputs, vloss) = self.estimator.run_epoch(epoch)
+            (toutputs, tloss, voutputs, vloss) = self.estimator.run_epoch(self.epoch)
+
+            # Checkpoint
+            Checkpoint(model=self.estimator.model, optimizer=self.estimator.optimizer,
+                       epoch=self.epoch, history=self.history,
+                       experiment_dir=self.config.EXPERIMENT_DIR).save()
+
             # Visualize
             self.visualizer.append_data('tloss', tloss)
             self.visualizer.append_data('vloss', vloss)
-            self.visualizer.visualize()
+            self.visualizer.visualize(self.epoch)
             self.visualizer.report()
+
+            # todo: do we need this really? not sure.
             # Save
-            self.history.append(epoch=epoch, phase='train', name='loss', value=tloss)
-            self.history.append(epoch=epoch, phase='valid', name='loss', value=vloss)
-            # Checkpoint
-            self.checkpointer.save(epoch=epoch, model=self.estimator.model,
-                              optimizer=self.estimator.optimizer, history=self.history)
+            # self.history.append(epoch=epoch, phase='train', name='loss', value=tloss)
+            # self.history.append(epoch=epoch, phase='valid', name='loss', value=vloss)
 
 
 
@@ -109,6 +141,19 @@ class Experiment:
 
 
 
-experiment = Experiment.start_over()
-# experiment = Experiment.resume('../experiment/2')
+
+config = Config()
+# experiment = Experiment.start_over(config)
+experiment = Experiment.resume(config.EXPERIMENT_DIR, config)
 experiment.do()
+
+
+# config = Config()
+#
+# estimator = LoadEstimator(config=config, resume=config.RESUME)
+#
+# if config.RESUME:
+#     res_dict = estimator.test()
+#     print()
+# else:
+#     estimator.train(epoch_size=config.EPOCH_SIZE)
