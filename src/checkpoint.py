@@ -4,29 +4,31 @@ import time
 import torch
 
 
-class Checkpointer:
+class Checkpoint:
+    """
+    #     Args:
+    #
+    #         model (LoadLSTM): loadmodel
+    #         optimizer (optim): stores the state of the optimizer
+    #         epoch (int): current epoch (an epoch is a loop through the full training data)
+    #         history
+    #         experiment_dir
+    #         # step (int): number of examples seen within the current epoch
+    #         # input (np.array):
+    #         # output (np.array):
+    """
 
-    def __init__(self, experiment_dir):
-        """
-        
-        Args:
-            experiment_dir: 
-        """""
+    def __init__(self, model, optimizer, epoch, history, experiment_dir):
 
+        self.model = model
+        self.optimizer = optimizer
+        self.epoch = epoch
+        self.history = history
         self.experiment_dir = experiment_dir
 
-    def save(self, epoch, model, optimizer, history):
-        """
 
-        Args:
-            epoch:
-            model:
-            optimizer:
-            history:
+    def save(self):
 
-        Returns:
-
-        """
 
         date_time = time.strftime('%Y_%m_%d_%H_%M_%S', time.localtime())
 
@@ -40,12 +42,12 @@ class Checkpointer:
         os.makedirs(save_path)
 
         # SAVE
-        torch.save({'epoch': epoch,
-                    'optimizer': optimizer,
-                    'history': history},
+        torch.save({'epoch': self.epoch,
+                    'optimizer': self.optimizer,
+                    'history': self.history},
                    os.path.join(save_path, 'optimizer_epoch_history.pt'))
 
-        torch.save(model, os.path.join(save_path, 'model.pt'))
+        torch.save(self.model, os.path.join(save_path, 'model.pt'))
 
         # with open(os.path.join(subdir_path, self.INPUT_FILE), 'wb') as fout:
         #     dill.dump(self.input, fout)
@@ -72,10 +74,14 @@ class Checkpointer:
         # with open(os.path.join(path, cls.OUTPUT_FILE), 'rb') as fin:
         #     output = dill.load(fin)
 
-        return (model,
-                resume_checkpoint['optimizer'],
-                resume_checkpoint['epoch'],
-                resume_checkpoint['history'])
+
+
+        return Checkpoint(model=model,
+                          optimizer=resume_checkpoint['optimizer'],
+                          epoch=resume_checkpoint['epoch'],
+                          history=resume_checkpoint['history'],
+                          experiment_dir=path
+                          )
 
     @classmethod
     def get_latest_checkpoint(cls, experiment_path):
