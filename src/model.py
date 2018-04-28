@@ -75,7 +75,7 @@ class LSTM(nn.Module):
                             bidirectional=False)
 
         self.fc = nn.Sequential(
-            nn.Linear(in_features=self.input_size, out_features=10),
+            nn.Linear(in_features=self.seq_length, out_features=10),
             nn.ReLU(inplace=True),
             nn.Linear(in_features=10, out_features=self.out_size)
         )
@@ -208,3 +208,70 @@ class decoder(nn.Module):
 
     def init_hidden(self, x):
         return Variable(x.data.new(1, x.size(0), self.decoder_hidden_size).zero_())
+
+
+class LoadLSTM(nn.Module):
+    """
+        Long-short term memory implementation for LoadDataset
+
+        Args:
+            input_size:
+            seq_length:
+            num_layers:
+
+        Attributes:
+            input_size:
+            seq_length:
+            num_layers:
+            lstm:
+            hidden:
+    """
+
+    def __init__(self, input_size, seq_length, num_layers, batch_size):
+        super(LoadLSTM, self).__init__()
+        self.input_size = input_size
+        self.seq_length = seq_length
+        self.num_layers = num_layers
+        self.batch_size = batch_size
+
+        # Inputs: input, (h_0,c_0)
+        #   input(seq_len, batch, input_size)
+        #   h_0(num_layers * num_directions, batch, hidden_size)
+        #   c_0(num_layers * num_directions, batch, hidden_size)
+        #   Note:If (h_0, c_0) is not provided, both h_0 and c_0 default to zero.
+        # Outputs: output, (h_n, c_n)
+        #   output (seq_len, batch, hidden_size * num_directions)
+        #   h_n (num_layers * num_directions, batch, hidden_size)
+        #   c_n (num_layers * num_directions, batch, hidden_size)
+        self.lstm = nn.LSTM(input_size=self.input_size,
+                            hidden_size=self.seq_length,
+                            num_layers=self.num_layers)
+
+        self.hidden = self.init_hidden()
+
+    def init_hidden(self):
+        """
+
+        Returns:
+            (Variable,Variable): (h_0, c_0)
+
+        """
+        # (num_layers, batch, hidden_dim)
+        return (Variable(torch.zeros(self.num_layers, 1, self.seq_length)),  # h_0
+                Variable(torch.zeros(self.num_layers, 1, self.seq_length)))  # c_0
+
+    def forward(self, x):
+        """
+
+        Args:
+            x:
+
+        Returns:
+            (?,?)
+        """
+        # Reshape input
+        # x shape: (seq_len, batch, input_size)
+        # hidden shape:(num_layers * num_directions,batch_size, hidden_size)
+        x = x.view(self.seq_length, -1, self.input_size)
+        lstm_out, self.hidden = self.lstm(x, self.hidden)
+        return lstm_out
