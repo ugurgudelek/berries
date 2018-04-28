@@ -6,7 +6,7 @@ ugurgudelek
 finance-cnn
 """
 
-
+# todo: make config an external txt file
 
 class Config:
     """
@@ -14,33 +14,61 @@ class Config:
     """
 
     def __init__(self):
-        self.stocks_dir = '../input/raw_data'
-        self.stock_names = ['dia','ewa','ewc','ewg',
-                            'ewh','ewj','eww','spy',
-                            'xlb','xle','xlf','xli',
-                            'xlk','xlp','xlu','xlv','xly']
+        """
 
-        # self.stock_names = ['spy']
-        self.label_after = 20
+        """
+        self.EPOCH_SIZE = 40
+        self.SEQ_LENGTH = 96
+        self.NUM_LAYERS = 1
+        self.INPUT_SIZE = 5
+        self.OUTPUT_SIZE = 1
 
-        self.input_size = 28
-        self.seq_length = 28
-        self.num_layers = 1
-        self.out_size = 1
-
-        self.train_batch_size = 1000
-        self.valid_batch_size = 1000
-
-        self.train_shuffle = True
-        self.valid_shuffle = False
-
-        self.epoch_size = 20
-        self.storage_names = ['y_hat', 'loss', 'y']
+        self.TRAIN_VALID_RATIO = 0.95
+        self.TRAIN_BATCH_SIZE = 100
+        self.VALID_BATCH_SIZE = 100
+        self.TRAIN_SHUFFLE = True
+        self.VALID_SHUFFLE = False
 
 
-def main():
-    pass
+        # self.INPUT_PATH = '../dataset/energy/load_wo_feb29.csv'
+        self.INPUT_PATH = '../dataset/energy/sample_load.csv'
+        self.EXPERIMENT_DIR = '../experiment/load_wo_feb29_15min'
+        self.RANDOM_SEED = 7
+
+        # self.TRAIN_DAY = 2700  # 2700 days * 96 quarter out of 2922 days
+        self.TRAIN_DAY = 24
+
+        self.STORAGE_NAMES = ['y_hat', 'loss', 'y']
+
+        self.RESUME = False
+
+# class Config:
+#     """
+#
+#     """
+#
+#     def __init__(self):
+#         self.stocks_dir = '../input/raw_data'
+#         self.stock_names = ['dia','ewa','ewc','ewg',
+#                             'ewh','ewj','eww','spy',
+#                             'xlb','xle','xlf','xli',
+#                             'xlk','xlp','xlu','xlv','xly']
+#
+#         # self.stock_names = ['spy']
+#         self.label_after = 20
+#
+#         self.input_size = 28
+#         self.seq_length = 28
+#         self.num_layers = 1
+#         self.out_size = 1
+#
+#         self.train_batch_size = 1000
+#         self.valid_batch_size = 1000
+#
+#         self.train_shuffle = True
+#         self.valid_shuffle = False
+#
+#         self.epoch_size = 20
+#         self.storage_names = ['y_hat', 'loss', 'y']
 
 
-if __name__ == "__main__":
-    main()
