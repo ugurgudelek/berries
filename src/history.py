@@ -1,4 +1,3 @@
-
 from collections import defaultdict
 import numpy as np
 
@@ -53,4 +52,19 @@ class History:
             raise Exception('key:{} not available in history'.format(name))
 
         return self.container[epoch][phase][name]
+
+#    def last(self, label):
+#         """
+#
+#         Args:
+#             label:
+#
+#         Returns:
+#         Raises: KeyError
+#         """
+#         arr = self.container[label]
+#         if len(arr) == 0:
+#             return np.inf
+#
+#         return arr[-1]
 
