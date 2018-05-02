@@ -4,6 +4,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 
 from torch.autograd import Variable
+from torch import FloatTensor
 import numpy as np
 
 
@@ -200,10 +201,12 @@ class Estimator:
         self.model = LSTM(input_size=model_config['input_size'],
                           seq_length=model_config['seq_length'],
                           num_layers=model_config['num_layers'],
-                          out_size=model_config['out_size'])
+                          out_size=model_config['out_size'],
+                          batch_size=model_config['batch_size'])
         self.criterion = nn.MSELoss()
         self.optimizer = optim.Adam(self.model.parameters(), lr=0.0005)
 
+        self.dataset = dataset
         self.train_dataloader = DataLoader(dataset.train_dataset,
                                            batch_size=dataloader_config['train_batch_size'],
                                            shuffle=dataloader_config['train_shuffle'],
@@ -223,8 +226,9 @@ class Estimator:
 
             toutput, tloss = self.train_on_batch(tX, ty)
 
-            toutputs = np.append(toutputs, toutput.data.numpy())
-            tlosses = np.append(tlosses, tloss.data.numpy())
+            toutputs = np.concatenate((toutputs, toutput.data.numpy()),
+                                      axis=0) if toutputs.size else toutput.data.numpy()
+            tlosses = np.concatenate((tlosses, tloss.data.numpy()), axis=0) if tlosses.size else tloss.data.numpy()
 
         epoch_training_loss = tlosses.mean()
 
@@ -234,8 +238,8 @@ class Estimator:
             vX, vy = Variable(vX.float(), requires_grad=False), Variable(vy.float(), requires_grad=False)
             voutput, vloss = self.validate_on_batch(vX, vy)
 
-            voutputs = np.append(voutputs, voutput.data.numpy())
-            vlosses = np.append(vlosses, vloss.data.numpy())
+            voutputs = np.concatenate((voutputs, voutput.data.numpy()), axis=0) if voutputs.size else voutput.data.numpy()
+            vlosses = np.concatenate((vlosses, vloss.data.numpy()), axis=0) if vlosses.size else vloss.data.numpy()
 
         epoch_validation_loss = vlosses.mean()
 
@@ -246,7 +250,7 @@ class Estimator:
 
         # forward + backward + optimize
         self.model.hidden = self.model.init_hidden()  # detach history of initial hidden
-        output = self.model.forward(Xs)
+        output = self.model(Xs)
         loss = self.criterion(output, ys)
         loss.backward(retain_graph=True)
         self.optimizer.step()
@@ -265,9 +269,11 @@ class Estimator:
     def predict(self, Xs):
         self.model.eval()
 
-        output, loss = self.model.forward(Xs)
+        # self.model.hidden = self.model.init_hidden()
+        pX = Variable(FloatTensor(Xs), requires_grad=False)
+        output = self.model(pX)
 
         self.model.train()
 
-        return output
+        return output.data.numpy()
 
