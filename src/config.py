@@ -17,15 +17,15 @@ class Config:
         """
 
         """
-        self.EPOCH_SIZE = 40
+        self.EPOCH_SIZE = 400
         self.SEQ_LENGTH = 96
         self.NUM_LAYERS = 1
         self.INPUT_SIZE = 5
-        self.OUTPUT_SIZE = 1
+        self.OUTPUT_SIZE = 96
 
-        self.TRAIN_VALID_RATIO = 0.95
-        self.TRAIN_BATCH_SIZE = 100
-        self.VALID_BATCH_SIZE = 100
+        self.TRAIN_VALID_RATIO = 0.90
+        self.TRAIN_BATCH_SIZE = 6
+        self.VALID_BATCH_SIZE = 6
         self.TRAIN_SHUFFLE = True
         self.VALID_SHUFFLE = False
 
@@ -36,7 +36,7 @@ class Config:
         self.RANDOM_SEED = 7
 
         # self.TRAIN_DAY = 2700  # 2700 days * 96 quarter out of 2922 days
-        self.TRAIN_DAY = 24
+        self.TRAIN_DAY = 20
 
         self.STORAGE_NAMES = ['y_hat', 'loss', 'y']
 
