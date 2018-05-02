@@ -78,7 +78,8 @@ class Experiment:
                               model_config={'input_size': config.INPUT_SIZE,
                                             'seq_length': config.SEQ_LENGTH,
                                             'num_layers': config.NUM_LAYERS,
-                                            'out_size': config.OUTPUT_SIZE},
+                                            'out_size': config.OUTPUT_SIZE,
+                                            'batch_size': config.TRAIN_BATCH_SIZE},
                               dataloader_config={'train_batch_size': config.TRAIN_BATCH_SIZE,
                                                  'train_shuffle': config.TRAIN_SHUFFLE,
                                                  'valid_batch_size': config.VALID_BATCH_SIZE,
@@ -113,11 +114,29 @@ class Experiment:
         return experiment
 
     def do(self):
+
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1)
+        plt.show(block=False)
         for self.epoch in range(self.epoch, self.config.EPOCH_SIZE):
             print('epoch : {}'.format(self.epoch))
 
             # Estimate - Train & Validate
             (toutputs, tloss, voutputs, vloss) = self.estimator.run_epoch(self.epoch)
+
+            # Sample Predict
+            px = self.estimator.dataset.train_dataset.__getitem__(0)[0]
+            prediction = self.estimator.predict(px)
+
+
+            ax.clear()
+            plt.plot(px[:,0], label='real')
+            plt.plot(prediction[:,0], label='pred')
+            plt.legend()
+            plt.suptitle('Epoch : {} -- Loss: {}'.format(self.epoch, tloss))
+            plt.legend()
+            plt.pause(1)
+            fig.canvas.draw()
 
             # Checkpoint
             Checkpoint(model=self.estimator.model, optimizer=self.estimator.optimizer,
@@ -125,10 +144,10 @@ class Experiment:
                        experiment_dir=self.config.EXPERIMENT_DIR).save()
 
             # Visualize
-            self.visualizer.append_data('tloss', tloss)
-            self.visualizer.append_data('vloss', vloss)
-            self.visualizer.visualize(self.epoch)
-            self.visualizer.report()
+            # self.visualizer.append_data('tloss', tloss)
+            # self.visualizer.append_data('vloss', vloss)
+            # self.visualizer.visualize(self.epoch)
+            # self.visualizer.report()
 
             # todo: do we need this really? not sure.
             # Save
@@ -143,10 +162,11 @@ class Experiment:
 
 
 config = Config()
-# experiment = Experiment.start_over(config)
-experiment = Experiment.resume(config.EXPERIMENT_DIR, config)
+experiment = Experiment.start_over(config)
+# experiment = Experiment.resume(config.EXPERIMENT_DIR, config)
 experiment.do()
-
+print()
+# experiment.estimator.dataset.train_dataset.__getitem__()
 
 # config = Config()
 #

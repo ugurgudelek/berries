@@ -15,12 +15,12 @@ class Visualizer:
         self.container['tloss'] = np.array([])
         self.container['vloss'] = np.array([])
 
-        self.fig = plt.figure()
-        self.ax = self.fig.add_subplot(1, 1, 1)
+        # self.fig = plt.figure()
+        # self.ax = self.fig.add_subplot(1, 1, 1)
         # todo- fix xlim. 28.04.2018
-        plt.xlim((0,50))
-        plt.ylim((0,1))
-        plt.show(block=False)
+        # plt.xlim((0,50))
+        # plt.ylim((0,1))
+        # plt.show(block=False)
 
 
 

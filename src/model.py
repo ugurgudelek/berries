@@ -49,13 +49,14 @@ class LSTM(nn.Module):
     """
 
     """
-    def __init__(self, input_size, seq_length, num_layers, out_size):
+    def __init__(self, input_size, seq_length, num_layers, out_size, batch_size):
         super(LSTM, self).__init__()
 
         self.input_size = input_size
         self.seq_length = seq_length
         self.num_layers = num_layers
         self.out_size = out_size
+        self.batch_size = batch_size
 
         # Inputs: input, (h_0,c_0)
         #   input(seq_len, batch, input_size)
@@ -67,7 +68,7 @@ class LSTM(nn.Module):
         #   h_n (num_layers * num_directions, batch, hidden_size)
         #   c_n (num_layers * num_directions, batch, hidden_size)
         self.lstm = nn.LSTM(input_size=self.input_size,
-                            hidden_size=self.seq_length,
+                            hidden_size=10,
                             num_layers=self.num_layers,
                             bias=True,
                             batch_first=False,
@@ -75,12 +76,13 @@ class LSTM(nn.Module):
                             bidirectional=False)
 
         self.fc = nn.Sequential(
-            nn.Linear(in_features=self.seq_length, out_features=10),
+            nn.Linear(in_features=self.seq_length, out_features=100),
             nn.ReLU(inplace=True),
-            nn.Linear(in_features=10, out_features=self.out_size)
+            nn.Linear(in_features=100, out_features=self.out_size)
         )
 
         self.hidden = self.init_hidden()
+
     def init_hidden(self):
         """
 
@@ -88,22 +90,31 @@ class LSTM(nn.Module):
             (Variable,Variable): (h_0, c_0)
 
         """
-        return (Variable(torch.zeros(self.num_layers, 1, self.seq_length)),  # h_0
-                Variable(torch.zeros(self.num_layers, 1, self.seq_length)))  # c_0
+        return (Variable(torch.zeros(self.num_layers, self.batch_size, 10)),  # h_0
+                Variable(torch.zeros(self.num_layers, self.batch_size, 10)))  # c_0
+
+    def init_hidden_2(self, bsz):
+        weight = next(self.parameters()).data
+        a = weight.new(self.num_layers, bsz, 1).normal_(-1, 1)
+        b = weight.new(self.num_layers, bsz, 10 - 1).zero_()
+        return Variable(torch.cat([a, b], 2))
 
     def forward(self, x):
 
         # Reshape input
         # x shape: (seq_len, batch, input_size)
         # hidden shape:(num_layers * num_directions,batch_size, hidden_size)
+
         x = x.view(self.seq_length, -1, self.input_size)
         lstm_out, self.hidden = self.lstm(x, self.hidden)
 
-        fc_out = self.fc(lstm_out[-1])
+        # fc_out = self.fc(lstm_out[-1])
 
         # output = fc_out.data.numpy().argmax(axis=1)
-        return fc_out
+        # return fc_out
 
+        # return all sequence, all batches, only last hidden
+        return lstm_out[:, :, -1]
 
 # ## A Dual-Stage Attention-Based Recurrent Neural Network for Time Series Prediction
 # source: https://arxiv.org/pdf/1704.02971.pdf

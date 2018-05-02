@@ -129,7 +129,7 @@ class LoadDataset(torch.utils.data.Dataset):
             int: data count
 
         """
-        return self.X.shape[0] - self.seq_length
+        return self.X.shape[0] - self.seq_length*2
 
     def __getitem__(self, ix):
         """
@@ -143,4 +143,4 @@ class LoadDataset(torch.utils.data.Dataset):
         """
         # (row, seq_len, input_size)
         # return self.X[ix, :, :], self.y[ix, :]
-        return self.X[ix:ix + self.seq_length, :], self.y[ix + self.seq_length - 1]
+        return self.X[ix:ix + self.seq_length, :], self.y[ix + self.seq_length-1: ix + self.seq_length*2-1]
