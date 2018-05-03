@@ -2,10 +2,28 @@ import pandas as pd
 import torch
 import numpy as np
 
-
+import warnings
 class LoadFullDataset():
-    def __init__(self, csv_path, train_valid_ratio=0.9, train_day=None, seq_length=96) -> None:
-        self.dataset_values = pd.read_csv(csv_path).loc[:, 'actual'].values
+    def __init__(self, csv_path, train_valid_ratio=0.9, train_day=None, valid_day=None, seq_length=96) -> None:
+
+        # date,from,to,actual,forecast
+        self.raw_dataset = pd.read_csv(csv_path)
+        self.raw_dataset['date'] = self.raw_dataset['date'].astype('datetime64[ns]')
+
+        # parse date
+        # self.raw_dataset['date'] = self.raw_dataset.apply(
+        #     lambda row: pd.to_datetime(row['date'], format='%Y-%m-%d %H:%M:%S'), axis=1)
+
+        # (years, months, weeks, days) = zip(*self.raw_dataset['date'].apply(lambda x: (x.year, x.month, x.week, x.day)))
+
+        years = self.raw_dataset['date'].dt.year.values
+        months = self.raw_dataset['date'].dt.month.values
+        weeks = self.raw_dataset['date'].dt.weekofyear.values
+        days = self.raw_dataset['date'].dt.day.values
+
+        self.dataset = self.raw_dataset.loc[:, 'actual'].values
+
+        self.dataset = np.stack((self.dataset, days, weeks, months, years), axis=1)
 
         # 1 Jan	Mon	New Year's Day	National
         # 30 Mar	Fri	Good Friday	National
@@ -26,22 +44,22 @@ class LoadFullDataset():
         # 1 Nov	Thu	All Saints' Day	BW, BY, NW, RP & SL
         # 21 Nov	Wed	Repentance Day	SN
 
-        dataset_len = self.dataset_values.shape[0]
+        dataset_len = self.dataset.shape[0]
 
         # === CREATE PERIODIC SIGNALS
-        daycount = self.dataset_values.shape[0] // seq_length
-        self.dataset_values = self.dataset_values[:daycount * seq_length]  # remove uncomplete days
+        daycount = self.dataset.shape[0] // seq_length
+        self.dataset = self.dataset[:daycount * seq_length]  # remove uncomplete days
 
-        def create_period_signal(freq, Fs):
-            t = np.arange(Fs)
-            return np.sin(2 * np.pi * freq * t / Fs)
-
-        p_day = create_period_signal(daycount * seq_length / 96, daycount * seq_length)
-        p_week = create_period_signal(daycount * seq_length / (96 * 7), daycount * seq_length)
-        p_month = create_period_signal(daycount * seq_length / (96 * 30), daycount * seq_length)
-        p_year = create_period_signal(daycount * seq_length / (96 * 365), daycount * seq_length)
-
-        self.dataset_values = np.stack((self.dataset_values, p_day, p_week, p_month, p_year), axis=1)
+        # def create_period_signal(freq, Fs):
+        #     t = np.arange(Fs)
+        #     return np.sin(2 * np.pi * freq * t / Fs)
+        #
+        # p_day = create_period_signal(daycount * seq_length / 96, daycount * seq_length)
+        # p_week = create_period_signal(daycount * seq_length / (96 * 7), daycount * seq_length)
+        # p_month = create_period_signal(daycount * seq_length / (96 * 30), daycount * seq_length)
+        # p_year = create_period_signal(daycount * seq_length / (96 * 365), daycount * seq_length)
+        #
+        # self.dataset = np.stack((self.dataset, p_day, p_week, p_month, p_year), axis=1)
 
         # TODO: fix reshape to estimate quarters. seq_length should be added in forwward pass
         # self.dataset_values = np.reshape(self.dataset_values, (-1, seq_length, 5))
@@ -49,7 +67,9 @@ class LoadFullDataset():
         # SPLIT TRAIN & VALID
         if train_day is None:
             train_day = int(daycount * train_valid_ratio)
-        valid_day = daycount - train_day
+
+        if valid_day is None:
+            valid_day = daycount - train_day
 
         train_len = train_day * seq_length
         valid_len = valid_day * seq_length
@@ -57,11 +77,18 @@ class LoadFullDataset():
         # train_values = self.dataset_values[:train_len, :, :]
         # valid_values = self.dataset_values[train_len:, :, :]
 
-        train_values = self.dataset_values[:train_len, :]
-        valid_values = self.dataset_values[train_len:, :]
+        missing_day_amount = ((train_len + valid_len) - self.dataset.shape[0]) / seq_length
+        if missing_day_amount != 0:
+            warnings.warn('{} day data is missing for validation'.format(missing_day_amount), UserWarning)
+
+
+        train_values = self.dataset[:train_len, :]
+        valid_values = self.dataset[train_len:train_len+valid_len, :]
 
         self.train_dataset = LoadDataset(train_values, seq_length=seq_length)
         self.valid_dataset = LoadDataset(valid_values, seq_length=seq_length)
+
+
 
 
 class LoadDataset(torch.utils.data.Dataset):
@@ -97,6 +124,10 @@ class LoadDataset(torch.utils.data.Dataset):
 
         self.y = self.dataset[1:, 0]
         self.X = self.dataset[:-1, :]
+
+    def get_sample(self):
+        ix = np.random.randint(low=0, high=self.__len__())
+        return self.__getitem__(ix=ix)
 
     def normalize(self, arr):
         """

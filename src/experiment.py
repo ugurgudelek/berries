@@ -54,7 +54,7 @@ class Experiment:
     """
 
     """
-    def __init__(self, config, dataset, estimator, history, visualizer, epoch):
+    def __init__(self, config, dataset:LoadFullDataset, estimator, history, visualizer, epoch):
         self.config = config
         self.dataset = dataset
         self.estimator = estimator
@@ -72,6 +72,7 @@ class Experiment:
         dataset = LoadFullDataset(csv_path=config.INPUT_PATH,
                                   train_valid_ratio=config.TRAIN_VALID_RATIO,
                                   train_day=config.TRAIN_DAY,
+                                  valid_day=config.VALID_DAY,
                                   seq_length=config.SEQ_LENGTH)
 
         estimator = Estimator(dataset=dataset,
@@ -125,13 +126,13 @@ class Experiment:
             (toutputs, tloss, voutputs, vloss) = self.estimator.run_epoch(self.epoch)
 
             # Sample Predict
-            px = self.estimator.dataset.train_dataset.__getitem__(0)[0]
-            prediction = self.estimator.predict(px)
+            pX, py = self.estimator.dataset.train_dataset.get_sample()
+            prediction = self.estimator.predict(pX)
 
 
             ax.clear()
-            plt.plot(px[:,0], label='real')
-            plt.plot(prediction[:,0], label='pred')
+            plt.plot(py, label='real')
+            plt.plot(prediction[:, 0], label='pred')
             plt.legend()
             plt.suptitle('Epoch : {} -- Loss: {}'.format(self.epoch, tloss))
             plt.legend()
@@ -165,6 +166,7 @@ config = Config()
 experiment = Experiment.start_over(config)
 # experiment = Experiment.resume(config.EXPERIMENT_DIR, config)
 experiment.do()
+sample = experiment.dataset.train_dataset.get_sample()
 print()
 # experiment.estimator.dataset.train_dataset.__getitem__()
 

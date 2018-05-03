@@ -83,15 +83,17 @@ class LSTM(nn.Module):
 
         self.hidden = self.init_hidden()
 
-    def init_hidden(self):
+    def init_hidden(self, batch_size=None):
         """
 
         Returns:
             (Variable,Variable): (h_0, c_0)
 
         """
-        return (Variable(torch.zeros(self.num_layers, self.batch_size, 10)),  # h_0
-                Variable(torch.zeros(self.num_layers, self.batch_size, 10)))  # c_0
+        if batch_size is None:
+            batch_size = self.batch_size
+        return (Variable(torch.zeros(self.num_layers, batch_size, 10)),  # h_0
+                Variable(torch.zeros(self.num_layers, batch_size, 10)))  # c_0
 
     def init_hidden_2(self, bsz):
         weight = next(self.parameters()).data
