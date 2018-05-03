@@ -32,11 +32,12 @@ class Config:
 
         # self.INPUT_PATH = '../dataset/energy/load_wo_feb29.csv'
         self.INPUT_PATH = '../dataset/energy/sample_load.csv'
-        self.EXPERIMENT_DIR = '../experiment/load_wo_feb29_15min'
+        self.EXPERIMENT_DIR = '../experiment/load_sample'
         self.RANDOM_SEED = 7
 
         # self.TRAIN_DAY = 2700  # 2700 days * 96 quarter out of 2922 days
         self.TRAIN_DAY = 20
+        self.VALID_DAY = 10
 
         self.STORAGE_NAMES = ['y_hat', 'loss', 'y']
 
