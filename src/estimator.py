@@ -1,4 +1,5 @@
 from model import CNN, LSTM
+import torch
 from torch import nn
 from torch import optim
 from torch.utils.data import DataLoader
@@ -6,6 +7,9 @@ from torch.utils.data import DataLoader
 from torch.autograd import Variable
 from torch import FloatTensor
 import numpy as np
+
+
+from tensorboardX import SummaryWriter
 
 
 # class LoadEstimator:
@@ -216,6 +220,12 @@ class Estimator:
                                            shuffle=dataloader_config['valid_shuffle'],
                                            drop_last=True)
 
+        self.writer = SummaryWriter()
+
+        dummy_input = Variable(torch.rand(13, 1, 28, 28))
+
+        self.writer.add_graph(self.model, (dummy_input,))
+
     def run_epoch(self, epoch):
 
         # Train
@@ -243,6 +253,10 @@ class Estimator:
 
         epoch_validation_loss = vlosses.mean()
 
+
+        self.writer.add_scalar('training_loss', epoch_training_loss , epoch)
+        self.writer.add_scalar('validation_loss', epoch_validation_loss, epoch)
+
         return (toutputs, epoch_training_loss, voutputs, epoch_validation_loss)
 
     def train_on_batch(self, Xs, ys):
@@ -269,7 +283,7 @@ class Estimator:
     def predict(self, Xs):
         self.model.eval()
 
-        # self.model.hidden = self.model.init_hidden()
+        self.model.hidden = self.model.init_hidden(batch_size=1)
         pX = Variable(FloatTensor(Xs), requires_grad=False)
         output = self.model(pX)
 
