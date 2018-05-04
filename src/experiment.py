@@ -24,6 +24,9 @@ from visualize import Visualizer
 
 from loaddataset import LoadFullDataset
 
+import io
+import imageio
+
 #todo: add logger
 # todo: add reporter
 # todo: plot and save graph
@@ -84,7 +87,8 @@ class Experiment:
                               dataloader_config={'train_batch_size': config.TRAIN_BATCH_SIZE,
                                                  'train_shuffle': config.TRAIN_SHUFFLE,
                                                  'valid_batch_size': config.VALID_BATCH_SIZE,
-                                                 'valid_shuffle': config.VALID_SHUFFLE})
+                                                 'valid_shuffle': config.VALID_SHUFFLE},
+                              use_cuda=config.USE_CUDA)
 
 
         history = History(config.EPOCH_SIZE, config.STORAGE_NAMES)
@@ -116,35 +120,36 @@ class Experiment:
 
     def do(self):
 
-        fig = plt.figure()
-        ax = fig.add_subplot(1, 1, 1)
-        plt.show(block=False)
+        # fig = plt.figure()
+        # ax = fig.add_subplot(1, 1, 1)
+        # plt.show(block=False)
         for self.epoch in range(self.epoch, self.config.EPOCH_SIZE):
             print('epoch : {}'.format(self.epoch))
 
             # Estimate - Train & Validate
             (toutputs, tloss, voutputs, vloss) = self.estimator.run_epoch(self.epoch)
 
-            # Sample Predict
-            pX, py = self.estimator.dataset.train_dataset.get_sample()
-            prediction = self.estimator.predict(pX)
-
-
-            ax.clear()
-            plt.plot(py, label='real')
-            plt.plot(prediction[:, 0], label='pred')
-            plt.legend()
-            plt.suptitle('Epoch : {} -- Loss: {}'.format(self.epoch, tloss))
-            plt.legend()
-            plt.pause(1)
-            fig.canvas.draw()
-
             # Checkpoint
             Checkpoint(model=self.estimator.model, optimizer=self.estimator.optimizer,
                        epoch=self.epoch, history=self.history,
                        experiment_dir=self.config.EXPERIMENT_DIR).save()
 
+            # Sample Predict
+            ix, (pX, py) = self.estimator.dataset.train_dataset.get_sample()
+            prediction = self.estimator.predict(pX)
+
             # Visualize
+            im = self.visualizer.prediction_to_image(actual=py, prediction=prediction[0, :], im_title='TLoss:{:0.5f} || VLoss:{:0.5f} || Epoch:{} ||ix:{}'.format(tloss, vloss, self.epoch, ix))
+
+            # Report to Tensorboard
+            self.estimator.writer.add_image('prediction image', im, self.epoch)
+            self.estimator.writer.add_scalar('training_loss', tloss, self.epoch)
+            self.estimator.writer.add_scalar('validation_loss', vloss, self.epoch)
+
+            self.estimator.writer.add_text('Text', 'text logged at step: {}'.format(self.epoch), self.epoch)
+
+            self.estimator.writer.add_pr_curve('xoxo', np.random.randint(2, size=100), np.random.rand(100), self.epoch)
+
             # self.visualizer.append_data('tloss', tloss)
             # self.visualizer.append_data('vloss', vloss)
             # self.visualizer.visualize(self.epoch)

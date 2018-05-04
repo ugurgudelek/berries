@@ -1,7 +1,8 @@
 
 import matplotlib.pyplot as plt
 import numpy as np
-
+import io
+import imageio
 
 class Visualizer:
     """
@@ -22,7 +23,24 @@ class Visualizer:
         # plt.ylim((0,1))
         # plt.show(block=False)
 
+    def prediction_to_image(self, actual, prediction, im_title):
 
+        # ax.clear()
+        plt.figure()
+        plt.plot(actual, label='real')
+        plt.plot(prediction, label='pred')
+        plt.legend()
+        plt.suptitle('{}'.format(im_title))
+        plt.legend()
+        # plt.pause(1)
+        # fig.canvas.draw()
+
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png')
+        buf.seek(0)
+        im = imageio.imread(buf)
+        buf.close()
+        return im
 
     def append_data(self, name, data):
         self.container[name] = np.append(self.container[name], data)
