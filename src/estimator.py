@@ -7,9 +7,11 @@ from torch.utils.data import DataLoader
 from torch.autograd import Variable
 from torch import FloatTensor
 import numpy as np
-
+import torchvision
 
 from tensorboardX import SummaryWriter
+
+import torchviz
 
 
 # class LoadEstimator:
@@ -200,13 +202,20 @@ class Estimator:
 
     """
 
-    def __init__(self, dataset, model_config, dataloader_config):
+    def __init__(self, dataset, model_config, dataloader_config, use_cuda):
 
         self.model = LSTM(input_size=model_config['input_size'],
                           seq_length=model_config['seq_length'],
                           num_layers=model_config['num_layers'],
                           out_size=model_config['out_size'],
-                          batch_size=model_config['batch_size'])
+                          batch_size=model_config['batch_size'],
+                          use_cuda=use_cuda)
+
+        self.use_cuda = use_cuda
+
+        if self.use_cuda:
+            self.model = self.model.cuda()
+
         self.criterion = nn.MSELoss()
         self.optimizer = optim.Adam(self.model.parameters(), lr=0.0005)
 
@@ -222,9 +231,34 @@ class Estimator:
 
         self.writer = SummaryWriter()
 
-        dummy_input = Variable(torch.rand(13, 1, 28, 28))
+        # res = self.model(torch.autograd.Variable(torch.Tensor(6,96,5), requires_grad=True))
+        # self.writer.add_graph(self.model, res)
 
-        self.writer.add_graph(self.model, (dummy_input,))
+        # dummy_input = Variable(torch.rand(1, 3, 224, 224))
+
+        # with SummaryWriter(comment='alexnet') as w:
+        #     model = torchvision.models.alexnet()
+        #     w.add_graph(model, (dummy_input,))
+
+        # dummy_input = Variable(torch.FloatTensor(torch.rand((6,96,5))), requires_grad=True)
+        # out = self.model(dummy_input)
+        #
+        # with SummaryWriter(comment='model') as w:
+        #     w.add_graph(self.model, (dummy_input,), verbose=True)
+        #
+        #
+        # self.writer.add_graph(self.model, (dummy_input,))
+
+
+        #
+        # dummy_input = Variable(torch.rand(6,96,5), requires_grad=True)
+        # # # dummy_input = Variable(torch.rand(1, 1, 28, 28), requires_grad=True)
+        # #
+        # with SummaryWriter(comment='Net') as w:
+        #     w.add_graph(self.model, (dummy_input,))
+        #
+        # # torchviz.make_dot(out, params=dict(self.model.named_parameters()))
+        # print()
 
     def run_epoch(self, epoch):
 
@@ -234,11 +268,15 @@ class Estimator:
             print('step : {}'.format(step))
             tX, ty = Variable(tX.float(), requires_grad=False), Variable(ty.float(), requires_grad=False)
 
+            if self.use_cuda:
+                tX, ty = tX.cuda(), ty.cuda()
+
             toutput, tloss = self.train_on_batch(tX, ty)
 
             toutputs = np.concatenate((toutputs, toutput.data.numpy()),
                                       axis=0) if toutputs.size else toutput.data.numpy()
-            tlosses = np.concatenate((tlosses, tloss.data.numpy()), axis=0) if tlosses.size else tloss.data.numpy()
+
+            tlosses = np.append(tlosses, tloss.item())
 
         epoch_training_loss = tlosses.mean()
 
@@ -246,16 +284,19 @@ class Estimator:
         voutputs, vlosses = np.array([]), np.array([])
         for i, (vX, vy) in enumerate(self.valid_dataloader):
             vX, vy = Variable(vX.float(), requires_grad=False), Variable(vy.float(), requires_grad=False)
+            if self.use_cuda:
+                vX, vy = vX.cuda(), vy.cuda()
             voutput, vloss = self.validate_on_batch(vX, vy)
 
             voutputs = np.concatenate((voutputs, voutput.data.numpy()), axis=0) if voutputs.size else voutput.data.numpy()
-            vlosses = np.concatenate((vlosses, vloss.data.numpy()), axis=0) if vlosses.size else vloss.data.numpy()
+            vlosses = np.append(vlosses, vloss.item())
 
         epoch_validation_loss = vlosses.mean()
 
 
-        self.writer.add_scalar('training_loss', epoch_training_loss , epoch)
-        self.writer.add_scalar('validation_loss', epoch_validation_loss, epoch)
+
+
+
 
         return (toutputs, epoch_training_loss, voutputs, epoch_validation_loss)
 
@@ -285,6 +326,8 @@ class Estimator:
 
         self.model.hidden = self.model.init_hidden(batch_size=1)
         pX = Variable(FloatTensor(Xs), requires_grad=False)
+        if self.use_cuda:
+            pX = pX.cuda()
         output = self.model(pX)
 
         self.model.train()

@@ -7,6 +7,7 @@ finance-cnn
 """
 
 # todo: make config an external txt file
+import torch
 
 class Config:
     """
@@ -43,6 +44,8 @@ class Config:
 
         self.RESUME = False
 
+        # self.USE_CUDA = torch.cuda.is_available()
+        self.USE_CUDA = False
 # class Config:
 #     """
 #
