@@ -127,7 +127,7 @@ class LoadDataset(torch.utils.data.Dataset):
 
     def get_sample(self):
         ix = np.random.randint(low=0, high=self.__len__())
-        return self.__getitem__(ix=ix)
+        return ix, self.__getitem__(ix=ix)
 
     def normalize(self, arr):
         """
