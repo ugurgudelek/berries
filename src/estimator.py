@@ -11,7 +11,7 @@ import torchvision
 
 from tensorboardX import SummaryWriter
 
-import torchviz
+
 
 
 # class LoadEstimator:
@@ -260,12 +260,14 @@ class Estimator:
         # # torchviz.make_dot(out, params=dict(self.model.named_parameters()))
         # print()
 
-    def run_epoch(self, epoch):
+    def run_epoch(self, epoch, t):
 
         # Train
         toutputs, tlosses = np.array([]), np.array([])
         for step, (tX, ty) in enumerate(self.train_dataloader):
-            print('step : {}'.format(step))
+            if step % 100 == 0:
+                t.set_description('EPOCH : {} || STEP : {}'.format(epoch, step))
+
             tX, ty = Variable(tX.float(), requires_grad=False), Variable(ty.float(), requires_grad=False)
 
             if self.use_cuda:
@@ -273,6 +275,7 @@ class Estimator:
 
             toutput, tloss = self.train_on_batch(tX, ty)
 
+            toutput, tloss = toutput.cpu(), tloss.cpu()
             toutputs = np.concatenate((toutputs, toutput.data.numpy()),
                                       axis=0) if toutputs.size else toutput.data.numpy()
 
@@ -288,6 +291,7 @@ class Estimator:
                 vX, vy = vX.cuda(), vy.cuda()
             voutput, vloss = self.validate_on_batch(vX, vy)
 
+            voutput, vloss = voutput.cpu(), vloss.cpu()
             voutputs = np.concatenate((voutputs, voutput.data.numpy()), axis=0) if voutputs.size else voutput.data.numpy()
             vlosses = np.append(vlosses, vloss.item())
 
@@ -300,22 +304,24 @@ class Estimator:
 
         return (toutputs, epoch_training_loss, voutputs, epoch_validation_loss)
 
-    def train_on_batch(self, Xs, ys):
+    def train_on_batch(self, Xs, ys, train=True):
         self.optimizer.zero_grad()  # pytorch accumulates gradients.
 
         # forward + backward + optimize
         self.model.hidden = self.model.init_hidden()  # detach history of initial hidden
         output = self.model(Xs)
         loss = self.criterion(output, ys)
-        loss.backward(retain_graph=True)
-        self.optimizer.step()
+
+        if train:
+            loss.backward(retain_graph=True)
+            self.optimizer.step()
 
         return output, loss
 
     def validate_on_batch(self, Xs, ys):
         self.model.eval()
 
-        output, loss = self.train_on_batch(Xs, ys)
+        output, loss = self.train_on_batch(Xs, ys, train=False)
 
         self.model.train()
 
@@ -332,5 +338,5 @@ class Estimator:
 
         self.model.train()
 
-        return output.data.numpy()
+        return output.cpu().data.numpy()
 

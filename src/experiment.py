@@ -24,6 +24,9 @@ from visualize import Visualizer
 
 from loaddataset import LoadFullDataset
 
+from tqdm import tqdm, trange
+tqdm.monitor_interval = 0
+
 import io
 import imageio
 
@@ -123,42 +126,47 @@ class Experiment:
         # fig = plt.figure()
         # ax = fig.add_subplot(1, 1, 1)
         # plt.show(block=False)
-        for self.epoch in range(self.epoch, self.config.EPOCH_SIZE):
-            print('epoch : {}'.format(self.epoch))
+        with trange(self.epoch, self.config.EPOCH_SIZE) as t:
+            for self.epoch in t:
+                # t.set_description('EPOCH %i' % self.epoch)
+                # t.set_postfix(loss=2.5, gen=1.1, str='h',
+                #               lst=[1, 2])
 
-            # Estimate - Train & Validate
-            (toutputs, tloss, voutputs, vloss) = self.estimator.run_epoch(self.epoch)
+                # print('epoch : {}'.format(self.epoch))
 
-            # Checkpoint
-            Checkpoint(model=self.estimator.model, optimizer=self.estimator.optimizer,
-                       epoch=self.epoch, history=self.history,
-                       experiment_dir=self.config.EXPERIMENT_DIR).save()
+                # Estimate - Train & Validate
+                (toutputs, tloss, voutputs, vloss) = self.estimator.run_epoch(self.epoch, t)
 
-            # Sample Predict
-            ix, (pX, py) = self.estimator.dataset.train_dataset.get_sample()
-            prediction = self.estimator.predict(pX)
+                # Checkpoint
+                Checkpoint(model=self.estimator.model, optimizer=self.estimator.optimizer,
+                           epoch=self.epoch, history=self.history,
+                           experiment_dir=self.config.EXPERIMENT_DIR).save()
 
-            # Visualize
-            im = self.visualizer.prediction_to_image(actual=py, prediction=prediction[0, :], im_title='TLoss:{:0.5f} || VLoss:{:0.5f} || Epoch:{} ||ix:{}'.format(tloss, vloss, self.epoch, ix))
+                # Sample Predict
+                ix, (pX, py) = self.estimator.dataset.train_dataset.get_sample()
+                prediction = self.estimator.predict(pX)
 
-            # Report to Tensorboard
-            self.estimator.writer.add_image('prediction image', im, self.epoch)
-            self.estimator.writer.add_scalar('training_loss', tloss, self.epoch)
-            self.estimator.writer.add_scalar('validation_loss', vloss, self.epoch)
+                # Visualize
+                im = self.visualizer.prediction_to_image(actual=py, prediction=prediction[0, :], im_title='TLoss:{:0.5f} || VLoss:{:0.5f} || Epoch:{} ||ix:{}'.format(tloss, vloss, self.epoch, ix))
 
-            self.estimator.writer.add_text('Text', 'text logged at step: {}'.format(self.epoch), self.epoch)
+                # Report to Tensorboard
+                self.estimator.writer.add_image('prediction image', im, self.epoch)
+                self.estimator.writer.add_scalar('training_loss', tloss, self.epoch)
+                self.estimator.writer.add_scalar('validation_loss', vloss, self.epoch)
 
-            self.estimator.writer.add_pr_curve('xoxo', np.random.randint(2, size=100), np.random.rand(100), self.epoch)
+                self.estimator.writer.add_text('Text', 'text logged at step: {}'.format(self.epoch), self.epoch)
 
-            # self.visualizer.append_data('tloss', tloss)
-            # self.visualizer.append_data('vloss', vloss)
-            # self.visualizer.visualize(self.epoch)
-            # self.visualizer.report()
+                self.estimator.writer.add_pr_curve('xoxo', np.random.randint(2, size=100), np.random.rand(100), self.epoch)
 
-            # todo: do we need this really? not sure.
-            # Save
-            # self.history.append(epoch=epoch, phase='train', name='loss', value=tloss)
-            # self.history.append(epoch=epoch, phase='valid', name='loss', value=vloss)
+                # self.visualizer.append_data('tloss', tloss)
+                # self.visualizer.append_data('vloss', vloss)
+                # self.visualizer.visualize(self.epoch)
+                # self.visualizer.report()
+
+                # todo: do we need this really? not sure.
+                # Save
+                # self.history.append(epoch=epoch, phase='train', name='loss', value=tloss)
+                # self.history.append(epoch=epoch, phase='valid', name='loss', value=vloss)
 
 
 
