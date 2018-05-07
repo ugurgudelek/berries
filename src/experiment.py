@@ -142,15 +142,27 @@ class Experiment:
                            epoch=self.epoch, history=self.history,
                            experiment_dir=self.config.EXPERIMENT_DIR).save()
 
+                # Train
                 # Sample Predict
                 ix, (pX, py) = self.estimator.dataset.train_dataset.get_sample()
                 prediction = self.estimator.predict(pX)
 
                 # Visualize
-                im = self.visualizer.prediction_to_image(actual=py, prediction=prediction[0, :], im_title='TLoss:{:0.5f} || VLoss:{:0.5f} || Epoch:{} ||ix:{}'.format(tloss, vloss, self.epoch, ix))
+                tim = self.visualizer.prediction_to_image(actual=py, prediction=prediction[0, :], im_title='TLoss:{:0.5f} || VLoss:{:0.5f} || Epoch:{} ||ix:{}'.format(tloss, vloss, self.epoch, ix))
+
+                # Validation
+                # Sample Predict
+                ix, (pX, py) = self.estimator.dataset.valid_dataset.get_sample()
+                prediction = self.estimator.predict(pX)
+
+                # Visualize
+                vim = self.visualizer.prediction_to_image(actual=py, prediction=prediction[0, :],
+                                                         im_title='TLoss:{:0.5f} || VLoss:{:0.5f} || Epoch:{} ||ix:{}'.format(
+                                                             tloss, vloss, self.epoch, ix))
 
                 # Report to Tensorboard
-                self.estimator.writer.add_image('prediction image', im, self.epoch)
+                self.estimator.writer.add_image('prediction image', tim, self.epoch)
+                self.estimator.writer.add_image('valid prediction image', vim, self.epoch)
                 self.estimator.writer.add_scalar('training_loss', tloss, self.epoch)
                 self.estimator.writer.add_scalar('validation_loss', vloss, self.epoch)
 
