@@ -25,27 +25,27 @@ class Config:
         self.OUTPUT_SIZE = 96
 
         self.TRAIN_VALID_RATIO = 0.90
-        self.TRAIN_BATCH_SIZE = 6
-        self.VALID_BATCH_SIZE = 6
+        self.TRAIN_BATCH_SIZE = 256
+        self.VALID_BATCH_SIZE = 256
         self.TRAIN_SHUFFLE = True
         self.VALID_SHUFFLE = False
 
 
-        # self.INPUT_PATH = '../dataset/energy/load_wo_feb29.csv'
-        self.INPUT_PATH = '../dataset/energy/sample_load.csv'
-        self.EXPERIMENT_DIR = '../experiment/load_sample'
+        self.INPUT_PATH = '../dataset/energy/load_wo_feb29.csv'
+        # self.INPUT_PATH = '../dataset/energy/sample_load.csv'
+        self.EXPERIMENT_DIR = '../experiment/load_full_wo_feb29'
         self.RANDOM_SEED = 7
 
         # self.TRAIN_DAY = 2700  # 2700 days * 96 quarter out of 2922 days
-        self.TRAIN_DAY = 20
-        self.VALID_DAY = 10
+        self.TRAIN_DAY = 2555
+        self.VALID_DAY = 365
 
         self.STORAGE_NAMES = ['y_hat', 'loss', 'y']
 
         self.RESUME = False
 
-        # self.USE_CUDA = torch.cuda.is_available()
-        self.USE_CUDA = False
+        self.USE_CUDA = torch.cuda.is_available()
+        # self.USE_CUDA = False
 # class Config:
 #     """
 #
