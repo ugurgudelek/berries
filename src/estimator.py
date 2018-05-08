@@ -11,7 +11,7 @@ import torchvision
 
 from tensorboardX import SummaryWriter
 
-
+from loaddataset import LoadFullDataset
 
 
 # class LoadEstimator:
@@ -202,7 +202,7 @@ class Estimator:
 
     """
 
-    def __init__(self, dataset, model_config, dataloader_config, use_cuda):
+    def __init__(self, dataset:LoadFullDataset, model_config, dataloader_config, use_cuda):
 
         self.model = LSTM(input_size=model_config['input_size'],
                           seq_length=model_config['seq_length'],
@@ -297,11 +297,6 @@ class Estimator:
 
         epoch_validation_loss = vlosses.mean()
 
-
-
-
-
-
         return (toutputs, epoch_training_loss, voutputs, epoch_validation_loss)
 
     def train_on_batch(self, Xs, ys, train=True):
@@ -339,4 +334,32 @@ class Estimator:
         self.model.train()
 
         return output.cpu().data.numpy()
+
+
+    def predict_all_validation(self):
+
+        # Validate
+        voutputs, vlosses = np.array([]), np.array([])
+        vXs, vys = np.array([]), np.array([])
+        for i, (vX, vy) in enumerate(self.valid_dataloader):
+            vX, vy = Variable(vX.float(), requires_grad=False), Variable(vy.float(), requires_grad=False)
+            if self.use_cuda:
+                vX, vy = vX.cuda(), vy.cuda()
+            voutput, vloss = self.validate_on_batch(vX, vy)
+
+
+            voutput, vloss = voutput.cpu(), vloss.cpu()
+            voutputs = np.concatenate((voutputs, voutput.data.numpy()),
+                                      axis=0) if voutputs.size else voutput.data.numpy()
+            vlosses = np.append(vlosses, vloss.item())
+
+            vXs = np.concatenate((vXs, vX.cpu().data.numpy()),
+                                      axis=0) if vXs.size else vX.cpu().data.numpy()
+
+            vys = np.concatenate((vys, vy.cpu().data.numpy()),
+                                      axis=0) if vys.size else vy.cpu().data.numpy()
+
+        epoch_validation_loss = vlosses.mean()
+
+        return vXs, vys,  voutputs, vlosses
 

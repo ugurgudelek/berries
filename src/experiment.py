@@ -12,6 +12,7 @@ from config import Config
 import torch
 
 import numpy as np
+import pandas as pd
 from collections import defaultdict
 import matplotlib.pyplot as plt
 
@@ -25,12 +26,14 @@ from visualize import Visualizer
 from loaddataset import LoadFullDataset
 
 from tqdm import tqdm, trange
+
 tqdm.monitor_interval = 0
 
 import io
 import imageio
 
-#todo: add logger
+
+# todo: add logger
 # todo: add reporter
 # todo: plot and save graph
 
@@ -55,12 +58,12 @@ import imageio
 # if we seed random func, they will generate same output everytime.
 
 
-
 class Experiment:
     """
 
     """
-    def __init__(self, config, dataset:LoadFullDataset, estimator, history, visualizer, epoch):
+
+    def __init__(self, config, dataset: LoadFullDataset, estimator, history, visualizer, epoch):
         self.config = config
         self.dataset = dataset
         self.estimator = estimator
@@ -93,7 +96,6 @@ class Experiment:
                                                  'valid_shuffle': config.VALID_SHUFFLE},
                               use_cuda=config.USE_CUDA)
 
-
         history = History(config.EPOCH_SIZE, config.STORAGE_NAMES)
         visualizer = Visualizer()
 
@@ -107,7 +109,6 @@ class Experiment:
 
         ckpt = Checkpoint.load(ckpt_path)
 
-
         experiment = Experiment.start_over(config)
 
         experiment.estimator.model = ckpt.model
@@ -120,6 +121,22 @@ class Experiment:
         # experiment.visualizer.container['vloss'] = experiment.history.container[epoch]['valid']['loss']
 
         return experiment
+
+    def prediction_to_csv(self):
+        vXs, vys, vpreds, vlosses = self.estimator.predict_all_validation()
+
+        valid_raw_dataset = self.estimator.dataset.get_raw_valid_dataset()
+        vXs_inverse = self.estimator.dataset.inverse_normalize(vXs, only_first=False)
+        vys_inverse = self.estimator.dataset.inverse_normalize(vys, only_first=True)
+        vpreds_inverse = self.estimator.dataset.inverse_normalize(vpreds, only_first=True)
+
+        # fixme: Burada kaldım. Karıştı buralar
+        y_df = pd.DataFrame(vys_inverse, columns=list(range(vys_inverse.shape[1]))).add_prefix(prefix='y')
+        yhat_df = pd.DataFrame(vpreds_inverse, columns=list(range(vpreds_inverse.shape[1]))).add_prefix(prefix='yhat')
+        result_df = pd.concat((y_df, yhat_df), axis=1)
+
+        result_df = pd.concat((valid_raw_dataset.reset_index(drop=True), result_df), axis=1)
+        result_df.to_csv('result.csv')
 
     def do(self):
 
@@ -148,7 +165,9 @@ class Experiment:
                 prediction = self.estimator.predict(pX)
 
                 # Visualize
-                tim = self.visualizer.prediction_to_image(actual=py, prediction=prediction[0, :], im_title='TLoss:{:0.5f} || VLoss:{:0.5f} || Epoch:{} ||ix:{}'.format(tloss, vloss, self.epoch, ix))
+                tim = self.visualizer.prediction_to_image(actual=py, prediction=prediction[0, :],
+                                                          im_title='TLoss:{:0.5f} || VLoss:{:0.5f} || Epoch:{} ||ix:{}'.format(
+                                                              tloss, vloss, self.epoch, ix))
 
                 # Validation
                 # Sample Predict
@@ -157,8 +176,8 @@ class Experiment:
 
                 # Visualize
                 vim = self.visualizer.prediction_to_image(actual=py, prediction=prediction[0, :],
-                                                         im_title='TLoss:{:0.5f} || VLoss:{:0.5f} || Epoch:{} ||ix:{}'.format(
-                                                             tloss, vloss, self.epoch, ix))
+                                                          im_title='TLoss:{:0.5f} || VLoss:{:0.5f} || Epoch:{} ||ix:{}'.format(
+                                                              tloss, vloss, self.epoch, ix))
 
                 # Report to Tensorboard
                 self.estimator.writer.add_image('prediction image', tim, self.epoch)
@@ -168,7 +187,8 @@ class Experiment:
 
                 self.estimator.writer.add_text('Text', 'text logged at step: {}'.format(self.epoch), self.epoch)
 
-                self.estimator.writer.add_pr_curve('xoxo', np.random.randint(2, size=100), np.random.rand(100), self.epoch)
+                self.estimator.writer.add_pr_curve('xoxo', np.random.randint(2, size=100), np.random.rand(100),
+                                                   self.epoch)
 
                 # self.visualizer.append_data('tloss', tloss)
                 # self.visualizer.append_data('vloss', vloss)
@@ -181,16 +201,10 @@ class Experiment:
                 # self.history.append(epoch=epoch, phase='valid', name='loss', value=vloss)
 
 
-
-
-
-
-
-
 config = Config()
-experiment = Experiment.start_over(config)
-# experiment = Experiment.resume(config.EXPERIMENT_DIR, config)
-experiment.do()
+# experiment = Experiment.start_over(config)
+experiment = Experiment.resume(config.EXPERIMENT_DIR, config)
+experiment.prediction_to_csv()
 sample = experiment.dataset.train_dataset.get_sample()
 print()
 # experiment.estimator.dataset.train_dataset.__getitem__()

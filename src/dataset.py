@@ -10,7 +10,7 @@ from torchvision import transforms
 from torch.utils.data import Dataset
 import pandas as pd
 import numpy as np
-from talib import RSI, SMA, MACD, WILLR, ULTOSC, MFI, STOCH
+# from talib import RSI, SMA, MACD, WILLR, ULTOSC, MFI, STOCH
 
 import os
 from sklearn import preprocessing

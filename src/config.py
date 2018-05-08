@@ -18,7 +18,7 @@ class Config:
         """
 
         """
-        self.EPOCH_SIZE = 400
+        self.EPOCH_SIZE = 401
         self.SEQ_LENGTH = 96
         self.NUM_LAYERS = 1
         self.INPUT_SIZE = 5

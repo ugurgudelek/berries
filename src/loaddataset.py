@@ -46,9 +46,14 @@ class LoadFullDataset():
 
         dataset_len = self.dataset.shape[0]
 
-        # === CREATE PERIODIC SIGNALS
+
         daycount = self.dataset.shape[0] // seq_length
         self.dataset = self.dataset[:daycount * seq_length]  # remove uncomplete days
+        self.raw_dataset = self.raw_dataset[:daycount * seq_length]
+
+
+        # normalize
+        self.dataset, self.min_norm_term, self.max_norm_term = self.normalize(self.dataset)
 
         # def create_period_signal(freq, Fs):
         #     t = np.arange(Fs)
@@ -61,7 +66,7 @@ class LoadFullDataset():
         #
         # self.dataset = np.stack((self.dataset, p_day, p_week, p_month, p_year), axis=1)
 
-        # TODO: fix reshape to estimate quarters. seq_length should be added in forwward pass
+        # TODO: fix reshape to estimate quarters. seq_length should be added in forward pass
         # self.dataset_values = np.reshape(self.dataset_values, (-1, seq_length, 5))
 
         # SPLIT TRAIN & VALID
@@ -71,8 +76,8 @@ class LoadFullDataset():
         if valid_day is None:
             valid_day = daycount - train_day
 
-        train_len = train_day * seq_length
-        valid_len = valid_day * seq_length
+        self.train_len = train_len = train_day * seq_length
+        self.valid_len = valid_len = valid_day * seq_length
 
         # train_values = self.dataset_values[:train_len, :, :]
         # valid_values = self.dataset_values[train_len:, :, :]
@@ -85,10 +90,48 @@ class LoadFullDataset():
         train_values = self.dataset[:train_len, :]
         valid_values = self.dataset[train_len:train_len+valid_len, :]
 
-        self.train_dataset = LoadDataset(train_values, seq_length=seq_length)
-        self.valid_dataset = LoadDataset(valid_values, seq_length=seq_length)
+        raw_train_dataset = self.raw_dataset.iloc[:train_len, :]
+        raw_valid_dataset = self.raw_dataset.iloc[train_len:train_len+valid_len, :]
+
+        self.train_dataset = LoadDataset(train_values, seq_length=seq_length, raw_dataset=raw_train_dataset)
+        self.valid_dataset = LoadDataset(valid_values, seq_length=seq_length, raw_dataset=raw_valid_dataset)
+
+    def get_raw_valid_dataset(self):
+        return self.raw_dataset[self.train_len:self.train_len+self.valid_len]
+
+    def normalize(self, arr):
+        """
+
+        Args:
+            arr:
+
+        Returns:
+
+        """
+        return (arr - arr.min(axis=0)) / (arr.max(axis=0) - arr.min(axis=0)), arr.min(axis=0), arr.max(axis=0)
+
+    def inverse_normalize(self, arr, min_term=None, max_term=None, only_first=False):
+        """
+
+        Args:
+            arr:
+            min_term:
+            max_term:
+
+        Returns:
+
+        """
 
 
+        if min_term is None:
+            min_term = self.min_norm_term
+        if max_term is None:
+            max_term = self.max_norm_term
+
+        if only_first:
+            return arr*(max_term[0]-min_term[0]) + min_term[0]
+
+        return arr*(max_term-min_term) + min_term
 
 
 class LoadDataset(torch.utils.data.Dataset):
@@ -102,9 +145,10 @@ class LoadDataset(torch.utils.data.Dataset):
             y:
     """
 
-    def __init__(self, dataset, seq_length, shuffle=True):
+    def __init__(self, dataset, seq_length, raw_dataset, shuffle=True):
         # normalize data. otherwise criterion cannot calculate loss
-        self.dataset, self.min_norm_term, self.max_norm_term = self.normalize(dataset)
+        self.dataset = dataset
+        self.raw_dataset = raw_dataset
         # split data wrt period
         # e.g. period = 96 -> (day_size, quarter_in_day)
 
@@ -129,29 +173,8 @@ class LoadDataset(torch.utils.data.Dataset):
         ix = np.random.randint(low=0, high=self.__len__())
         return ix, self.__getitem__(ix=ix)
 
-    def normalize(self, arr):
-        """
-
-        Args:
-            arr:
-
-        Returns:
-
-        """
-        return (arr - arr.min()) / (arr.max() - arr.min()), arr.min(), arr.max()
-
-    def inverse_normalize(self, arr, min_term, max_term):
-        """
-
-        Args:
-            arr:
-            min_term:
-            max_term:
-
-        Returns:
-
-        """
-        return arr*(max_term-min_term) + min_term
+    def get_attributes(self, ix):
+        return self.raw_dataset.iloc[ix:ix + self.seq_length, :]
 
     def __len__(self):
         """
