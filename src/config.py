@@ -31,13 +31,15 @@ class Config:
         self.VALID_SHUFFLE = False
 
 
-        self.INPUT_PATH = '../dataset/energy/load_wo_feb29.csv'
+        # self.INPUT_PATH = '../dataset/energy/load_wo_feb29.csv'
+        self.INPUT_PATH = '../dataset/energy/pvgeneration.csv'
         # self.INPUT_PATH = '../dataset/energy/sample_load.csv'
-        self.EXPERIMENT_DIR = '../experiment/load_full_wo_feb29'
+        self.EXPERIMENT_DIR = '../experiment/pvgeneration'
         self.RANDOM_SEED = 7
 
         # self.TRAIN_DAY = 2700  # 2700 days * 96 quarter out of 2922 days
-        self.TRAIN_DAY = 2555
+        # self.TRAIN_DAY = 2555 # loaddataste
+        self.TRAIN_DAY = 2102  # pvdataset
         self.VALID_DAY = 365
 
         self.STORAGE_NAMES = ['y_hat', 'loss', 'y']
@@ -45,6 +47,8 @@ class Config:
         self.RESUME = False
 
         self.USE_CUDA = torch.cuda.is_available()
+
+        print('CUDA AVAILABLE:{}'.format(self.USE_CUDA))
         # self.USE_CUDA = False
 # class Config:
 #     """
