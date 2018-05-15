@@ -9,6 +9,7 @@ class LoadFullDataset():
         # date,from,to,actual,forecast
         self.raw_dataset = pd.read_csv(csv_path)
         self.raw_dataset['date'] = self.raw_dataset['date'].astype('datetime64[ns]')
+        self.raw_dataset['from'] = self.raw_dataset['from'].astype('datetime64[ns]')
 
         # parse date
         # self.raw_dataset['date'] = self.raw_dataset.apply(
@@ -20,10 +21,11 @@ class LoadFullDataset():
         months = self.raw_dataset['date'].dt.month.values
         weeks = self.raw_dataset['date'].dt.weekofyear.values
         days = self.raw_dataset['date'].dt.day.values
+        hours = self.raw_dataset['from'].dt.hour.values
 
         self.dataset = self.raw_dataset.loc[:, 'actual'].values
 
-        self.dataset = np.stack((self.dataset, days, weeks, months, years), axis=1)
+        self.dataset = np.stack((self.dataset, hours, days, weeks, months, years), axis=1)
 
         # 1 Jan	Mon	New Year's Day	National
         # 30 Mar	Fri	Good Friday	National

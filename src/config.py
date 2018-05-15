@@ -21,7 +21,7 @@ class Config:
         self.EPOCH_SIZE = 401
         self.SEQ_LENGTH = 96
         self.NUM_LAYERS = 1
-        self.INPUT_SIZE = 5
+        self.INPUT_SIZE = 6
         self.OUTPUT_SIZE = 96
 
         self.TRAIN_VALID_RATIO = 0.90
@@ -34,7 +34,7 @@ class Config:
         # self.INPUT_PATH = '../dataset/energy/load_wo_feb29.csv'
         self.INPUT_PATH = '../dataset/energy/pvgeneration.csv'
         # self.INPUT_PATH = '../dataset/energy/sample_load.csv'
-        self.EXPERIMENT_DIR = '../experiment/pvgeneration'
+        self.EXPERIMENT_DIR = '../experiment/pvgeneration_w_hours'
         self.RANDOM_SEED = 7
 
         # self.TRAIN_DAY = 2700  # 2700 days * 96 quarter out of 2922 days
@@ -47,7 +47,7 @@ class Config:
         self.RESUME = False
 
         self.USE_CUDA = torch.cuda.is_available()
-
+        # self.USE_CUDA = False
         print('CUDA AVAILABLE:{}'.format(self.USE_CUDA))
         # self.USE_CUDA = False
 # class Config:
