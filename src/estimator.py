@@ -11,7 +11,7 @@ import torchvision
 
 from tensorboardX import SummaryWriter
 
-from loaddataset import LoadFullDataset
+from dataset import LoadDataset
 
 
 # class LoadEstimator:
@@ -202,7 +202,7 @@ class Estimator:
 
     """
 
-    def __init__(self, dataset:LoadFullDataset, model_config, dataloader_config, use_cuda):
+    def __init__(self, dataset:LoadDataset, model_config, dataloader_config, use_cuda):
 
         self.model = LSTM(input_size=model_config['input_size'],
                           seq_length=model_config['seq_length'],

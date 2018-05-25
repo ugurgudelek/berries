@@ -23,7 +23,7 @@ from checkpoint import Checkpoint
 from estimator import Estimator
 from visualize import Visualizer
 
-from loaddataset import LoadFullDataset
+from dataset import *
 
 from tqdm import tqdm, trange
 
@@ -63,7 +63,7 @@ class Experiment:
 
     """
 
-    def __init__(self, config, dataset: LoadFullDataset, estimator, history, visualizer, epoch):
+    def __init__(self, config, dataset, estimator, history, visualizer, epoch):
         self.config = config
         self.dataset = dataset
         self.estimator = estimator
@@ -78,7 +78,14 @@ class Experiment:
     @classmethod
     def start_over(cls, config):
 
-        dataset = LoadFullDataset(csv_path=config.INPUT_PATH,
+
+        dataset_cls = get_dataset_cls_from_name(name=config.DATASET_NAME)
+
+        dataset = dataset_cls(**config.DATASET_ARGS)
+
+
+
+        dataset = LoadDataset(csv_path=config.INPUT_PATH,
                                   train_valid_ratio=config.TRAIN_VALID_RATIO,
                                   train_day=config.TRAIN_DAY,
                                   valid_day=config.VALID_DAY,

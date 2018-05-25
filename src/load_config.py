@@ -18,9 +18,11 @@ class Config:
         """
 
         """
-        self.EPOCH_SIZE = 100
-        self.INPUT_SIZE = 28
-        self.OUTPUT_SIZE = 3  # down, steady, up
+        self.EPOCH_SIZE = 401
+        self.SEQ_LENGTH = 96
+        self.NUM_LAYERS = 1
+        self.INPUT_SIZE = 6
+        self.OUTPUT_SIZE = 96
 
         self.TRAIN_VALID_RATIO = 0.90
         self.TRAIN_BATCH_SIZE = 256
@@ -30,11 +32,7 @@ class Config:
 
 
 
-        self.DATASET_NAME = 'IndicatorDataset'
         self.INPUT_PATH = '../dataset/dataset/finance/stocks/stocks.csv'
-
-        self.DATASET_ARGS = {'dataset_name': self.DATASET_NAME, 'input_path': self.INPUT_PATH, 'train_valid_ratio': self.TRAIN_VALID_RATIO}
-
         self.EXPERIMENT_DIR = '../experiment/finance_cnn'
         self.RANDOM_SEED = 7
 
@@ -47,8 +45,8 @@ class Config:
 
         self.RESUME = False
 
-        # self.USE_CUDA = torch.cuda.is_available()
-        self.USE_CUDA = False
+        self.USE_CUDA = torch.cuda.is_available()
+        # self.USE_CUDA = False
         print('CUDA AVAILABLE:{}'.format(self.USE_CUDA))
         # self.USE_CUDA = False
 # class Config:
