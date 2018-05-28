@@ -31,11 +31,11 @@ class Config:
 
 
         self.DATASET_NAME = 'IndicatorDataset'
-        self.INPUT_PATH = '../dataset/dataset/finance/stocks/stocks.csv'
+        self.INPUT_PATH = '../dataset/finance/stocks/stocks_sample.csv'
 
-        self.DATASET_ARGS = {'dataset_name': self.DATASET_NAME, 'input_path': self.INPUT_PATH, 'train_valid_ratio': self.TRAIN_VALID_RATIO}
+        self.DATASET_ARGS = {'dataset_name': self.DATASET_NAME, 'train_valid_ratio': self.TRAIN_VALID_RATIO, 'input_path': self.INPUT_PATH}
 
-        self.EXPERIMENT_DIR = '../experiment/finance_cnn'
+        self.EXPERIMENT_DIR = '../experiment/finance_cnn_sample'
         self.RANDOM_SEED = 7
 
         # self.TRAIN_DAY = 2700  # 2700 days * 96 quarter out of 2922 days

@@ -80,16 +80,7 @@ class Experiment:
 
 
         dataset_cls = get_dataset_cls_from_name(name=config.DATASET_NAME)
-
         dataset = dataset_cls(**config.DATASET_ARGS)
-
-
-
-        dataset = LoadDataset(csv_path=config.INPUT_PATH,
-                                  train_valid_ratio=config.TRAIN_VALID_RATIO,
-                                  train_day=config.TRAIN_DAY,
-                                  valid_day=config.VALID_DAY,
-                                  seq_length=config.SEQ_LENGTH)
 
         estimator = Estimator(dataset=dataset,
                               model_config={'input_size': config.INPUT_SIZE,
