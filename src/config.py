@@ -9,6 +9,7 @@ finance-cnn
 # todo: make config an external txt file
 import torch
 
+
 class Config:
     """
 
@@ -18,30 +19,44 @@ class Config:
         """
 
         """
+        self.MODEL_NAME = 'CNN'
         self.EPOCH_SIZE = 100
         self.INPUT_SIZE = 28
         self.OUTPUT_SIZE = 3  # down, steady, up
 
         self.TRAIN_VALID_RATIO = 0.90
-        self.TRAIN_BATCH_SIZE = 256
-        self.VALID_BATCH_SIZE = 256
+        self.TRAIN_BATCH_SIZE = 64
+        self.VALID_BATCH_SIZE = 64
         self.TRAIN_SHUFFLE = True
         self.VALID_SHUFFLE = False
 
-
-
         self.DATASET_NAME = 'IndicatorDataset'
-        self.INPUT_PATH = '../dataset/finance/stocks/stocks_sample.csv'
+        self.INPUT_PATH = '../dataset/finance/stocks/stocks.csv'
 
-        self.DATASET_ARGS = {'dataset_name': self.DATASET_NAME, 'train_valid_ratio': self.TRAIN_VALID_RATIO, 'input_path': self.INPUT_PATH}
-
-        self.EXPERIMENT_DIR = '../experiment/finance_cnn_sample'
+        self.EXPERIMENT_DIR = '../experiment/finance_cnn'
         self.RANDOM_SEED = 7
 
-        # self.TRAIN_DAY = 2700  # 2700 days * 96 quarter out of 2922 days
-        # self.TRAIN_DAY = 2555 # loaddataste
-        self.TRAIN_DAY = 2102  # pvdataset
-        self.VALID_DAY = 365
+
+        self.DATASET_ARGS = {'dataset_name': self.DATASET_NAME,
+                             'train_valid_ratio': self.TRAIN_VALID_RATIO,
+                             'input_path': self.INPUT_PATH}
+
+        self.MODEL_ARGS = {'model_name':self.MODEL_NAME,
+            'input_size': self.INPUT_SIZE,
+                           'out_size': self.OUTPUT_SIZE,
+                           'batch_size': self.TRAIN_BATCH_SIZE
+                           }
+
+        self.CRITERION_ARGS = {'criterion_name': 'MSE'}
+        self.OPTIMIZER_ARGS = {'optimizer_name': 'Adam',
+                               'lr': 0.0005}
+
+        self.DATALOADER_ARGS = {'train_batch_size': self.TRAIN_BATCH_SIZE,
+                                'train_shuffle': self.TRAIN_SHUFFLE,
+                                'valid_batch_size': self.VALID_BATCH_SIZE,
+                                'valid_shuffle': self.VALID_SHUFFLE
+                                }
+
 
         self.STORAGE_NAMES = ['y_hat', 'loss', 'y']
 
@@ -79,5 +94,3 @@ class Config:
 #
 #         self.epoch_size = 20
 #         self.storage_names = ['y_hat', 'loss', 'y']
-
-
