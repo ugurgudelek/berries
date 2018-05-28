@@ -11,6 +11,8 @@ import pandas as pd
 import numpy as np
 from talib import RSI, SMA, MACD, WILLR, ULTOSC, MFI, STOCH
 
+import utils
+
 import os
 import warnings
 from sklearn import preprocessing
@@ -30,8 +32,10 @@ class InnerIndicatorDataset(torch.utils.data.Dataset):
 
         self.dataset = dataset
 
-        self.X = self.dataset.drop(['label','name'], axis=1)
-        self.y = self.dataset[['label']]
+        self.X = self.dataset.drop(['date','open','high','low', 'close', 'name',
+                                    'label_sell', 'label_buy', 'label_hold'], axis=1)
+
+        self.y = self.dataset[['label_sell', 'label_buy', 'label_hold']]
         self.name = self.dataset[['name']]
 
         self.image_width = self.X.shape[1]
@@ -43,15 +47,11 @@ class InnerIndicatorDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, ix):
         X = self.X.iloc[ix: ix + self.image_width, :]
-        y = self.y.iloc[ix + self.image_width - 1]
+        y = self.y.iloc[ix + self.image_width - 1, :]
 
         # change type to numpy
-        X = X.values
-        y = y.values.flatten()
-
-        X = X.astype(float)
-        y = y.astype(float)
-
+        X = X.values.astype(float)
+        y = y.values.astype(float)
 
         X = np.expand_dims(X, axis=0)
 
@@ -67,84 +67,75 @@ class IndicatorDataset():
 
     # def __init__(self, stocks_dir, stock_names=None, label_after=20, row_len=28):
 
+    def __init__(self, dataset_name, input_path, train_valid_ratio):
+
+        self.dataset_name = dataset_name
+        self.input_path = input_path
+        self.train_valid_ratio = train_valid_ratio
 
 
-    def __init__(self, **kwargs):
+        stocks = pd.read_csv(self.input_path, index_col=0)
+        stocks['date'] = stocks['date'].astype('datetime64[ns]')
+        stocks['high'] = stocks['high'].values.astype(np.float)
+        stocks['low'] = stocks['low'].values.astype(np.float)
+        stocks['adjusted_close'] = stocks['adjusted_close'].values.astype(np.float)
+        stocks['volume'] = stocks['volume'].values.astype(np.float)
 
-        self.__dict__.update(kwargs)
-
-        self.stocks_dir = stocks_dir
-
-        # read only necessary stocks
-        self.stocks = self._read_dir(self.stocks_dir, stock_names)
-
-        # assign labels
-        for stock_name, stock_data in self.stocks.items():
-            self.stocks[stock_name]['label'] = stock_data.loc[:, 'adjusted_close'].shift(-label_after)
+        # labelize with up,down,hold
+        stocks = self.labelize_with_windows_slide(stocks)
 
         # calculate technical analysis values from stock data
         # this creates a new dataset depends on technical analysis
-        self.dataset = IndicatorDataset.technical_analysis(self.stocks)
+        self.dataset = IndicatorDataset.technical_analysis(stocks)
 
-        for stock_name, data in self.dataset.items():
+        # add seasonality
+        self.dataset['year'] = self.dataset['date'].dt.year.values
+        self.dataset['month'] = self.dataset['date'].dt.month.values
+        self.dataset['week'] = self.dataset['date'].dt.week.values
+        self.dataset['weekday'] = self.dataset['date'].dt.weekday.values
+        self.dataset['day'] = self.dataset['date'].dt.day.values
 
-            # change dtypes
-            data['date'] = pd.to_datetime(data['date'])
-            data['high'] = data['high'].values.astype(np.float)
-            data['low'] = data['low'].values.astype(np.float)
-            data['adjusted_close'] = data['adjusted_close'].values.astype(np.float)
-            data['volume'] = data['volume'].values.astype(np.float)
+        # normalize
+        self.dataset = self.normalize(self.dataset).dropna(axis=0)
 
-            # add seasonality
-            data['day'] = data['date'].apply(lambda x: x.day)
-            data['weekday'] = data['date'].apply(lambda x: x.weekday())
-            data['week'] = data['date'].apply(lambda x: x.week)
-            data['month'] = data['date'].apply(lambda x: x.month)
-            data['year'] = data['date'].apply(lambda x: x.year)
+        # equalize up,down and hold labels
+        # self.dataset = self.updown_scaling(self.dataset)
 
-            self.normalize(data)
-
-            # dropna
-            data = data.dropna(axis=0)
-
-            # filter features
-            indexes = data.index
-            dates = data['date']
-            self.dataset[stock_name] = data = data.drop(['date', 'open', 'high', 'low', 'close'], axis=1)
-
-            # scaler = preprocessing.StandardScaler().fit(data)
-            # data = scaler.transform(data)
-            # self.dataset[stock_name].iloc[:, :] = data
-
-            # assign fall,rise and hold labels
-            # label_split_threshold = 0.27
-            # label_pct = self.dataset[stock_name].copy().loc[:, 'label']
-
-            # self.dataset[stock_name].loc[(label_pct <= -label_split_threshold), 'label'] = 0 # fall
-            # self.dataset[stock_name].loc[(label_pct >= label_split_threshold), 'label'] = 2 # rise
-            # self.dataset[stock_name].loc[((-label_split_threshold < label_pct) & (label_pct < label_split_threshold)), 'label'] = 1 # steady
-
-            # set multiindex(index,date)
-            self.dataset[stock_name].index = pd.MultiIndex.from_tuples(list(zip(*[indexes, dates])),
-                                                                       names=['index', 'date'])
-
-            # check shape
-            assert data.shape[1] == row_len + 1  # +1 for label
-
-
-        # merged all stocks into one big chunk of data
-        merged = np.empty(shape=(0,data.shape[1] + 1))
-        for stock_name, stock_df in self.dataset.items():
-            stock_df['name'] = stock_name
-            merged = np.vstack((merged, stock_df.values))
-
-        col_names = self.dataset['spy'].columns
-        self.dataset = pd.DataFrame(merged, columns=col_names)
-
+        # sort dataset
+        self.dataset = self.dataset.sort_values(by=['date', 'name']).reset_index(drop=True)
 
         train_len = int(self.dataset.shape[0] * 0.9)
         self.train_dataset = InnerIndicatorDataset(self.dataset.iloc[:train_len, :])
         self.valid_dataset = InnerIndicatorDataset(self.dataset.iloc[train_len:, :])
+
+
+    def updown_scaling(self, stocks):
+
+        def inner_func(stock_data):
+            buy_count = stock_data['label_buy'].sum()
+            sell_count = stock_data['label_sell'].sum()
+            hold_count = stock_data['label_hold'].sum()
+
+            new_downs = utils.pick_random_samples(df=stock_data, on='label_buy', condition=1, n=int(hold_count-buy_count))
+            new_ups = utils.pick_random_samples(df=stock_data, on='label_sell', condition=1, n=int(hold_count-sell_count))
+
+            return pd.concat((stock_data, new_ups, new_downs))
+
+        return stocks.groupby('name').apply(inner_func)
+
+    def labelize_with_windows_slide(self, stocks, window=28, shift_periods=28):
+
+        def inner_func(stock_data):
+            stock_data['max_28'] = stock_data['adjusted_close'].rolling(window).apply(utils.roll_is_max)
+            stock_data['min_28'] = stock_data['adjusted_close'].rolling(window).apply(utils.roll_is_min)
+
+            stock_data['label_buy'] = stock_data['min_28'].shift(periods=-shift_periods)
+            stock_data['label_sell'] = stock_data['max_28'].shift(periods=-shift_periods)
+            stock_data['label_hold'] = 0.0
+            stock_data.loc[(stock_data['label_buy'] != 1.0) & (stock_data['label_sell'] != 1.0), 'label_hold'] = 1.0
+            return stock_data.drop(['max_28', 'min_28'], axis=1)
+
+        return stocks.groupby('name').apply(inner_func).dropna()
 
     def _read_dir(self, stocks_dir, stock_names):
         """
@@ -164,26 +155,37 @@ class IndicatorDataset():
 
         return stocks
 
-    def normalize(self, data):
+    def normalize(self, stocks):
 
-        # change values to percentage change
-        data.loc[:, 'open'] = data.loc[:, 'open'].pct_change()
-        data.loc[:, 'high'] = data.loc[:, 'high'].pct_change()
-        data.loc[:, 'low'] = data.loc[:, 'low'].pct_change()
-        data.loc[:, 'close'] = data.loc[:, 'close'].pct_change()
+        def inner_func(data):
+            # change values to percentage change
+            data.loc[:, 'open'] = data.loc[:, 'open'].pct_change()
+            data.loc[:, 'high'] = data.loc[:, 'high'].pct_change()
+            data.loc[:, 'low'] = data.loc[:, 'low'].pct_change()
+            data.loc[:, 'close'] = data.loc[:, 'close'].pct_change()
 
-        data.loc[:, 'adjusted_close'] = data.loc[:, 'adjusted_close'].pct_change()
-        data.loc[:, 'label'] = data.loc[:, 'label'].pct_change()
-        # data.loc[:, 'sma_15'] = data.loc[:, 'sma_15'].pct_change()
-        data.loc[:, 'sma_20'] = data.loc[:, 'sma_20'].pct_change()
-        # data.loc[:, 'sma_25'] = data.loc[:, 'sma_25'].pct_change()
-        data.loc[:, 'sma_30'] = data.loc[:, 'sma_30'].pct_change()
-        data.loc[:, 'volume'] = data.loc[:, 'volume'].pct_change()
+            data.loc[:, 'adjusted_close'] = data.loc[:, 'adjusted_close'].pct_change()
+            # data.loc[:, 'sma_15'] = data.loc[:, 'sma_15'].pct_change()
+            data.loc[:, 'sma_20'] = data.loc[:, 'sma_20'].pct_change()
+            # data.loc[:, 'sma_25'] = data.loc[:, 'sma_25'].pct_change()
+            data.loc[:, 'sma_30'] = data.loc[:, 'sma_30'].pct_change()
+            data.loc[:, 'volume'] = data.loc[:, 'volume'].pct_change()
 
-        # other technical values are already in normalized form.
+            data['year'] = utils.normalize(data['year'])
+            data['month'] = utils.normalize(data['month'])
+            data['week'] = utils.normalize(data['week'])
+            data['weekday'] = utils.normalize(data['weekday'])
+            data['day'] = utils.normalize(data['day'])
+
+            # other technical values are already in normalized form.
+            return data
+
+        return stocks.groupby('name').apply(inner_func)
+
+
 
     @staticmethod
-    def technical_analysis(stocks):
+    def technical_analysis(stocks: pd.DataFrame):
         """
         Wrapper for indicator calculation
         Args:
@@ -192,10 +194,9 @@ class IndicatorDataset():
         Returns:
 
         """
-        r = dict()
-        for (name, stock) in stocks.items():
-            r[name] = IndicatorDataset.indicators(stock.copy())
-        return r
+
+        return stocks.groupby('name').apply(IndicatorDataset.indicators)
+
 
     @staticmethod
     def indicators(dataframe: pd.DataFrame) -> pd.DataFrame:
@@ -462,6 +463,9 @@ def get_dataset_cls_from_name(name):
 if __name__ == "__main__":
     config = Config()
 
-    dataset = IndicatorDataset(config=config, stock_names=['spy'], label_after=30)
-    print(dataset.train_dataset.__getitem__(0))
+    dataset = IndicatorDataset(dataset_name='IndicatorDataset',
+                               input_path='../dataset/finance/stocks/stocks_sample.csv',
+                               train_valid_ratio=0.9)
+    print(dataset.train_dataset.__getitem__(14))
+    print()
 
