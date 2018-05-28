@@ -1,4 +1,4 @@
-from model import CNN, LSTM
+import model
 import torch
 from torch import nn
 from torch import optim
@@ -202,63 +202,33 @@ class Estimator:
 
     """
 
-    def __init__(self, dataset:LoadDataset, model_config, dataloader_config, use_cuda):
+    def __init__(self, dataset, model_args, dataloader_args, criterion_args, optimizer_args, use_cuda, writer_path):
 
-        self.model = LSTM(input_size=model_config['input_size'],
-                          seq_length=model_config['seq_length'],
-                          num_layers=model_config['num_layers'],
-                          out_size=model_config['out_size'],
-                          batch_size=model_config['batch_size'],
-                          use_cuda=use_cuda)
+        model_cls = model.get_model_cls_from_name(model_args['model_name'])
+        self.model = model_cls(**model_args)
+        print('{} model constructed.'.format(model_args['model_name']))
 
         self.use_cuda = use_cuda
-
         if self.use_cuda:
             self.model = self.model.cuda()
 
-        self.criterion = nn.MSELoss()
-        self.optimizer = optim.Adam(self.model.parameters(), lr=0.0005)
+        if criterion_args['criterion_name'] == 'MSE':
+            self.criterion = nn.MSELoss()
+
+        if optimizer_args['optimizer_name'] == 'Adam':
+            self.optimizer = optim.Adam(self.model.parameters(), lr=optimizer_args['lr'])
 
         self.dataset = dataset
         self.train_dataloader = DataLoader(dataset.train_dataset,
-                                           batch_size=dataloader_config['train_batch_size'],
-                                           shuffle=dataloader_config['train_shuffle'],
+                                           batch_size=dataloader_args['train_batch_size'],
+                                           shuffle=dataloader_args['train_shuffle'],
                                            drop_last=True)
         self.valid_dataloader = DataLoader(dataset.valid_dataset,
-                                           batch_size=dataloader_config['valid_batch_size'],
-                                           shuffle=dataloader_config['valid_shuffle'],
+                                           batch_size=dataloader_args['valid_batch_size'],
+                                           shuffle=dataloader_args['valid_shuffle'],
                                            drop_last=True)
 
-        self.writer = SummaryWriter()
-
-        # res = self.model(torch.autograd.Variable(torch.Tensor(6,96,5), requires_grad=True))
-        # self.writer.add_graph(self.model, res)
-
-        # dummy_input = Variable(torch.rand(1, 3, 224, 224))
-
-        # with SummaryWriter(comment='alexnet') as w:
-        #     model = torchvision.models.alexnet()
-        #     w.add_graph(model, (dummy_input,))
-
-        # dummy_input = Variable(torch.FloatTensor(torch.rand((6,96,5))), requires_grad=True)
-        # out = self.model(dummy_input)
-        #
-        # with SummaryWriter(comment='model') as w:
-        #     w.add_graph(self.model, (dummy_input,), verbose=True)
-        #
-        #
-        # self.writer.add_graph(self.model, (dummy_input,))
-
-
-        #
-        # dummy_input = Variable(torch.rand(6,96,5), requires_grad=True)
-        # # # dummy_input = Variable(torch.rand(1, 1, 28, 28), requires_grad=True)
-        # #
-        # with SummaryWriter(comment='Net') as w:
-        #     w.add_graph(self.model, (dummy_input,))
-        #
-        # # torchviz.make_dot(out, params=dict(self.model.named_parameters()))
-        # print()
+        self.writer = SummaryWriter(log_dir=writer_path)
 
     def run_epoch(self, epoch, t):
 
@@ -303,7 +273,7 @@ class Estimator:
         self.optimizer.zero_grad()  # pytorch accumulates gradients.
 
         # forward + backward + optimize
-        self.model.hidden = self.model.init_hidden()  # detach history of initial hidden
+        #self.model.hidden = self.model.init_hidden()  # detach history of initial hidden
         output = self.model(Xs)
         loss = self.criterion(output, ys)
 
@@ -325,8 +295,8 @@ class Estimator:
     def predict(self, Xs):
         self.model.eval()
 
-        self.model.hidden = self.model.init_hidden(batch_size=1)
-        pX = Variable(FloatTensor(Xs), requires_grad=False)
+        # self.model.hidden = self.model.init_hidden(batch_size=1)
+        pX = Variable(FloatTensor(Xs), requires_grad=False).unsqueeze(0)
         if self.use_cuda:
             pX = pX.cuda()
         output = self.model(pX)
