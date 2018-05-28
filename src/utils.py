@@ -18,6 +18,18 @@ def merge_stocks(input_path, output_path):
 
     stock_dataframe.to_csv(os.path.join(output_path, 'stocks.csv'))
 
+def roll_is_max(x):
+    return True if x.max() == x[-1] else False
+
+def roll_is_min(x):
+    return True if x.min() == x[-1] else False
+
+def pick_random_samples(df, on, condition, n):
+    return df.loc[df[on] == condition].sample(n=n, replace=True)
+
+def normalize(arr):
+    return (arr - arr.min()) / (arr.max() - arr.min())
+
 
 path = '../dataset/finance/stocks'
 merge_stocks(input_path=path, output_path=path)
