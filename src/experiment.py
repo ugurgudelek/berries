@@ -83,16 +83,12 @@ class Experiment:
         dataset = dataset_cls(**config.DATASET_ARGS)
 
         estimator = Estimator(dataset=dataset,
-                              model_config={'input_size': config.INPUT_SIZE,
-                                            'seq_length': config.SEQ_LENGTH,
-                                            'num_layers': config.NUM_LAYERS,
-                                            'out_size': config.OUTPUT_SIZE,
-                                            'batch_size': config.TRAIN_BATCH_SIZE},
-                              dataloader_config={'train_batch_size': config.TRAIN_BATCH_SIZE,
-                                                 'train_shuffle': config.TRAIN_SHUFFLE,
-                                                 'valid_batch_size': config.VALID_BATCH_SIZE,
-                                                 'valid_shuffle': config.VALID_SHUFFLE},
-                              use_cuda=config.USE_CUDA)
+                              model_args=config.MODEL_ARGS,
+                              dataloader_args=config.DATALOADER_ARGS,
+                              criterion_args=config.CRITERION_ARGS,
+                              optimizer_args=config.OPTIMIZER_ARGS,
+                              use_cuda=config.USE_CUDA,
+                              writer_path=os.path.join(config.EXPERIMENT_DIR, 'tensorboard'))
 
         history = History(config.EPOCH_SIZE, config.STORAGE_NAMES)
         visualizer = Visualizer()

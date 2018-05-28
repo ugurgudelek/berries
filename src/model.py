@@ -13,13 +13,18 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 
 
+def get_model_cls_from_name(name):
+    if name == 'CNN':
+        return CNN
 
+    if name == 'LSTM':
+        return LSTM
 
 class CNN(nn.Module):
     """
 
     """
-    def __init__(self):
+    def __init__(self, model_name, input_size, out_size, batch_size):
         super(CNN, self).__init__()
 
         self.cnn1 = nn.Sequential(
@@ -37,7 +42,7 @@ class CNN(nn.Module):
         )
         self.fc = nn.Sequential(
             nn.Linear(4608, 500),
-            nn.Linear(500, 1)
+            nn.Linear(500, out_size)
         )
 
     def forward(self, x):

@@ -16,7 +16,7 @@ def merge_stocks(input_path, output_path):
     for stockname, stockdata in stocks.items():
         stock_dataframe = pd.concat((stock_dataframe, stockdata))
 
-    stock_dataframe.to_csv(os.path.join(output_path, 'stocks.csv'))
+    stock_dataframe.to_csv(os.path.join(output_path, 'stocks.csv'), index=False)
 
 def roll_is_max(x):
     return True if x.max() == x[-1] else False
@@ -31,5 +31,6 @@ def normalize(arr):
     return (arr - arr.min()) / (arr.max() - arr.min())
 
 
-path = '../dataset/finance/stocks'
-merge_stocks(input_path=path, output_path=path)
+input_path = '../dataset/finance/stocks/raw_stocks'
+output_path = '../dataset/finance/stocks'
+merge_stocks(input_path=input_path, output_path=output_path)
