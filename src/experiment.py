@@ -98,7 +98,7 @@ class Experiment:
         return Experiment(config, dataset, estimator, history, visualizer, epoch)
 
     @classmethod
-    def resume(self, experiment_path, config):
+    def resume(cls, experiment_path, config):
         ckpt_path = Checkpoint.get_latest_checkpoint(experiment_path)
 
         ckpt = Checkpoint.load(ckpt_path)
