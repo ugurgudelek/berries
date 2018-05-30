@@ -104,14 +104,6 @@ class IndicatorDataset():
         # normalize
         self.dataset = self.normalize(self.dataset).dropna(axis=0)
 
-        # self.dataset.to_csv('../dataset/finance/stocks/indicator_dataset.csv', index=False)
-        self.dataset = pd.read_csv('../dataset/finance/stocks/indicator_dataset.csv')
-        stocks['date'] = stocks['date'].astype('datetime64[ns]')
-        stocks['high'] = stocks['high'].values.astype(np.float)
-        stocks['low'] = stocks['low'].values.astype(np.float)
-        stocks['adjusted_close'] = stocks['adjusted_close'].values.astype(np.float)
-        stocks['volume'] = stocks['volume'].values.astype(np.float)
-
         # equalize up,down and hold labels
         self.dataset = self.updown_scaling(self.dataset)
 
@@ -120,7 +112,7 @@ class IndicatorDataset():
         self.dataset = self.dataset.sort_values(by=['date', 'name']).reset_index(drop=True)
 
 
-        train_len = int(self.dataset.shape[0] * 0.9)
+        train_len = int(self.dataset.shape[0] * self.train_valid_ratio)
         self.train_dataset = InnerIndicatorDataset(self.dataset.iloc[:train_len, :])
         self.valid_dataset = InnerIndicatorDataset(self.dataset.iloc[train_len:, :])
 

@@ -2,3 +2,9 @@
 *.iml
 *.xml
 *.pyc
+*.pt
+*.AIDL-SERVER
+*.json
+*.csv
+*.xls
+src/.cache/v/cache/lastfailed

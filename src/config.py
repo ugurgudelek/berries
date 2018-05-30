@@ -20,7 +20,7 @@ class Config:
 
         """
         self.MODEL_NAME = 'CNN'
-        self.EPOCH_SIZE = 100
+        self.EPOCH_SIZE = 501
         self.INPUT_SIZE = 28
         self.OUTPUT_SIZE = 3  # down, steady, up
 
@@ -33,7 +33,7 @@ class Config:
         self.DATASET_NAME = 'IndicatorDataset'
         self.INPUT_PATH = '../dataset/finance/stocks/stocks.csv'
 
-        self.EXPERIMENT_DIR = '../experiment/finance_cnn'
+        self.EXPERIMENT_DIR = '../experiment/finance_cnn3'
         self.RANDOM_SEED = 7
 
 
@@ -62,35 +62,6 @@ class Config:
 
         self.RESUME = False
 
-        # self.USE_CUDA = torch.cuda.is_available()
-        self.USE_CUDA = False
-        print('CUDA AVAILABLE:{}'.format(self.USE_CUDA))
+        self.USE_CUDA = torch.cuda.is_available()
         # self.USE_CUDA = False
-# class Config:
-#     """
-#
-#     """
-#
-#     def __init__(self):
-#         self.stocks_dir = '../input/raw_data'
-#         self.stock_names = ['dia','ewa','ewc','ewg',
-#                             'ewh','ewj','eww','spy',
-#                             'xlb','xle','xlf','xli',
-#                             'xlk','xlp','xlu','xlv','xly']
-#
-#         # self.stock_names = ['spy']
-#         self.label_after = 20
-#
-#         self.input_size = 28
-#         self.seq_length = 28
-#         self.num_layers = 1
-#         self.out_size = 1
-#
-#         self.train_batch_size = 1000
-#         self.valid_batch_size = 1000
-#
-#         self.train_shuffle = True
-#         self.valid_shuffle = False
-#
-#         self.epoch_size = 20
-#         self.storage_names = ['y_hat', 'loss', 'y']
+        print('CUDA AVAILABLE:{}'.format(self.USE_CUDA))
