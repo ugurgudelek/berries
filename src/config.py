@@ -19,6 +19,7 @@ class Config:
         """
 
         """
+        self.RANDOM_SEED = 42
         self.MODEL_NAME = 'CNN'
         self.EPOCH_SIZE = 501
         self.INPUT_SIZE = 28
@@ -31,11 +32,9 @@ class Config:
         self.VALID_SHUFFLE = False
 
         self.DATASET_NAME = 'IndicatorDataset'
-        self.INPUT_PATH = '../dataset/finance/stocks/stocks.csv'
+        self.INPUT_PATH = '../dataset/finance/stocks/sample_2000_random.csv'
 
-        self.EXPERIMENT_DIR = '../experiment/finance_cnn3'
-        self.RANDOM_SEED = 7
-
+        self.EXPERIMENT_DIR = '../experiment/finance_cnn'
 
         self.DATASET_ARGS = {'dataset_name': self.DATASET_NAME,
                              'train_valid_ratio': self.TRAIN_VALID_RATIO,
@@ -63,5 +62,9 @@ class Config:
         self.RESUME = False
 
         self.USE_CUDA = torch.cuda.is_available()
+        if self.USE_CUDA:
+            if torch.cuda.get_device_name(0) == 'GeForce GT 650M':
+                self.USE_CUDA = False
+                print('USE_CUDA is set to False because this GPU is too old.')
         # self.USE_CUDA = False
         print('CUDA AVAILABLE:{}'.format(self.USE_CUDA))

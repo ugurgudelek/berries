@@ -49,13 +49,17 @@ class InnerIndicatorDataset(torch.utils.data.Dataset):
         X = self.X.iloc[ix: ix + self.image_width, :]
         y = self.y.iloc[ix + self.image_width - 1, :]
 
+        name = self.dataset['name'].iloc[ix + self.image_width - 1]
+        date = self.dataset['date'].iloc[ix + self.image_width - 1]
+        extra_info = {'name':name, 'date':date}
+
         # change type to numpy
         X = X.values.astype(float)
         y = y.values.astype(float)
 
         X = np.expand_dims(X, axis=0)
 
-        return (X,y)
+        return X,y, extra_info
 
     def _reshape(self, data):
         # (in_channels, width, height)
