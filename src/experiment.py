@@ -138,7 +138,12 @@ class Experiment:
         #
         # result_df = pd.concat((valid_raw_dataset.reset_index(drop=True), result_df), axis=1)
 
-        result_df = pd.concat((pd.DataFrame(vys, columns=['sell', 'buy', 'hold']), pd.Series(dates, name='date'), pd.Series(names, name='name')), axis=1)
+        result_df = pd.concat((pd.DataFrame(vpreds, columns=['psell', 'pbuy', 'phold']),
+                               pd.DataFrame(vys, columns=['rsell', 'rbuy', 'rhold']),
+                                pd.Series(dates, name='date'),
+                                pd.Series(names, name='name')), axis=1)
+
+        result_df = result_df.drop_duplicates(subset=['date', 'name'])
 
         result_df.to_csv('result.csv', index=False)
 
