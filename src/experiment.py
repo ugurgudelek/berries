@@ -74,10 +74,16 @@ class Experiment:
         if config.RANDOM_SEED is not None:
             torch.manual_seed(config.RANDOM_SEED)
             np.random.seed(config.RANDOM_SEED)
+            if config.USE_CUDA:
+                torch.cuda.manual_seed_all(config.RANDOM_SEED)
+                torch.backends.cudnn.deterministic = True
+
+        print('randomness test: numpy: {} || torch: {}'.format(np.random.random(1), torch.rand(1)))
+        print()
+
 
     @classmethod
     def start_over(cls, config):
-
 
         dataset_cls = get_dataset_cls_from_name(name=config.DATASET_NAME)
         dataset = dataset_cls(**config.DATASET_ARGS)
@@ -117,20 +123,24 @@ class Experiment:
         return experiment
 
     def prediction_to_csv(self):
-        vXs, vys, vpreds, vlosses = self.estimator.predict_all_validation()
+        vXs, vys, vpreds, vlosses, (dates,names) = self.estimator.predict_all_validation()
 
-        valid_raw_dataset = self.estimator.dataset.get_raw_valid_dataset()
-        vXs_inverse = self.estimator.dataset.inverse_normalize(vXs, only_first=False)
-        vys_inverse = self.estimator.dataset.inverse_normalize(vys, only_first=True)
-        vpreds_inverse = self.estimator.dataset.inverse_normalize(vpreds, only_first=True)
+        print()
+        # valid_raw_dataset = self.estimator.dataset.get_raw_valid_dataset()
+        # vXs_inverse = self.estimator.dataset.inverse_normalize(vXs, only_first=False)
+        # vys_inverse = self.estimator.dataset.inverse_normalize(vys, only_first=True)
+        # vpreds_inverse = self.estimator.dataset.inverse_normalize(vpreds, only_first=True)
+        #
+        # # fixme: Burada kaldım. Karıştı buralar
+        # y_df = pd.DataFrame(vys_inverse, columns=list(range(vys_inverse.shape[1]))).add_prefix(prefix='y')
+        # yhat_df = pd.DataFrame(vpreds_inverse, columns=list(range(vpreds_inverse.shape[1]))).add_prefix(prefix='yhat')
+        # result_df = pd.concat((y_df, yhat_df), axis=1)
+        #
+        # result_df = pd.concat((valid_raw_dataset.reset_index(drop=True), result_df), axis=1)
 
-        # fixme: Burada kaldım. Karıştı buralar
-        y_df = pd.DataFrame(vys_inverse, columns=list(range(vys_inverse.shape[1]))).add_prefix(prefix='y')
-        yhat_df = pd.DataFrame(vpreds_inverse, columns=list(range(vpreds_inverse.shape[1]))).add_prefix(prefix='yhat')
-        result_df = pd.concat((y_df, yhat_df), axis=1)
+        result_df = pd.concat((pd.DataFrame(vys, columns=['sell', 'buy', 'hold']), pd.Series(dates, name='date'), pd.Series(names, name='name')), axis=1)
 
-        result_df = pd.concat((valid_raw_dataset.reset_index(drop=True), result_df), axis=1)
-        result_df.to_csv('result.csv')
+        result_df.to_csv('result.csv', index=False)
 
     def do(self):
 
@@ -155,7 +165,7 @@ class Experiment:
 
                 # Train
                 # Sample Predict
-                ix, (pX, py) = self.estimator.dataset.train_dataset.get_sample()
+                ix, (pX, py, extra_info) = self.estimator.dataset.train_dataset.get_sample()
                 prediction = self.estimator.predict(pX)
 
                 # Visualize
@@ -165,7 +175,7 @@ class Experiment:
 
                 # Validation
                 # Sample Predict
-                ix, (pX, py) = self.estimator.dataset.valid_dataset.get_sample()
+                ix, (pX, py, extra_info) = self.estimator.dataset.valid_dataset.get_sample()
                 prediction = self.estimator.predict(pX)
 
                 # Visualize
@@ -196,9 +206,9 @@ class Experiment:
 
 
 config = Config()
-# experiment = Experiment.start_over(config)
-experiment = Experiment.resume(config.EXPERIMENT_DIR, config)
-# experiment.do()
+experiment = Experiment.start_over(config)
+# experiment = Experiment.resume(config.EXPERIMENT_DIR, config)
+experiment.do()
 experiment.prediction_to_csv()
 sample = experiment.dataset.train_dataset.get_sample()
 print()
