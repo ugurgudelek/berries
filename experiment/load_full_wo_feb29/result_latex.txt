@@ -1,0 +1,21 @@
+\begin{table*}[!h]
+	\centering
+	\caption{Optimization Resultss}
+	\label{tab:optimization_result}
+	\begin{tabular}{|c|p{1.5cm}|c|p{1.5cm}|p{1.5cm}|p{1.5cm}|p{1.5cm}|p{1.5cm}|p{1.5cm}|p{1.5cm}|}
+		\hline
+		\textbf{Tariff} & \textbf{Decision Strategy} & \textbf{Case} & \textbf{Forecasted Cost} & \textbf{Realized Cost} & \textbf{Optimal Cost} & \textbf{Realized Saving} & \textbf{Saving Rate (\%)} & \textbf{Optimal Saving} & \textbf{Optimality Rate (\%)} \\ \hline
+		DE              & Multi Time                 & None          & 912.73 \euro                 & 912.73 \euro               & 912.73 \euro              & -                        & -                         & -                       & -                             \\ \hline
+		DE              & Multi Time                 & Battery-only  & 865.25 \euro                 & 912.73 \euro               & 912.73 \euro              & 0.00 \euro                   & 0.00\%                    & 0.00 \euro                  & -                             \\ \hline
+		DE              & Multi Time                 & PV-included   & 241.42 \euro                 & 297.83 \euro               & 294.48 \euro              & 614.90 \euro                 & 67.37\%                   & 618.25 \euro                & 99.46\%                       \\ \hline
+		DE              & Single Time                & None          & 912.73 \euro                 & 912.73 \euro               & 912.73 \euro              & -                        & -                         & -                       & -                             \\ \hline
+		DE              & Single Time                & Battery-only  & 868.71 \euro                 & 912.73 \euro               & 912.73 \euro              & 0.00 \euro                   & 0.00\%                    & 0.00 \euro                  & -                             \\ \hline
+		DE              & Single Time                & PV-included   & 243.84 \euro                 & 297.08 \euro               & 294.48 \euro              & 615.65 \euro                 & 67.45\%                   & 618.25 \euro                & 99.58\%                       \\ \hline
+		TR              & Multi Time                 & None          & 1,624.38 \Lira               & 1,624.38 \Lira             & 1,624.38 \Lira            & -                        & -                         & -                       & -                             \\ \hline
+		TR              & Multi Time                 & Battery-only  & 934.17 \Lira                 & 1,028.01 \Lira             & 1,023.86 \Lira            & 596.37 \euro                 & 36.71\%                   & 600.52 \euro                & 99.31\%                       \\ \hline
+		TR              & Multi Time                 & PV-included   & -157.85 \Lira                & -42.97 \Lira               & -50.52 \Lira              & 1,667.35 \euro               & 102.65\%                  & 1,674.90 \euro              & 99.55\%                       \\ \hline
+		TR              & Single Time                & None          & 1,624.38 \Lira               & 1,624.38 \Lira             & 1,624.38 \Lira            & -                        & -                         & -                       & -                             \\ \hline
+		TR              & Single Time                & Battery-only  & 941.89 \Lira                 & 1,028.69 \Lira             & 1,023.86 \Lira            & 595.69 \euro                 & 36.67\%                   & 600.52 \euro                & 99.20\%                       \\ \hline
+		TR              & Single Time                & PV-included   & -151.16 \Lira                & -43.92 \Lira               & -50.52 \Lira              & 1,668.30 \euro               & 102.70\%                  & 1,674.90 \euro              & 99.61\%                       \\ \hline
+	\end{tabular}
+\end{table*}
