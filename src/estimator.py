@@ -10,10 +10,10 @@ import numpy as np
 import torchvision
 
 from tensorboardX import SummaryWriter
-
+import pandas as pd
 from dataset import LoadDataset
 
-
+import collections
 # class LoadEstimator:
 #     """
 #     todo: Please add docstring
@@ -219,14 +219,34 @@ class Estimator:
             self.optimizer = optim.Adam(self.model.parameters(), lr=optimizer_args['lr'])
 
         self.dataset = dataset
+
+        def custom_collate_fn(batch):
+
+            if isinstance(batch[0], np.ndarray):
+                return torch.stack([torch.from_numpy(b) for b in batch], 0)
+
+            elif isinstance(batch[0], collections.Sequence):
+                transposed = zip(*batch)
+                return [custom_collate_fn(samples) for samples in transposed]
+
+            elif isinstance(batch[0], dict):
+                return pd.DataFrame(list(batch)).to_dict('list')
+            else:
+
+                raise Exception('Update custom_collate_fn!!')
+
+
+
         self.train_dataloader = DataLoader(dataset.train_dataset,
                                            batch_size=dataloader_args['train_batch_size'],
                                            shuffle=dataloader_args['train_shuffle'],
-                                           drop_last=True)
+                                           drop_last=True,
+                                           collate_fn=custom_collate_fn) # to override default_collate_fn
         self.valid_dataloader = DataLoader(dataset.valid_dataset,
                                            batch_size=dataloader_args['valid_batch_size'],
                                            shuffle=dataloader_args['valid_shuffle'],
-                                           drop_last=True)
+                                           drop_last=True,
+                                           collate_fn=custom_collate_fn) # to override default_collate_fn
 
         self.writer = SummaryWriter(log_dir=writer_path)
 
@@ -234,7 +254,7 @@ class Estimator:
 
         # Train
         toutputs, tlosses = np.array([]), np.array([])
-        for step, (tX, ty) in enumerate(self.train_dataloader):
+        for step, (tX, ty, extra_info) in enumerate(self.train_dataloader):
             if step % 100 == 0:
                 t.set_description('EPOCH : {} || STEP : {}'.format(epoch, step))
 
@@ -255,7 +275,7 @@ class Estimator:
 
         # Validate
         voutputs, vlosses = np.array([]), np.array([])
-        for i, (vX, vy) in enumerate(self.valid_dataloader):
+        for i, (vX, vy, extra_info) in enumerate(self.valid_dataloader):
             vX, vy = Variable(vX.float(), requires_grad=False), Variable(vy.float(), requires_grad=False)
             if self.use_cuda:
                 vX, vy = vX.cuda(), vy.cuda()
@@ -311,7 +331,9 @@ class Estimator:
         # Validate
         voutputs, vlosses = np.array([]), np.array([])
         vXs, vys = np.array([]), np.array([])
-        for i, (vX, vy) in enumerate(self.valid_dataloader):
+
+        names,dates = np.array([]), np.array([])
+        for i, (vX, vy, extra_info) in enumerate(self.valid_dataloader):
             vX, vy = Variable(vX.float(), requires_grad=False), Variable(vy.float(), requires_grad=False)
             if self.use_cuda:
                 vX, vy = vX.cuda(), vy.cuda()
@@ -329,7 +351,10 @@ class Estimator:
             vys = np.concatenate((vys, vy.cpu().data.numpy()),
                                       axis=0) if vys.size else vy.cpu().data.numpy()
 
+            dates = np.append(dates, extra_info['date'])
+            names = np.append(names, extra_info['name'])
+
         epoch_validation_loss = vlosses.mean()
 
-        return vXs, vys,  voutputs, vlosses
+        return vXs, vys,  voutputs, vlosses, (dates,names)
 
