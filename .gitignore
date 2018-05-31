@@ -8,3 +8,4 @@
 src/.cache/v/cache/lastfailed
 *.ugurlaptop
 *.xlsx
+dataset/energy/*
