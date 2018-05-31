@@ -87,6 +87,9 @@ class BuySell:
         dataframe['share_amount'] = share_amount_list
         dataframe['total_capital'] = dataframe['current_capital'] + dataframe['share_amount']*dataframe['price']
 
+        dataframe['profit'] = dataframe['total_capital'] - self.initial_capital
+
+
         return dataframe
 
 
@@ -96,10 +99,37 @@ class BuySell:
 if __name__ == "__main__":
     np.random.seed(42)
     initial_capital = 10000
-    fake_dataframe = pd.DataFrame({'price':np.random.randint(100,150, size=100),
-                                   'directive':np.random.choice(['buy','hold','sell'], size=100, replace=True)})
+    size= 100
+    fake_dataframe = pd.DataFrame({'price':np.random.randint(100,150, size=size),
+                                   'directive':np.random.choice(['buy','hold','sell'], size=size, replace=True),
+                                   'name':np.random.choice(['xlp','xlu','xlv','xly','dia','ewa','ewc','ewg','ewh','ewj','eww','spy','xlb','xle','xlf','xli','xlk'], size=size, replace=True)})
 
-    buysell = BuySell(capital=initial_capital)
-    # print(buysell.buyandhold(dataframe=fake_dataframe))
-    # print(fake_dataframe)
-    print(buysell.process(fake_dataframe))
+    dataframe = pd.read_csv('../experiment/finance_cnn3/result.csv')
+    prices = pd.read_csv('../dataset/finance/stocks/stocks.csv')
+
+    dataframe = pd.merge(dataframe, prices, on=['date', 'name']).drop(['open','high','low','close', 'volume'], axis=1)
+
+    dataframe = dataframe.rename(columns={'adjusted_close':'price'})
+
+    def custom_argmax(row):
+        if row['sell'] == 1:
+            return 'sell'
+        if row['buy'] == 1:
+            return 'buy'
+        return 'hold'
+
+    # dataframe['directive'] = dataframe.apply(custom_argmax, axis=1)
+    # dataframe = dataframe.drop_duplicates()
+
+    stock_names = dataframe['name'].unique()
+    result_dict = dict()
+    for stock_name in stock_names:
+
+        search_df = fake_dataframe.loc[dataframe['name'] == stock_name]
+
+        buysell = BuySell(capital=initial_capital)
+
+        # result_dict[stock_name] = buysell.buyandhold(dataframe=search_df)
+        result_dict[stock_name] = buysell.process(dataframe=search_df)['profit'].iloc[-1]
+
+    print(result_dict)
