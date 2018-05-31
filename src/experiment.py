@@ -206,9 +206,9 @@ class Experiment:
 
 
 config = Config()
-experiment = Experiment.start_over(config)
-# experiment = Experiment.resume(config.EXPERIMENT_DIR, config)
-experiment.do()
+# experiment = Experiment.start_over(config)
+experiment = Experiment.resume(config.EXPERIMENT_DIR, config)
+# experiment.do()
 experiment.prediction_to_csv()
 sample = experiment.dataset.train_dataset.get_sample()
 print()

@@ -32,9 +32,9 @@ class Config:
         self.VALID_SHUFFLE = False
 
         self.DATASET_NAME = 'IndicatorDataset'
-        self.INPUT_PATH = '../dataset/finance/stocks/sample_2000_random.csv'
+        self.INPUT_PATH = '../dataset/finance/stocks/stocks.csv'
 
-        self.EXPERIMENT_DIR = '../experiment/finance_cnn'
+        self.EXPERIMENT_DIR = '../experiment/finance_cnn3'
 
         self.DATASET_ARGS = {'dataset_name': self.DATASET_NAME,
                              'train_valid_ratio': self.TRAIN_VALID_RATIO,
