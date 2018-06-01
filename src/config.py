@@ -34,7 +34,7 @@ class Config:
         self.DATASET_NAME = 'IndicatorDataset'
         self.INPUT_PATH = '../dataset/finance/stocks/stocks.csv'
 
-        self.EXPERIMENT_DIR = '../experiment/finance_cnn3'
+        self.EXPERIMENT_DIR = '../experiment/finance_cnn_garbage'
 
         self.DATASET_ARGS = {'dataset_name': self.DATASET_NAME,
                              'train_valid_ratio': self.TRAIN_VALID_RATIO,

@@ -75,8 +75,6 @@ class IndicatorDataset():
 
     """
 
-    # def __init__(self, stocks_dir, stock_names=None, label_after=20, row_len=28):
-
     def __init__(self, dataset_name, input_path, train_valid_ratio):
 
         self.dataset_name = dataset_name
@@ -99,22 +97,27 @@ class IndicatorDataset():
         self.dataset = IndicatorDataset.technical_analysis(stocks)
 
         # add seasonality
-        self.dataset['year'] = self.dataset['date'].dt.year.values
-        self.dataset['month'] = self.dataset['date'].dt.month.values
-        self.dataset['week'] = self.dataset['date'].dt.week.values
-        self.dataset['weekday'] = self.dataset['date'].dt.weekday.values
-        self.dataset['day'] = self.dataset['date'].dt.day.values
+        self.dataset['year'] = self.dataset['date'].dt.year.values.astype(int)
+        self.dataset['month'] = self.dataset['date'].dt.month.values.astype(int)
+        self.dataset['week'] = self.dataset['date'].dt.week.values.astype(int)
+        self.dataset['weekday'] = self.dataset['date'].dt.weekday.values.astype(int)
+        self.dataset['day'] = self.dataset['date'].dt.day.values.astype(int)
 
-        # normalize
-        self.dataset = self.normalize(self.dataset).dropna(axis=0)
 
-        # equalize up,down and hold labels
-        self.dataset = self.updown_scaling(self.dataset)
+        self.dataset = utils.save_column(self.dataset, col_name='adjusted_close')
 
+        # make stationary, standardize
+        # self.dataset = self.normalize(self.dataset).dropna(axis=0)
+        self.dataset = self.standardize(self.dataset, neg_subset=['date','name','label_buy','label_sell','label_hold','raw_adjusted_close'])
 
         # sort dataset
         self.dataset = self.dataset.sort_values(by=['date', 'name']).reset_index(drop=True)
 
+        # save dataset
+        self.dataset.to_csv(os.path.join('/'.join(input_path.split('/')[:-1]), 'indicator_dataset.csv'), index=False)
+
+        # equalize up,down and hold labels
+        self.dataset = self.updown_scaling(self.dataset)
 
         train_len = int(self.dataset.shape[0] * self.train_valid_ratio)
         self.train_dataset = InnerIndicatorDataset(self.dataset.iloc[:train_len, :])
@@ -133,16 +136,21 @@ class IndicatorDataset():
 
             return pd.concat((stock_data, new_ups, new_downs))
 
-        return stocks.groupby('name').apply(inner_func)
+        return stocks.groupby('name').apply(inner_func).sort_values(by=['date', 'name']).reset_index(drop=True)
 
-    def labelize_with_windows_slide(self, stocks, window=28, shift_periods=28):
+    def labelize_with_windows_slide(self, stocks, window=28):
 
         def inner_func(stock_data):
-            stock_data['max_28'] = stock_data['adjusted_close'].rolling(window).apply(utils.roll_is_max)
-            stock_data['min_28'] = stock_data['adjusted_close'].rolling(window).apply(utils.roll_is_min)
+            """look future windowth price values to label each row
+            if window[0] is max in given window then label it with sell,
+            if window[0] is min in given window then label it with buy,
+            otherwise hold.
+            """
+            stock_data['max_28'] = stock_data['adjusted_close'].rolling(window).apply(utils.roll_is_max).shift(periods=-window + 1)
+            stock_data['min_28'] = stock_data['adjusted_close'].rolling(window).apply(utils.roll_is_min).shift(periods=-window + 1)
 
-            stock_data['label_buy'] = stock_data['min_28'].shift(periods=-shift_periods)
-            stock_data['label_sell'] = stock_data['max_28'].shift(periods=-shift_periods)
+            stock_data['label_buy'] = stock_data['min_28'].values
+            stock_data['label_sell'] = stock_data['max_28'].values
             stock_data['label_hold'] = 0.0
             stock_data.loc[(stock_data['label_buy'] != 1.0) & (stock_data['label_sell'] != 1.0), 'label_hold'] = 1.0
             return stock_data.drop(['max_28', 'min_28'], axis=1)
@@ -167,7 +175,17 @@ class IndicatorDataset():
 
         return stocks
 
-    def normalize(self, stocks):
+    def standardize(self, stocks, neg_subset):
+
+        def inner_func(data):
+            data_neg_subset = data[neg_subset]
+            data_subset = data.drop(neg_subset, axis=1)
+            data_subset = data_subset.apply(utils.standardize, axis=0)
+            return pd.concat((data_neg_subset, data_subset),axis=1)
+
+        return stocks.groupby('name').apply(inner_func).dropna()
+
+    def make_stationary(self, stocks):
 
         def inner_func(data):
             # change values to percentage change
@@ -175,13 +193,20 @@ class IndicatorDataset():
             data.loc[:, 'high'] = data.loc[:, 'high'].pct_change()
             data.loc[:, 'low'] = data.loc[:, 'low'].pct_change()
             data.loc[:, 'close'] = data.loc[:, 'close'].pct_change()
-
             data.loc[:, 'adjusted_close'] = data.loc[:, 'adjusted_close'].pct_change()
             # data.loc[:, 'sma_15'] = data.loc[:, 'sma_15'].pct_change()
             data.loc[:, 'sma_20'] = data.loc[:, 'sma_20'].pct_change()
             # data.loc[:, 'sma_25'] = data.loc[:, 'sma_25'].pct_change()
             data.loc[:, 'sma_30'] = data.loc[:, 'sma_30'].pct_change()
             data.loc[:, 'volume'] = data.loc[:, 'volume'].pct_change()
+
+            return data
+
+        return stocks.groupby('name').apply(inner_func)
+
+    def normalize(self, stocks):
+
+        def inner_func(data):
 
             data['year'] = utils.normalize(data['year'])
             data['month'] = utils.normalize(data['month'])
