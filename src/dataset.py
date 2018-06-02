@@ -33,7 +33,7 @@ class InnerIndicatorDataset(torch.utils.data.Dataset):
         self.dataset = dataset
 
         self.X = self.dataset.drop(['date','open','high','low', 'close', 'name',
-                                    'label_sell', 'label_buy', 'label_hold'], axis=1)
+                                    'label_sell', 'label_buy', 'label_hold', 'raw_adjusted_close'], axis=1)
 
         self.y = self.dataset[['label_sell', 'label_buy', 'label_hold']]
         self.name = self.dataset[['name']]
@@ -75,14 +75,17 @@ class IndicatorDataset():
 
     """
 
-    def __init__(self, dataset_name, input_path, train_valid_ratio):
+    def __init__(self, dataset_name, input_path, stock_names, train_valid_ratio, save_indicator_dataset):
 
         self.dataset_name = dataset_name
         self.input_path = input_path
         self.train_valid_ratio = train_valid_ratio
+        self.stock_names = stock_names
 
 
         stocks = pd.read_csv(self.input_path)
+        if stock_names is not None:
+            stocks = stocks.loc[np.isin(stocks['name'], self.stock_names)]
         stocks['date'] = stocks['date'].astype('datetime64[ns]')
         stocks['high'] = stocks['high'].values.astype(np.float)
         stocks['low'] = stocks['low'].values.astype(np.float)
@@ -114,9 +117,10 @@ class IndicatorDataset():
         self.dataset = self.dataset.sort_values(by=['date', 'name']).reset_index(drop=True)
 
         # save dataset
-        self.dataset.to_csv(os.path.join('/'.join(input_path.split('/')[:-1]), 'indicator_dataset.csv'), index=False)
+        if save_indicator_dataset:
+            self.dataset.to_csv(os.path.join('/'.join(input_path.split('/')[:-1]), 'indicator_dataset.csv'), index=False)
 
-        # equalize up,down and hold labels
+        # # equalize up,down and hold labels
         self.dataset = self.updown_scaling(self.dataset)
 
         train_len = int(self.dataset.shape[0] * self.train_valid_ratio)

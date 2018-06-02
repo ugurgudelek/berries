@@ -122,30 +122,20 @@ class Experiment:
 
         return experiment
 
-    def prediction_to_csv(self):
+    def prediction_to_csv(self, save_path):
         vXs, vys, vpreds, vlosses, (dates,names) = self.estimator.predict_all_validation()
 
-        print()
-        # valid_raw_dataset = self.estimator.dataset.get_raw_valid_dataset()
-        # vXs_inverse = self.estimator.dataset.inverse_normalize(vXs, only_first=False)
-        # vys_inverse = self.estimator.dataset.inverse_normalize(vys, only_first=True)
-        # vpreds_inverse = self.estimator.dataset.inverse_normalize(vpreds, only_first=True)
-        #
-        # # fixme: Burada kaldım. Karıştı buralar
-        # y_df = pd.DataFrame(vys_inverse, columns=list(range(vys_inverse.shape[1]))).add_prefix(prefix='y')
-        # yhat_df = pd.DataFrame(vpreds_inverse, columns=list(range(vpreds_inverse.shape[1]))).add_prefix(prefix='yhat')
-        # result_df = pd.concat((y_df, yhat_df), axis=1)
-        #
-        # result_df = pd.concat((valid_raw_dataset.reset_index(drop=True), result_df), axis=1)
+        valid_dataset = self.estimator.dataset.valid_dataset.dataset
 
         result_df = pd.concat((pd.DataFrame(vpreds, columns=['psell', 'pbuy', 'phold']),
                                pd.DataFrame(vys, columns=['rsell', 'rbuy', 'rhold']),
                                 pd.Series(dates, name='date'),
                                 pd.Series(names, name='name')), axis=1)
 
+        result_df = pd.merge(result_df, valid_dataset[['date', 'name', 'raw_adjusted_close']], on=['date', 'name'])
         result_df = result_df.drop_duplicates(subset=['date', 'name'])
 
-        result_df.to_csv('result.csv', index=False)
+        result_df.to_csv(os.path.join(save_path, 'prediction_results.csv'), index=False)
 
     def do(self):
 
@@ -210,21 +200,20 @@ class Experiment:
                 # self.history.append(epoch=epoch, phase='valid', name='loss', value=vloss)
 
 
-config = Config()
-experiment = Experiment.start_over(config)
-# experiment = Experiment.resume(config.EXPERIMENT_DIR, config)
-experiment.do()
-experiment.prediction_to_csv()
-sample = experiment.dataset.train_dataset.get_sample()
-print()
-# experiment.estimator.dataset.train_dataset.__getitem__()
+def exp_pipeline():
+    stock_names = ['dia', 'ewa', 'ewc', 'ewg', 'ewh', 'ewj', 'eww', 'spy', 'xlb',
+                   'xle', 'xlf', 'xli', 'xlk', 'xlp', 'xlu', 'xlv', 'xly']
 
-# config = Config()
-#
-# estimator = LoadEstimator(config=config, resume=config.RESUME)
-#
-# if config.RESUME:
-#     res_dict = estimator.test()
-#     print()
-# else:
-#     estimator.train(epoch_size=config.EPOCH_SIZE)
+    for stock_name in stock_names:
+
+        config = Config()
+        config.STOCK_NAMES = [stock_name]
+        config.EXPERIMENT_DIR = '../experiment/finance_cnn_exp1_{}_only'.format(stock_name)
+        config.set_dataset_args()
+
+        experiment = Experiment.start_over(config)
+        experiment.do()
+        experiment.prediction_to_csv(save_path=config.EXPERIMENT_DIR)
+
+
+exp_pipeline()

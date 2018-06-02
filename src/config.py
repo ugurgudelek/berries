@@ -21,9 +21,12 @@ class Config:
         """
         self.RANDOM_SEED = 42
         self.MODEL_NAME = 'CNN'
-        self.EPOCH_SIZE = 501
+        self.EPOCH_SIZE = 20
         self.INPUT_SIZE = 28
         self.OUTPUT_SIZE = 3  # down, steady, up
+
+        self.STOCK_NAMES = ['dia']
+        self.SAVE_INDICATOR_DATASET = True
 
         self.TRAIN_VALID_RATIO = 0.90
         self.TRAIN_BATCH_SIZE = 64
@@ -34,14 +37,16 @@ class Config:
         self.DATASET_NAME = 'IndicatorDataset'
         self.INPUT_PATH = '../dataset/finance/stocks/stocks.csv'
 
-        self.EXPERIMENT_DIR = '../experiment/finance_cnn_garbage'
+        self.EXPERIMENT_DIR = '../experiment/finance_cnn_exp1_dia_only'
 
         self.DATASET_ARGS = {'dataset_name': self.DATASET_NAME,
                              'train_valid_ratio': self.TRAIN_VALID_RATIO,
-                             'input_path': self.INPUT_PATH}
+                             'input_path': self.INPUT_PATH,
+                             'stock_names': self.STOCK_NAMES,
+                             'save_indicator_dataset':self.SAVE_INDICATOR_DATASET}
 
         self.MODEL_ARGS = {'model_name':self.MODEL_NAME,
-            'input_size': self.INPUT_SIZE,
+                           'input_size': self.INPUT_SIZE,
                            'out_size': self.OUTPUT_SIZE,
                            'batch_size': self.TRAIN_BATCH_SIZE
                            }
@@ -68,3 +73,10 @@ class Config:
                 print('USE_CUDA is set to False because this GPU is too old.')
         # self.USE_CUDA = False
         print('CUDA AVAILABLE:{}'.format(self.USE_CUDA))
+
+    def set_dataset_args(self):
+        self.DATASET_ARGS = {'dataset_name': self.DATASET_NAME,
+                         'train_valid_ratio': self.TRAIN_VALID_RATIO,
+                         'input_path': self.INPUT_PATH,
+                         'stock_names': self.STOCK_NAMES,
+                         'save_indicator_dataset': self.SAVE_INDICATOR_DATASET}
