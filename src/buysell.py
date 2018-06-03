@@ -1,8 +1,3 @@
-"""
-Ugur Gudelek
-29.05.2018
-"""
-
 import pandas as pd
 import numpy as np
 
@@ -14,7 +9,6 @@ class BuySell:
         self.current_capital = capital
         self.share_amount = 0
 
-
     def buyandhold(self, dataframe):
         """
 
@@ -25,7 +19,7 @@ class BuySell:
 
         """
         first_price = dataframe.iloc[0].loc['price']
-        last_price  = dataframe.iloc[-1].loc['price']
+        last_price = dataframe.iloc[-1].loc['price']
 
         self.current_capital, self.share_amount = BuySell._buy(self.initial_capital, first_price)
         money, self.share_amount = BuySell._sell(self.share_amount, last_price)
@@ -56,8 +50,6 @@ class BuySell:
         money = share_amount * price
         return money, 0
 
-
-
     def process(self, dataframe):
         """
 
@@ -70,7 +62,7 @@ class BuySell:
         capital_list = list()
         share_amount_list = list()
 
-        for idx,row in dataframe.iterrows():
+        for idx, row in dataframe.iterrows():
             if row['directive'] == 'buy':
                 remaining_money, share_amount = BuySell._buy(self.current_capital, row['price'])
                 self.current_capital = remaining_money
@@ -80,83 +72,93 @@ class BuySell:
                 money, share_amount = BuySell._sell(self.share_amount, row['price'])
                 self.current_capital += money
                 self.share_amount = share_amount
+
             capital_list.append(self.current_capital)
             share_amount_list.append(self.share_amount)
 
-        dataframe['current_capital'] = capital_list
-        dataframe['share_amount'] = share_amount_list
-        dataframe['total_capital'] = dataframe['current_capital'] + dataframe['share_amount']*dataframe['price']
+        dataframe.loc[:, 'current_capital'] = capital_list
+        dataframe.loc[:, 'share_amount'] = share_amount_list
+        dataframe.loc[:, 'total_capital'] = dataframe['current_capital'] + dataframe['share_amount'] * dataframe[
+            'price']
 
-        dataframe['profit'] = dataframe['total_capital'] - self.initial_capital
-
+        dataframe.loc[:, 'profit'] = dataframe['total_capital'] - self.initial_capital
 
         return dataframe
 
 
+def label_to_directives(row):
+    row = row[['pbuy', 'psell', 'phold']]
+    argmax_idx = np.argmax(row.values)
 
+    if argmax_idx == 0:
+        return 'buy'
+    if argmax_idx == 1:
+        return 'sell'
+    return 'hold'
 
-
-if __name__ == "__main__":
-    np.random.seed(42)
+def buysell_pipeline_stock():
     initial_capital = 100000
-    # size = 100
-    # fake_dataframe = pd.DataFrame({'price':np.random.randint(100,150, size=size),
-    #                                'directive':np.random.choice(['buy','hold','sell'], size=size, replace=True),
-    #                                'name':np.random.choice(['xlp','xlu','xlv','xly','dia','ewa','ewc','ewg','ewh','ewj','eww','spy','xlb','xle','xlf','xli','xlk'], size=size, replace=True)})
+    stock_names = ['dia', 'ewa', 'ewc', 'ewg', 'ewh', 'ewj', 'eww', 'spy', 'xlb', 'xle', 'xlf', 'xli', 'xlk', 'xlp',
+                   'xlu', 'xlv', 'xly']
+    exp_name = 'stock_exp'
 
-    dataframe = pd.read_csv('../experiment/finance_cnn3/result.csv')
-    prices = pd.read_csv('../dataset/finance/stocks/stocks.csv')
-
-    dataframe = pd.merge(dataframe, prices, on=['date', 'name']).drop(['open','high','low','close', 'volume'], axis=1)
-
-    dataframe = dataframe.rename(columns={'adjusted_close': 'price'})
-
-    def custom_argmax(row):
-        row = row[['psell','pbuy','phold']]
-
-        argmax_idx = np.argmax(row.values)
-
-
-        if argmax_idx == 0:
-            return 'sell'
-        if argmax_idx == 1:
-            return 'buy'
-        return 'hold'
-
-    def custom_argmax2(row):
-        row = row[['psell','pbuy','phold']]
-
-        argmax_idx = np.argmax(row.values)
-
-
-        if argmax_idx == 0:
-            return pd.Series([1,0,0])
-        if argmax_idx == 1:
-            return pd.Series([0,1,0])
-        return pd.Series([0,0,1])
-
-
-    dataframe['directive'] = dataframe.apply(custom_argmax, axis=1)
-    dataframe[['pmapsell', 'pmapbuy', 'pmaphold']] = dataframe.apply(custom_argmax2, axis=1)
-
-    dataframe.loc[((dataframe['pmaphold'] == 1) & (dataframe['rhold'] == 1) |
-                   (dataframe['pmaphold'] == 0) & (dataframe['rhold'] == 0))].shape[0] /     dataframe.shape[0]
-
-    dataframe.loc[((dataframe['pmapsell'] == 1) & (dataframe['rsell'] == 1) |
-                   (dataframe['pmapsell'] == 0) & (dataframe['rsell'] == 0))].shape[0] /     dataframe.shape[0]
-
-    dataframe.loc[((dataframe['pmapbuy'] == 1) & (dataframe['rbuy'] == 1) |
-                   (dataframe['pmapbuy'] == 0) & (dataframe['rbuy'] == 0))].shape[0] /     dataframe.shape[0]
-
-    stock_names = dataframe['name'].unique()
-    result_dict = dict()
+    final_result_df = None
     for stock_name in stock_names:
+        path = '../experiment/finance_cnn/{}/{}/prediction_results.csv'.format(exp_name, stock_name)
+        dataframe = pd.read_csv(path)
+        dataframe['directive'] = dataframe.apply(label_to_directives, axis=1)
+        dataframe['price'] = dataframe['raw_adjusted_close'].values
 
-        search_df = dataframe.loc[dataframe['name'] == stock_name]
+        # Buy and Hold strategy
+        buyandhold_profit = BuySell(capital=initial_capital).buyandhold(dataframe)
 
+        # Our simple strategy
         buysell = BuySell(capital=initial_capital)
+        buysell_result_df = buysell.process(dataframe)
+        subset = ['name', 'date', 'price', 'directive', 'current_capital', 'share_amount', 'total_capital', 'profit']
+        #     subset = buysell_result_df.columns
+        if final_result_df is None:
+            final_result_df = pd.DataFrame(columns=subset)
 
-        # result_dict[stock_name] = buysell.buyandhold(dataframe=search_df)
-        result_dict[stock_name] = buysell.process(dataframe=search_df)['profit'].iloc[-1]
+        last_row = buysell_result_df[subset].iloc[-1]
+        last_row['bah_profit'] = buyandhold_profit
 
-    print(result_dict)
+        final_result_df = final_result_df.append(last_row)
+
+    final_result_df = final_result_df.reset_index(drop=True)
+
+    return final_result_df
+
+
+def buysell_pipeline_stress():
+    initial_capital = 100000
+    exp_name = 'stress_exp'
+    final_result_df = None
+    for i in range(19):
+        path = '../experiment/finance_cnn/{}/{}/prediction_results.csv'.format(exp_name, i)
+        dataframe = pd.read_csv(path)
+        dataframe['directive'] = dataframe.apply(label_to_directives, axis=1)
+        dataframe['price'] = dataframe['raw_adjusted_close'].values
+
+        # Buy and Hold strategy
+        buyandhold_profit = BuySell(capital=initial_capital).buyandhold(dataframe)
+
+        # Our simple strategy
+        buysell = BuySell(capital=initial_capital)
+        buysell_result_df = buysell.process(dataframe)
+        subset = ['name', 'date', 'price', 'directive', 'current_capital', 'share_amount', 'total_capital', 'profit']
+        #     subset = buysell_result_df.columns
+        if final_result_df is None:
+            final_result_df = pd.DataFrame(columns=subset)
+
+        last_row = buysell_result_df[subset].iloc[-1]
+        last_row['bah_profit'] = buyandhold_profit
+        last_row['deleted_colnum'] = i
+
+        final_result_df = final_result_df.append(last_row)
+
+    final_result_df = final_result_df.reset_index(drop=True)
+
+    final_result_df
+
+

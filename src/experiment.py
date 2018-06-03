@@ -201,22 +201,45 @@ class Experiment:
                 # self.history.append(epoch=epoch, phase='valid', name='loss', value=vloss)
 
 
+
+
 def exp_pipeline():
     stock_names = ['dia', 'ewa', 'ewc', 'ewg', 'ewh', 'ewj', 'eww', 'spy', 'xlb',
                    'xle', 'xlf', 'xli', 'xlk', 'xlp', 'xlu', 'xlv', 'xly']
 
-    exp_name = 'exp3'
+    exp_name = 'stock_exp'
     for stock_name in stock_names:
 
         print('Experiment starting for {} ...'.format(stock_name))
         config = Config()
         config.STOCK_NAMES = [stock_name]
-        config.EXPERIMENT_DIR = '../experiment/finance_cnn_{}/{}_only'.format(exp_name, stock_name)
+        config.EXPERIMENT_DIR = '../experiment/finance_cnn/{}/{}'.format(exp_name, stock_name)
         config.set_dataset_args()
 
         experiment = Experiment.start_over(config)
         experiment.do()
         experiment.prediction_to_csv(save_path=config.EXPERIMENT_DIR)
 
+def stress_test():
+    exp_name = 'stress_exp'
+    stock_name = ['dia']
+
+    for i in range(0,28):
+
+        config = Config()
+        config.STOCK_NAMES = [stock_name]
+        config.EXPERIMENT_DIR = '../experiment/finance_cnn/{}/{}'.format(exp_name, i)
+        config.set_dataset_args()
+
+
+        experiment = Experiment.start_over(config)
+
+        experiment.estimator.stress_dataset(i)
+
+        experiment.do()
+
+        experiment.prediction_to_csv(save_path=config.EXPERIMENT_DIR)
 
 exp_pipeline()
+stress_test()
+#
