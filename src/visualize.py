@@ -26,7 +26,7 @@ class Visualizer:
     def prediction_to_image(self, actual, prediction, im_title):
 
         # ax.clear()
-        plt.figure()
+        plt.clf()
         plt.plot(actual, label='real')
         plt.plot(prediction, label='pred')
         plt.legend()
