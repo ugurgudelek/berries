@@ -7,5 +7,12 @@ src/__pycache__
 
 dataset/energy
 experiment/energy
+
 *checkpoints
+
+# permission for last 'xlf' checkpoint
+!experiment/finance_cnn/stock_exp/xlf/checkpoints
+experiment/finance_cnn/stock_exp/xlf/checkpoints/*
+!experiment/finance_cnn/stock_exp/xlf/checkpoints/2018_06_04_00_08_17
+
 
