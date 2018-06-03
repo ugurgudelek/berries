@@ -16,7 +16,7 @@ import utils
 import os
 import warnings
 from sklearn import preprocessing
-
+from collections import defaultdict
 from config import Config
 
 import matplotlib.pyplot as plt
@@ -28,11 +28,11 @@ class InnerIndicatorDataset(torch.utils.data.Dataset):
     Args:
         dataset(pd.DataFrame):
     """
-    def __init__(self, dataset):
 
+    def __init__(self, dataset):
         self.dataset = dataset
 
-        self.X = self.dataset.drop(['date','open','high','low', 'close', 'name',
+        self.X = self.dataset.drop(['date', 'open', 'high', 'low', 'close', 'name',
                                     'label_sell', 'label_buy', 'label_hold', 'raw_adjusted_close'], axis=1)
 
         self.y = self.dataset[['label_sell', 'label_buy', 'label_hold']]
@@ -51,7 +51,7 @@ class InnerIndicatorDataset(torch.utils.data.Dataset):
 
         name = self.dataset['name'].iloc[ix + self.image_width - 1]
         date = self.dataset['date'].iloc[ix + self.image_width - 1]
-        extra_info = {'name':name, 'date':date}
+        extra_info = {'name': name, 'date': date}
 
         # change type to numpy
         X = X.values.astype(float)
@@ -59,7 +59,7 @@ class InnerIndicatorDataset(torch.utils.data.Dataset):
 
         X = np.expand_dims(X, axis=0)
 
-        return X,y, extra_info
+        return X, y, extra_info
 
     def _reshape(self, data):
         # (in_channels, width, height)
@@ -68,6 +68,34 @@ class InnerIndicatorDataset(torch.utils.data.Dataset):
     def get_sample(self):
         ix = np.random.randint(low=0, high=self.__len__())
         return ix, self.__getitem__(ix=ix)
+
+
+class IndicatorStandardizer:
+    def __init__(self):
+        self.means = defaultdict(dict)
+        self.stds = defaultdict(dict)
+
+    def apply_standardization(self, series, stock_name, kind):
+        stock_name = stock_name
+        series_name = series.name
+
+        first_idx = series.index[0]
+        if isinstance(series[first_idx], float) or isinstance(series[first_idx], np.integer):
+            if kind == 'train':
+                mu = series.mean()
+                sigma = series.std()
+                # save
+                self.means[stock_name][series_name] = series.mean()
+                self.stds[stock_name][series_name] = series.std()
+
+            elif kind == 'validation':
+                mu = self.means[stock_name][series_name]
+                sigma = self.stds[stock_name][series_name]
+
+            else:
+                raise Exception('Invalid Type. Only train and validation allowed')
+
+        return (series - mu) / sigma
 
 
 class IndicatorDataset():
@@ -83,6 +111,8 @@ class IndicatorDataset():
         self.stock_names = stock_names
         self.save_dataset = save_dataset
 
+        self.standardizer = IndicatorStandardizer()
+
         raw_dataset = pd.read_csv(input_path)
         if stock_names is not None:
             raw_dataset = raw_dataset.loc[np.isin(raw_dataset['name'], stock_names)]
@@ -91,18 +121,21 @@ class IndicatorDataset():
         raw_train_dataset = raw_dataset.iloc[:train_len, :]
         raw_valid_dataset = raw_dataset.iloc[train_len:, :]
 
-        self.preprocessed_train_dataset = self.preprocess_dataset(dataset=raw_train_dataset)
-        self.preprocessed_valid_dataset = self.preprocess_dataset(dataset=raw_valid_dataset)
+        self.preprocessed_train_dataset = self.preprocess_dataset(dataset=raw_train_dataset, kind='train')
+        self.preprocessed_valid_dataset = self.preprocess_dataset(dataset=raw_valid_dataset, kind='validation')
 
         if save_dataset:
-            self.preprocessed_train_dataset.to_csv(os.path.join('/'.join(input_path.split('/')[:-1]), 'train_preprocessed_indicator_dataset.csv'), index=False)
-            self.preprocessed_valid_dataset.to_csv(os.path.join('/'.join(input_path.split('/')[:-1]), 'valid_preprocessed_indicator_dataset.csv'), index=False)
+            self.preprocessed_train_dataset.to_csv(
+                os.path.join('/'.join(input_path.split('/')[:-1]), 'train_preprocessed_indicator_dataset.csv'),
+                index=False)
+            self.preprocessed_valid_dataset.to_csv(
+                os.path.join('/'.join(input_path.split('/')[:-1]), 'valid_preprocessed_indicator_dataset.csv'),
+                index=False)
 
         self.train_dataset = InnerIndicatorDataset(dataset=self.preprocessed_train_dataset)
         self.valid_dataset = InnerIndicatorDataset(dataset=self.preprocessed_valid_dataset)
 
-
-    def preprocess_dataset(self, dataset):
+    def preprocess_dataset(self, dataset, kind='train'):
 
         dataset['date'] = dataset['date'].astype('datetime64[ns]')
         dataset['high'] = dataset['high'].values.astype(np.float)
@@ -129,8 +162,8 @@ class IndicatorDataset():
         # make stationary, standardize
         # self.dataset = self.normalize(self.dataset).dropna(axis=0)
         dataset = self.standardize(dataset,
-                                        neg_subset=['date', 'name', 'label_buy', 'label_sell', 'label_hold',
-                                                    'raw_adjusted_close'])
+                                    neg_subset=['date', 'name', 'label_buy', 'label_sell', 'label_hold',
+                                                'raw_adjusted_close'], kind=kind)
 
         # sort dataset
         dataset = dataset.sort_values(by=['date', 'name']).reset_index(drop=True)
@@ -147,8 +180,10 @@ class IndicatorDataset():
             sell_count = stock_data['label_sell'].sum()
             hold_count = stock_data['label_hold'].sum()
 
-            new_downs = utils.pick_random_samples(df=stock_data, on='label_buy', condition=1, n=int(hold_count-buy_count))
-            new_ups = utils.pick_random_samples(df=stock_data, on='label_sell', condition=1, n=int(hold_count-sell_count))
+            new_downs = utils.pick_random_samples(df=stock_data, on='label_buy', condition=1,
+                                                  n=int(hold_count - buy_count))
+            new_ups = utils.pick_random_samples(df=stock_data, on='label_sell', condition=1,
+                                                n=int(hold_count - sell_count))
 
             return pd.concat((stock_data, new_ups, new_downs))
 
@@ -162,8 +197,10 @@ class IndicatorDataset():
             if window[0] is min in given window then label it with buy,
             otherwise hold.
             """
-            stock_data['max_28'] = stock_data['adjusted_close'].rolling(window).apply(utils.roll_is_max).shift(periods=-window + 1)
-            stock_data['min_28'] = stock_data['adjusted_close'].rolling(window).apply(utils.roll_is_min).shift(periods=-window + 1)
+            stock_data['max_28'] = stock_data['adjusted_close'].rolling(window).apply(utils.roll_is_max).shift(
+                periods=-window + 1)
+            stock_data['min_28'] = stock_data['adjusted_close'].rolling(window).apply(utils.roll_is_min).shift(
+                periods=-window + 1)
 
             stock_data['label_buy'] = stock_data['min_28'].values
             stock_data['label_sell'] = stock_data['max_28'].values
@@ -191,15 +228,32 @@ class IndicatorDataset():
 
         return stocks
 
-    def standardize(self, stocks, neg_subset):
+    def standardize(self, stocks, neg_subset, kind):
 
-        def inner_func(data):
+        # for (stock_name, stock_data) in stocks.groupby('name'):
+        #     stock_neg_subset = stock_data[neg_subset]
+        #     stock_subset = stock_data.drop(neg_subset, axis=1)
+        #
+        #     stock_subset = stock_subset.apply(, args=(mu, sigma), axis=0)
+        #
+        #     stock_data = pd.concat((stock_neg_subset, stock_subset), axis=1)
+        #
+        #     # line below is ugly. can we fix this ?
+        #     stocks.loc[stocks['name'] == stock_name] = stock_data
+        #
+        #     mus_out[stock_name] = stock_data.mean()
+        #     sigmas_out[stock_name] = stock_data.std()
+
+        def inner_func(data, kind):
+            stock_name = data['name'].iloc[0]
             data_neg_subset = data[neg_subset]
             data_subset = data.drop(neg_subset, axis=1)
-            data_subset = data_subset.apply(utils.standardize, axis=0)
+            data_subset = data_subset.apply(lambda x: self.standardizer.apply_standardization(x, kind=kind, stock_name=stock_name), axis=0)
             return pd.concat((data_neg_subset, data_subset),axis=1)
 
-        return stocks.groupby('name').apply(inner_func).dropna()
+        return stocks.groupby('name').apply(lambda x: inner_func(x, kind)).dropna()
+
+
 
     def make_stationary(self, stocks):
 
@@ -223,7 +277,6 @@ class IndicatorDataset():
     def normalize(self, stocks):
 
         def inner_func(data):
-
             data['year'] = utils.normalize(data['year'])
             data['month'] = utils.normalize(data['month'])
             data['week'] = utils.normalize(data['week'])
@@ -234,8 +287,6 @@ class IndicatorDataset():
             return data
 
         return stocks.groupby('name').apply(inner_func)
-
-
 
     @staticmethod
     def technical_analysis(stocks: pd.DataFrame):
@@ -249,7 +300,6 @@ class IndicatorDataset():
         """
 
         return stocks.groupby('name').apply(IndicatorDataset.indicators)
-
 
     @staticmethod
     def indicators(dataframe: pd.DataFrame) -> pd.DataFrame:
@@ -267,10 +317,10 @@ class IndicatorDataset():
         close = dataframe['adjusted_close'].values
         volume = dataframe['volume'].values
 
-        dataframe['rsi_15'] = RSI(close, timeperiod=15)/50 - 1
-        dataframe['rsi_20'] = RSI(close, timeperiod=20)/50 - 1
+        dataframe['rsi_15'] = RSI(close, timeperiod=15) / 50 - 1
+        dataframe['rsi_20'] = RSI(close, timeperiod=20) / 50 - 1
         # dataframe['rsi_25'] = RSI(close, timeperiod=25)/50 - 1
-        dataframe['rsi_30'] = RSI(close, timeperiod=30)/50 - 1
+        dataframe['rsi_30'] = RSI(close, timeperiod=30) / 50 - 1
 
         # dataframe['sma_15'] = SMA(close, timeperiod=15)
         dataframe['sma_20'] = SMA(close, timeperiod=20)
@@ -284,17 +334,17 @@ class IndicatorDataset():
         dataframe['macd_16'], macdsignal, dataframe['macdhist_16'] = MACD(close, fastperiod=16, slowperiod=30,
                                                                           signalperiod=11)
 
-        dataframe['willR_14'] = WILLR(high, low, close, timeperiod=14)/50 + 1
+        dataframe['willR_14'] = WILLR(high, low, close, timeperiod=14) / 50 + 1
         # dataframe['willR_18'] = WILLR(high, low, close, timeperiod=18)/50 + 1
-        dataframe['willR_22'] = WILLR(high, low, close, timeperiod=22)/50 + 1
+        dataframe['willR_22'] = WILLR(high, low, close, timeperiod=22) / 50 + 1
 
-        dataframe['ultimate_osc_7'] = ULTOSC(high, low, close, timeperiod1=7, timeperiod2=14, timeperiod3=28)/50 - 1
+        dataframe['ultimate_osc_7'] = ULTOSC(high, low, close, timeperiod1=7, timeperiod2=14, timeperiod3=28) / 50 - 1
         # dataframe['ultimate_osc_8'] = ULTOSC(high, low, close, timeperiod1=8, timeperiod2=16, timeperiod3=32)/50 - 1
-        dataframe['ultimate_osc_9'] = ULTOSC(high, low, close, timeperiod1=9, timeperiod2=18, timeperiod3=36)/50 - 1
+        dataframe['ultimate_osc_9'] = ULTOSC(high, low, close, timeperiod1=9, timeperiod2=18, timeperiod3=36) / 50 - 1
 
-        dataframe['mfi_14'] = MFI(high, low, close, volume, timeperiod=14)/50 - 1
-        dataframe['mfi_18'] = MFI(high, low, close, volume, timeperiod=18)/50 - 1
-        dataframe['mfi_22'] = MFI(high, low, close, volume, timeperiod=22)/50 - 1
+        dataframe['mfi_14'] = MFI(high, low, close, volume, timeperiod=14) / 50 - 1
+        dataframe['mfi_18'] = MFI(high, low, close, volume, timeperiod=18) / 50 - 1
+        dataframe['mfi_22'] = MFI(high, low, close, volume, timeperiod=22) / 50 - 1
 
         slowk, slowd = STOCH(high, low, close, fastk_period=14, slowk_period=3, slowk_matype=0, slowd_period=3,
                              slowd_matype=0)
@@ -354,11 +404,9 @@ class LoadDataset():
 
         dataset_len = self.dataset.shape[0]
 
-
         daycount = self.dataset.shape[0] // seq_length
         self.dataset = self.dataset[:daycount * seq_length]  # remove uncomplete days
         self.raw_dataset = self.raw_dataset[:daycount * seq_length]
-
 
         # normalize
         self.dataset, self.min_norm_term, self.max_norm_term = self.normalize(self.dataset)
@@ -394,18 +442,17 @@ class LoadDataset():
         if missing_day_amount != 0:
             warnings.warn('{} day data is missing for validation'.format(missing_day_amount), UserWarning)
 
-
         train_values = self.dataset[:train_len, :]
-        valid_values = self.dataset[train_len:train_len+valid_len, :]
+        valid_values = self.dataset[train_len:train_len + valid_len, :]
 
         raw_train_dataset = self.raw_dataset.iloc[:train_len, :]
-        raw_valid_dataset = self.raw_dataset.iloc[train_len:train_len+valid_len, :]
+        raw_valid_dataset = self.raw_dataset.iloc[train_len:train_len + valid_len, :]
 
         self.train_dataset = InnerLoadDataset(train_values, seq_length=seq_length, raw_dataset=raw_train_dataset)
         self.valid_dataset = InnerLoadDataset(valid_values, seq_length=seq_length, raw_dataset=raw_valid_dataset)
 
     def get_raw_valid_dataset(self):
-        return self.raw_dataset[self.train_len:self.train_len+self.valid_len]
+        return self.raw_dataset[self.train_len:self.train_len + self.valid_len]
 
     def normalize(self, arr):
         """
@@ -430,16 +477,17 @@ class LoadDataset():
 
         """
 
-
         if min_term is None:
             min_term = self.min_norm_term
         if max_term is None:
             max_term = self.max_norm_term
 
         if only_first:
-            return arr*(max_term[0]-min_term[0]) + min_term[0]
+            return arr * (max_term[0] - min_term[0]) + min_term[0]
 
-        return arr*(max_term-min_term) + min_term
+        return arr * (max_term - min_term) + min_term
+
+
 class InnerLoadDataset(torch.utils.data.Dataset):
     """
 
@@ -457,7 +505,6 @@ class InnerLoadDataset(torch.utils.data.Dataset):
         self.raw_dataset = raw_dataset
         # split data wrt period
         # e.g. period = 96 -> (day_size, quarter_in_day)
-
 
         self.seq_length = seq_length
 
@@ -489,7 +536,7 @@ class InnerLoadDataset(torch.utils.data.Dataset):
             int: data count
 
         """
-        return self.X.shape[0] - self.seq_length*2
+        return self.X.shape[0] - self.seq_length * 2
 
     def __getitem__(self, ix):
         """
@@ -503,7 +550,7 @@ class InnerLoadDataset(torch.utils.data.Dataset):
         """
         # (row, seq_len, input_size)
         # return self.X[ix, :, :], self.y[ix, :]
-        return self.X[ix:ix + self.seq_length, :], self.y[ix + self.seq_length-1: ix + self.seq_length*2-1]
+        return self.X[ix:ix + self.seq_length, :], self.y[ix + self.seq_length - 1: ix + self.seq_length * 2 - 1]
 
 
 def get_dataset_cls_from_name(name):
@@ -513,6 +560,7 @@ def get_dataset_cls_from_name(name):
     if name == 'LoadDataset':
         return LoadDataset
 
+
 if __name__ == "__main__":
     config = Config()
 
@@ -521,4 +569,3 @@ if __name__ == "__main__":
                                train_valid_ratio=0.9)
     print(dataset.train_dataset.__getitem__(14))
     print()
-

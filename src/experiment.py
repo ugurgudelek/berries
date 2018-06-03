@@ -205,7 +205,7 @@ def exp_pipeline():
     stock_names = ['dia', 'ewa', 'ewc', 'ewg', 'ewh', 'ewj', 'eww', 'spy', 'xlb',
                    'xle', 'xlf', 'xli', 'xlk', 'xlp', 'xlu', 'xlv', 'xly']
 
-    exp_name = 'exp2'
+    exp_name = 'exp3'
     for stock_name in stock_names:
 
         print('Experiment starting for {} ...'.format(stock_name))

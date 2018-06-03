@@ -25,11 +25,7 @@ def roll_is_max(x):
 def roll_is_min(x):
     return True if x.min() == x[0] else False
 
-def standardize(series):
-    first_idx = series.index[0]
-    if isinstance(series[first_idx], float) or isinstance(series[first_idx], np.integer):
-        series = (series - series.mean()) / series.std()
-    return series
+
 
 
 def pick_random_samples(df, on, condition, n):
