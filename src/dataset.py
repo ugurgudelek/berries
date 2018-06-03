@@ -124,6 +124,20 @@ class IndicatorDataset():
         self.preprocessed_train_dataset = self.preprocess_dataset(dataset=raw_train_dataset, kind='train')
         self.preprocessed_valid_dataset = self.preprocess_dataset(dataset=raw_valid_dataset, kind='validation')
 
+        print('Train ----\n'
+              'Shape: {} \n'
+              'First date: {} \n'
+              'Last date: {}'.format(self.preprocessed_train_dataset.shape,
+                                     self.preprocessed_train_dataset['date'].iloc[0],
+                                     self.preprocessed_train_dataset['date'].iloc[-1]))
+
+        print('Valid ----\n'
+              'Shape: {} \n'
+              'First date: {} \n'
+              'Last date: {}'.format(self.preprocessed_valid_dataset.shape,
+                                     self.preprocessed_valid_dataset['date'].iloc[0],
+                                     self.preprocessed_valid_dataset['date'].iloc[-1]))
+
         if save_dataset:
             self.preprocessed_train_dataset.to_csv(
                 os.path.join('/'.join(input_path.split('/')[:-1]), 'train_preprocessed_indicator_dataset.csv'),

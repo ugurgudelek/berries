@@ -30,7 +30,7 @@ class Config:
 
         self.TRAIN_VALID_RATIO = 0.90
         self.TRAIN_BATCH_SIZE = 64
-        self.VALID_BATCH_SIZE = 64
+        self.VALID_BATCH_SIZE = 1
         self.TRAIN_SHUFFLE = True
         self.VALID_SHUFFLE = False
 
