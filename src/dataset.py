@@ -75,58 +75,70 @@ class IndicatorDataset():
 
     """
 
-    def __init__(self, dataset_name, input_path, stock_names, train_valid_ratio, save_indicator_dataset):
+    def __init__(self, dataset_name, input_path, stock_names, save_dataset, train_valid_ratio):
 
         self.dataset_name = dataset_name
         self.input_path = input_path
         self.train_valid_ratio = train_valid_ratio
         self.stock_names = stock_names
+        self.save_dataset = save_dataset
 
-
-        stocks = pd.read_csv(self.input_path)
+        raw_dataset = pd.read_csv(input_path)
         if stock_names is not None:
-            stocks = stocks.loc[np.isin(stocks['name'], self.stock_names)]
-        stocks['date'] = stocks['date'].astype('datetime64[ns]')
-        stocks['high'] = stocks['high'].values.astype(np.float)
-        stocks['low'] = stocks['low'].values.astype(np.float)
-        stocks['adjusted_close'] = stocks['adjusted_close'].values.astype(np.float)
-        stocks['volume'] = stocks['volume'].values.astype(np.float)
+            raw_dataset = raw_dataset.loc[np.isin(raw_dataset['name'], stock_names)]
+
+        train_len = int(raw_dataset.shape[0] * train_valid_ratio)
+        raw_train_dataset = raw_dataset.iloc[:train_len, :]
+        raw_valid_dataset = raw_dataset.iloc[train_len:, :]
+
+        self.preprocessed_train_dataset = self.preprocess_dataset(dataset=raw_train_dataset)
+        self.preprocessed_valid_dataset = self.preprocess_dataset(dataset=raw_valid_dataset)
+
+        if save_dataset:
+            self.preprocessed_train_dataset.to_csv(os.path.join('/'.join(input_path.split('/')[:-1]), 'train_preprocessed_indicator_dataset.csv'), index=False)
+            self.preprocessed_valid_dataset.to_csv(os.path.join('/'.join(input_path.split('/')[:-1]), 'valid_preprocessed_indicator_dataset.csv'), index=False)
+
+        self.train_dataset = InnerIndicatorDataset(dataset=self.preprocessed_train_dataset)
+        self.valid_dataset = InnerIndicatorDataset(dataset=self.preprocessed_valid_dataset)
+
+
+    def preprocess_dataset(self, dataset):
+
+        dataset['date'] = dataset['date'].astype('datetime64[ns]')
+        dataset['high'] = dataset['high'].values.astype(np.float)
+        dataset['low'] = dataset['low'].values.astype(np.float)
+        dataset['adjusted_close'] = dataset['adjusted_close'].values.astype(np.float)
+        dataset['volume'] = dataset['volume'].values.astype(np.float)
 
         # labelize with up,down,hold
-        stocks = self.labelize_with_windows_slide(stocks)
+        dataset = self.labelize_with_windows_slide(dataset)
 
         # calculate technical analysis values from stock data
         # this creates a new dataset depends on technical analysis
-        self.dataset = IndicatorDataset.technical_analysis(stocks)
+        dataset = IndicatorDataset.technical_analysis(dataset)
 
         # add seasonality
-        self.dataset['year'] = self.dataset['date'].dt.year.values.astype(int)
-        self.dataset['month'] = self.dataset['date'].dt.month.values.astype(int)
-        self.dataset['week'] = self.dataset['date'].dt.week.values.astype(int)
-        self.dataset['weekday'] = self.dataset['date'].dt.weekday.values.astype(int)
-        self.dataset['day'] = self.dataset['date'].dt.day.values.astype(int)
+        dataset['year'] = dataset['date'].dt.year.values.astype(int)
+        dataset['month'] = dataset['date'].dt.month.values.astype(int)
+        dataset['week'] = dataset['date'].dt.week.values.astype(int)
+        dataset['weekday'] = dataset['date'].dt.weekday.values.astype(int)
+        dataset['day'] = dataset['date'].dt.day.values.astype(int)
 
-
-        self.dataset = utils.save_column(self.dataset, col_name='adjusted_close')
+        dataset = utils.save_column(dataset, col_name='adjusted_close')
 
         # make stationary, standardize
         # self.dataset = self.normalize(self.dataset).dropna(axis=0)
-        self.dataset = self.standardize(self.dataset, neg_subset=['date','name','label_buy','label_sell','label_hold','raw_adjusted_close'])
+        dataset = self.standardize(dataset,
+                                        neg_subset=['date', 'name', 'label_buy', 'label_sell', 'label_hold',
+                                                    'raw_adjusted_close'])
 
         # sort dataset
-        self.dataset = self.dataset.sort_values(by=['date', 'name']).reset_index(drop=True)
-
-        # save dataset
-        if save_indicator_dataset:
-            self.dataset.to_csv(os.path.join('/'.join(input_path.split('/')[:-1]), 'indicator_dataset.csv'), index=False)
+        dataset = dataset.sort_values(by=['date', 'name']).reset_index(drop=True)
 
         # # equalize up,down and hold labels
-        self.dataset = self.updown_scaling(self.dataset)
+        dataset = self.updown_scaling(dataset)
 
-        train_len = int(self.dataset.shape[0] * self.train_valid_ratio)
-        self.train_dataset = InnerIndicatorDataset(self.dataset.iloc[:train_len, :])
-        self.valid_dataset = InnerIndicatorDataset(self.dataset.iloc[train_len:, :])
-
+        return dataset
 
     def updown_scaling(self, stocks):
 

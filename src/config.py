@@ -26,7 +26,7 @@ class Config:
         self.OUTPUT_SIZE = 3  # down, steady, up
 
         self.STOCK_NAMES = ['dia']
-        self.SAVE_INDICATOR_DATASET = True
+        self.SAVE_DATASET = True
 
         self.TRAIN_VALID_RATIO = 0.90
         self.TRAIN_BATCH_SIZE = 64
@@ -43,7 +43,7 @@ class Config:
                              'train_valid_ratio': self.TRAIN_VALID_RATIO,
                              'input_path': self.INPUT_PATH,
                              'stock_names': self.STOCK_NAMES,
-                             'save_indicator_dataset':self.SAVE_INDICATOR_DATASET}
+                             'save_dataset':self.SAVE_DATASET}
 
         self.MODEL_ARGS = {'model_name':self.MODEL_NAME,
                            'input_size': self.INPUT_SIZE,
@@ -79,4 +79,4 @@ class Config:
                          'train_valid_ratio': self.TRAIN_VALID_RATIO,
                          'input_path': self.INPUT_PATH,
                          'stock_names': self.STOCK_NAMES,
-                         'save_indicator_dataset': self.SAVE_INDICATOR_DATASET}
+                         'save_dataset': self.SAVE_DATASET}

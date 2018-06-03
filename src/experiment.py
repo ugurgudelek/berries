@@ -208,7 +208,7 @@ def exp_pipeline():
 
         config = Config()
         config.STOCK_NAMES = [stock_name]
-        config.EXPERIMENT_DIR = '../experiment/finance_cnn_exp1_{}_only'.format(stock_name)
+        config.EXPERIMENT_DIR = '../experiment/finance_cnn_exp2_{}_only'.format(stock_name)
         config.set_dataset_args()
 
         experiment = Experiment.start_over(config)
