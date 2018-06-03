@@ -191,6 +191,7 @@ class Experiment:
 
                 # self.visualizer.append_data('tloss', tloss)
                 # self.visualizer.append_data('vloss', vloss)
+
                 # self.visualizer.visualize(self.epoch)
                 # self.visualizer.report()
 
@@ -204,11 +205,13 @@ def exp_pipeline():
     stock_names = ['dia', 'ewa', 'ewc', 'ewg', 'ewh', 'ewj', 'eww', 'spy', 'xlb',
                    'xle', 'xlf', 'xli', 'xlk', 'xlp', 'xlu', 'xlv', 'xly']
 
+    exp_name = 'exp2'
     for stock_name in stock_names:
 
+        print('Experiment starting for {} ...'.format(stock_name))
         config = Config()
         config.STOCK_NAMES = [stock_name]
-        config.EXPERIMENT_DIR = '../experiment/finance_cnn_exp2_{}_only'.format(stock_name)
+        config.EXPERIMENT_DIR = '../experiment/finance_cnn_{}/{}_only'.format(exp_name, stock_name)
         config.set_dataset_args()
 
         experiment = Experiment.start_over(config)
