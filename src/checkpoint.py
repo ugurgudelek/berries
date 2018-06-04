@@ -18,18 +18,14 @@ class Checkpoint:
     #         # output (np.array):
     """
 
-    def __init__(self, model, optimizer, epoch, history, experiment_dir):
-
-        self.model = model
-        self.optimizer = optimizer
+    def __init__(self, model_state_dict, optimizer_state_dict, epoch, history, experiment_dir):
+        self.model_state_dict = model_state_dict
+        self.optimizer_state_dict = optimizer_state_dict
         self.epoch = epoch
         self.history = history
         self.experiment_dir = experiment_dir
 
-
     def save(self):
-
-
         date_time = time.strftime('%Y_%m_%d_%H_%M_%S', time.localtime())
 
         save_path = os.path.join(self.experiment_dir, 'checkpoints', date_time)
@@ -43,11 +39,11 @@ class Checkpoint:
 
         # SAVE
         torch.save({'epoch': self.epoch,
-                    'optimizer': self.optimizer,
+                    'optimizer_state_dict': self.optimizer_state_dict,
                     'history': self.history},
                    os.path.join(save_path, 'optimizer_epoch_history.pt'))
 
-        torch.save(self.model, os.path.join(save_path, 'model.pt'))
+        torch.save(self.model_state_dict, os.path.join(save_path, 'model.pt'))
 
         # with open(os.path.join(subdir_path, self.INPUT_FILE), 'wb') as fout:
         #     dill.dump(self.input, fout)
@@ -66,7 +62,7 @@ class Checkpoint:
 
         """
         resume_checkpoint = torch.load(os.path.join(path, 'optimizer_epoch_history.pt'))
-        model = torch.load(os.path.join(path, 'model.pt'))
+        model_state_dict = torch.load(os.path.join(path, 'model.pt'))
 
         # with open(os.path.join(path, cls.INPUT_FILE), 'rb') as fin:
         #     input = dill.load(fin)
@@ -74,10 +70,8 @@ class Checkpoint:
         # with open(os.path.join(path, cls.OUTPUT_FILE), 'rb') as fin:
         #     output = dill.load(fin)
 
-
-
-        return Checkpoint(model=model,
-                          optimizer=resume_checkpoint['optimizer'],
+        return Checkpoint(model_state_dict=model_state_dict,
+                          optimizer_state_dict=resume_checkpoint['optimizer_state_dict'],
                           epoch=resume_checkpoint['epoch'],
                           history=resume_checkpoint['history'],
                           experiment_dir=path

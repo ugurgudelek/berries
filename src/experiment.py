@@ -18,6 +18,8 @@ import matplotlib.pyplot as plt
 
 import torch.nn.functional as F
 
+import time
+
 from history import History
 from checkpoint import Checkpoint
 from estimator import Estimator
@@ -72,14 +74,16 @@ class Experiment:
         self.epoch = epoch
 
         if config.RANDOM_SEED is not None:
-            torch.manual_seed(config.RANDOM_SEED)
-            np.random.seed(config.RANDOM_SEED)
-            if config.USE_CUDA:
-                torch.cuda.manual_seed_all(config.RANDOM_SEED)
-                torch.backends.cudnn.deterministic = True
+            self.make_deterministic(seed=config.RANDOM_SEED, use_cuda=config.USE_CUDA)
+
+    def make_deterministic(self, seed, use_cuda):
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+        if use_cuda:
+            torch.cuda.manual_seed_all(seed)
+            torch.backends.cudnn.deterministic = True
 
         print('randomness test: numpy: {} || torch: {}'.format(np.random.random(1), torch.rand(1)))
-        print()
 
 
     @classmethod
@@ -105,16 +109,24 @@ class Experiment:
 
     @classmethod
     def resume(cls, experiment_path, config):
-        ckpt_path = Checkpoint.get_latest_checkpoint(experiment_path)
 
-        ckpt = Checkpoint.load(ckpt_path)
 
         experiment = Experiment.start_over(config)
 
-        experiment.estimator.model = ckpt.model
-        experiment.estimator.optimizer = ckpt.optimizer
+        ckpt_path = Checkpoint.get_latest_checkpoint(experiment_path)
+
+        ckpt = Checkpoint.load(ckpt_path)
+        # if config.USE_CUDA:
+        #     ckpt.model = ckpt.model.cuda()
+        # else:
+        #     ckpt.model = ckpt.model.cpu()
+
+        experiment.estimator.model.load_state_dict(ckpt.model_state_dict)
+
+
+        experiment.estimator.optimizer.load_state_dict(ckpt.optimizer_state_dict)
         experiment.epoch = ckpt.epoch + 1
-        experiment.history = ckpt.history
+        # experiment.history = ckpt.history
 
         # todo: improve with more proper way
         # experiment.visualizer.container['tloss'] = experiment.history.container[epoch]['train']['loss']
@@ -154,7 +166,7 @@ class Experiment:
                 (toutputs, tloss, voutputs, vloss) = self.estimator.run_epoch(self.epoch, t)
 
                 # Checkpoint
-                Checkpoint(model=self.estimator.model, optimizer=self.estimator.optimizer,
+                Checkpoint(model_state_dict=self.estimator.model.state_dict(), optimizer_state_dict=self.estimator.optimizer.state_dict(),
                            epoch=self.epoch, history=self.history,
                            experiment_dir=self.config.EXPERIMENT_DIR).save()
 
@@ -201,7 +213,49 @@ class Experiment:
                 # self.history.append(epoch=epoch, phase='valid', name='loss', value=vloss)
 
 
+def resume_test():
+    exp_name = 'resume_exp'
+    stock_name = 'xlf'
 
+    print('Experiment starting for {} ...'.format(stock_name))
+    config = Config()
+    config.STOCK_NAMES = [stock_name]
+    config.EXPERIMENT_DIR = '../experiment/finance_cnn/{}/{}'.format(exp_name, stock_name)
+    config.set_dataset_args()
+
+
+    # experiment = Experiment.start_over(config=config)
+    # experiment.do()
+    experiment = Experiment.resume(config.EXPERIMENT_DIR, config=config)
+
+    # experiment1 = Experiment.resume(config.EXPERIMENT_DIR, config=config)
+    # experiment2 = Experiment.resume(config.EXPERIMENT_DIR, config=config)
+    # experiment3 = Experiment.resume(config.EXPERIMENT_DIR, config=config)
+    # experiment4 = Experiment.resume(config.EXPERIMENT_DIR, config=config)
+    #
+    # def pred(exp):
+    #     # X, y, extra_info = next(exp.estimator.valid_dataloader.__iter__())
+    #     # X, y, extra_info = next(exp.estimator.valid_dataloader.__iter__())
+    #
+    #     for i, (X,y,extra_info) in enumerate(exp.estimator.valid_dataloader):
+    #         print(extra_info['date'])
+    #         if i == 3:
+    #             break
+    #     print("=====")
+    #     # print('Date : ', extra_info['date'])
+    #     # print('Name : ', extra_info['name'])
+    #     # print('X :', X.data.numpy().reshape(28,28))
+    #
+    #     X, y = torch.autograd.Variable(X.float(), requires_grad=False), torch.autograd.Variable(y.float(), requires_grad=False)
+    #     voutput, vloss = exp.estimator.validate_on_batch(X, y)
+    #     print(extra_info['date'],voutput, vloss)
+    #
+    # pred(experiment1)
+    # pred(experiment2)
+    # pred(experiment3)
+    # pred(experiment4)
+    # print()
+    experiment.prediction_to_csv(save_path=config.EXPERIMENT_DIR)
 
 def exp_pipeline():
     stock_names = ['dia', 'ewa', 'ewc', 'ewg', 'ewh', 'ewj', 'eww', 'spy', 'xlb',
@@ -242,4 +296,4 @@ def stress_test():
 
 exp_pipeline()
 stress_test()
-#
+# resume_test()
