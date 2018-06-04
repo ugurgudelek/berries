@@ -275,8 +275,8 @@ def exp_pipeline():
         experiment.prediction_to_csv(save_path=config.EXPERIMENT_DIR)
 
 def stress_test():
-    exp_name = 'stress_exp'
-    stock_name = ['dia']
+    exp_name = 'stress_exp_spy'
+    stock_name = ['spy']
 
     for i in range(0,28):
 
@@ -294,6 +294,6 @@ def stress_test():
 
         experiment.prediction_to_csv(save_path=config.EXPERIMENT_DIR)
 
-exp_pipeline()
+# exp_pipeline()
 stress_test()
 # resume_test()
