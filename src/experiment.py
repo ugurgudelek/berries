@@ -215,12 +215,10 @@ class Experiment:
 
 def resume_test():
     exp_name = 'resume_exp'
-    stock_name = 'xlf'
 
-    print('Experiment starting for {} ...'.format(stock_name))
     config = Config()
-    config.STOCK_NAMES = [stock_name]
-    config.EXPERIMENT_DIR = '../experiment/finance_cnn/{}/{}'.format(exp_name, stock_name)
+
+    config.EXPERIMENT_DIR = '../experiment/finance_cnn/{}'.format(exp_name)
     config.set_dataset_args()
 
 
@@ -228,6 +226,9 @@ def resume_test():
     # experiment.do()
     experiment = Experiment.resume(config.EXPERIMENT_DIR, config=config)
 
+    w = experiment.estimator.model.state_dict()['cnn1.0.weight'].data.numpy()[0].reshape(3, 3)
+    im = next(iter((experiment.estimator.valid_dataloader)))[0].data.numpy().reshape(28, 28)
+    print()
     # experiment1 = Experiment.resume(config.EXPERIMENT_DIR, config=config)
     # experiment2 = Experiment.resume(config.EXPERIMENT_DIR, config=config)
     # experiment3 = Experiment.resume(config.EXPERIMENT_DIR, config=config)
@@ -295,5 +296,5 @@ def stress_test():
         experiment.prediction_to_csv(save_path=config.EXPERIMENT_DIR)
 
 # exp_pipeline()
-stress_test()
-# resume_test()
+# stress_test()
+resume_test()
