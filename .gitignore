@@ -11,8 +11,8 @@ experiment/energy
 *checkpoints
 
 # permission for resume exp checkpoints
-!experiment/finance_cnn/resume_exp
-experiment/finance_cnn/stock_exp/xlf/checkpoints/*
-!experiment/finance_cnn/stock_exp/xlf/checkpoints/2018_06_04_00_08_17
+!experiment/finance_cnn/resume_exp/checkpoints/
+!experiment/finance_cnn/resume_exp/checkpoints/*
+
 
 
