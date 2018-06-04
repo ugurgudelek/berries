@@ -182,8 +182,10 @@ class IndicatorDataset():
         # sort dataset
         dataset = dataset.sort_values(by=['date', 'name']).reset_index(drop=True)
 
+
         # # equalize up,down and hold labels
-        dataset = self.updown_scaling(dataset)
+        if kind == 'train':
+            dataset = self.updown_scaling(dataset)
 
         return dataset
 

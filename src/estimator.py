@@ -357,9 +357,6 @@ class Estimator:
             dates = np.append(dates, extra_info['date'])
             names = np.append(names, extra_info['name'])
 
-            print(dates[0], dates[-1])
-
-
         epoch_validation_loss = vlosses.mean()
 
         return vXs, vys,  voutputs, vlosses, (dates,names)
