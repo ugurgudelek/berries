@@ -20,6 +20,8 @@ import torch.nn.functional as F
 
 import time
 
+from torchvision.models import inception_v3
+
 from history import History
 from checkpoint import Checkpoint
 from estimator import Estimator
@@ -295,6 +297,15 @@ def stress_test():
 
         experiment.prediction_to_csv(save_path=config.EXPERIMENT_DIR)
 
+
+def inception_exp():
+
+    model = inception_v3(pretrained=True)
+    print()
+    # self.fc = nn.Linear(2048, num_classes)
+
+
 # exp_pipeline()
 # stress_test()
-resume_test()
+# resume_test()
+inception_exp()
