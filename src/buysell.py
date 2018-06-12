@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-
+from enum import Enum
 
 class BuySell:
 
@@ -21,8 +21,8 @@ class BuySell:
         first_price = dataframe.iloc[0].loc['price']
         last_price = dataframe.iloc[-1].loc['price']
 
-        self.current_capital, self.share_amount = BuySell._buy(self.initial_capital, first_price)
-        money, self.share_amount = BuySell._sell(self.share_amount, last_price)
+        self.current_capital, self.share_amount, transaction_done = BuySell._buy(self.initial_capital, first_price)
+        money, self.share_amount, transaction_done = BuySell._sell(self.share_amount, last_price)
         self.current_capital += money
 
         profit = self.current_capital - self.initial_capital
@@ -34,23 +34,60 @@ class BuySell:
         """buys if appliable
         Returns: (float, int) current_money, share_amount"""
 
+        transaction_done = False
         remaining_money = money
         share_amount = 0
 
         if money > price:
             share_amount = int(money / price)
             remaining_money = money - share_amount * price
+            transaction_done = True
 
-        return remaining_money, share_amount
+        return remaining_money, share_amount, transaction_done
 
     @staticmethod
     def _sell(share_amount, price):
         """sells all shares :)
         Returns: (float, int) current_money, share_amount"""
+        transaction_done = False
         money = share_amount * price
-        return money, 0
+        if share_amount != 0:
+            transaction_done = True
+        return money, 0, transaction_done
 
-    def process(self, dataframe):
+
+    class TransactionState(Enum):
+        ONGOING = 0
+        ENDED = 1
+
+    class Transaction:
+
+        def __init__(self):
+            pass
+
+        def start(self, price):
+            self.state = TransactionState.ONGOING
+            self.init_price = price
+
+        def end(self, price):
+            self.state = TransactionState.ENDED
+            self.end_price = price
+
+        def _is_available(self):
+            return self.state == TransactionState.ENDED
+        def get_profit(self):
+            if self._is_available():
+                return self.end_price - self.init_price
+            raise Exception('get_profit not available')
+
+        def get_norm_profit(self):
+            if self._is_available():
+                return self.get_profit() / self.init_price
+            raise Exception('get_norm_profit not available')
+
+
+
+    def process(self, dataframe, only_valid_transactions=False):
         """
 
         Args:
@@ -59,32 +96,105 @@ class BuySell:
         Returns: (float) profit
 
         """
-        capital_list = list()
-        share_amount_list = list()
+        dataframe['capital_before'] = np.nan
+        dataframe['share_before'] = np.nan
+        dataframe['capital_after'] = np.nan
+        dataframe['share_after'] = np.nan
 
         for idx, row in dataframe.iterrows():
+            capital_before = self.current_capital
+            share_before = self.share_amount
+            transaction_done = None
+
             if row['directive'] == 'buy':
-                remaining_money, share_amount = BuySell._buy(self.current_capital, row['price'])
+                remaining_money, share_amount, transaction_done = BuySell._buy(self.current_capital, row['price'])
                 self.current_capital = remaining_money
                 self.share_amount += share_amount
 
             if row['directive'] == 'sell':
-                money, share_amount = BuySell._sell(self.share_amount, row['price'])
+                money, share_amount, transaction_done = BuySell._sell(self.share_amount, row['price'])
                 self.current_capital += money
                 self.share_amount = share_amount
 
-            capital_list.append(self.current_capital)
-            share_amount_list.append(self.share_amount)
+            if transaction_done is not None:  # save transaction
+                if (not only_valid_transactions) or transaction_done:
+                    dataframe.loc[idx, 'capital_before'] = capital_before
+                    dataframe.loc[idx, 'share_before'] = share_before
+                    dataframe.loc[idx, 'capital_after'] = self.current_capital
+                    dataframe.loc[idx, 'share_after'] = self.share_amount
 
-        dataframe.loc[:, 'current_capital'] = capital_list
-        dataframe.loc[:, 'share_amount'] = share_amount_list
-        dataframe.loc[:, 'total_capital'] = dataframe['current_capital'] + dataframe['share_amount'] * dataframe[
-            'price']
 
-        dataframe.loc[:, 'profit'] = dataframe['total_capital'] - self.initial_capital
+        dataframe.loc[:, 'profit'] = dataframe['capital_after'] - dataframe['capital_before']
+        dataframe.loc[:, 'total_capital'] = dataframe['capital_after'] + dataframe['share_after'] * dataframe['price']
+        dataframe.loc[:, 'total_profit'] = dataframe['total_capital'] - self.initial_capital
+        dataframe = dataframe.dropna(axis=0)  # this keeps only transaction rows i.e buy-sell
+
+
+        dataframe['date'] = dataframe['date'].astype('datetime64[ns]')
+        dataframe.loc[:, 'till_last_transaction'] = dataframe['date'].diff(periods=1)
 
         return dataframe
 
+
+    def table(self):
+
+        def annualized_return(initial_capital, final_capital, period_of_days):
+            #     P : initial capital
+            #     n   : period in year(for day its 365)
+            #     t   : num of period observed: 1 means 365 day
+            #     A : final capital
+            A = final_capital
+            P = initial_capital
+            n = 365
+            t = period_of_days / n # our test period / one year
+
+            return 100 * n * ((A / P) ** (1 / (n * t)) - 1)
+
+
+        # our_r: our annualized % return average
+        def get_our_annualized_return(transactions_df, period_of_days):
+            return annualized_return(initial_capital=transactions_df['total_capital'].iloc[0],
+                                     final_capital=transactions_df['total_capital'].iloc[-1],
+                                     period_of_days=period_of_days)
+
+        # bah_r: bah annualized % return
+        def get_bah_annualized_return(init_capital, bah_capital, period_of_days):
+            return annualized_return(initial_capital=init_capital,
+                                     final_capital=bah_capital,
+                                     period_of_days=period_of_days)
+
+        # ant : annualized number of transaction
+        def get_annualized_number_of_transaction(transactions_df, period_of_days):
+            return transactions_df.shape[0] * 365 / period_of_days
+
+        # pos : percent of success : sum(succ. transaction) / sum(transaction)
+        def get_percent_of_success(transactions_df):
+            pos_len = transactions_df.loc[transactions_df['return'] > 0].shape[0]
+            return 100 * pos_len / transactions_df.shape[0]
+
+        # apt : average percent profit per transactions
+        def get_apt(transactions_df):
+            return 100 * transactions_df['return'].sum() / transactions_df.shape[0]
+
+        # l   : average transaction length
+        def get_l(transactions_df):
+            return transactions_df.t_period.sum() / transactions_df.shape[0]
+
+        # mpt : maximum profit percentage in transaction
+        def get_mpt(transactions_df):
+            return 100 * transactions_df['return'].max()
+
+        # mlt : maximum loss percentage in transaction
+        def get_mlt(transactions_df):
+            return transactions_df['return'].min()
+
+        # maxc : maximum capital over test period
+        def get_maxc(transactions_df):
+            return transactions_df.capital_after.max()
+
+        # minc : minimum capital over test period
+        def get_minc(transactions_df):
+            return transactions_df.capital_after.min()
 
 def label_to_directives(row):
     row = row[['pbuy', 'psell', 'phold']]
@@ -95,6 +205,7 @@ def label_to_directives(row):
     if argmax_idx == 1:
         return 'sell'
     return 'hold'
+
 
 def buysell_pipeline_stock():
     initial_capital = 100000
@@ -115,7 +226,7 @@ def buysell_pipeline_stock():
         # Our simple strategy
         buysell = BuySell(capital=initial_capital)
         buysell_result_df = buysell.process(dataframe)
-        subset = ['name', 'date', 'price', 'directive', 'current_capital', 'share_amount', 'total_capital', 'profit']
+        subset = ['name', 'date', 'price', 'directive', 'capital_after', 'share_after', 'total_capital', 'total_profit']
         #     subset = buysell_result_df.columns
         if final_result_df is None:
             final_result_df = pd.DataFrame(columns=subset)
@@ -162,3 +273,4 @@ def buysell_pipeline_stress():
     final_result_df
 
 
+buysell_pipeline_stock()
