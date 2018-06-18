@@ -382,9 +382,8 @@ def buysell_pipeline_stress():
 
 def table_experiment():
     initial_capital = 100000
-    stock_names = ['dia', 'ewa', 'ewc', 'ewg', 'ewh', 'ewj', 'eww', 'spy', 'xlb', 'xle', 'xlf', 'xli', 'xlk', 'xlp',
-                   'xlu', 'xlv', 'xly']
-    exp_name = 'stock_exp'
+    stock_names = ['dia', 'ewa', 'ewc', 'ewg', 'ewh', 'ewj', 'eww', 'spy', 'xlb', 'xle', 'xlf', 'xli', 'xlk', 'xlp', 'xlu', 'xlv', 'xly']
+    exp_name = 'stock_exp_7day'
 
     final_result_df = pd.DataFrame()
     for stock_name in stock_names:
@@ -409,7 +408,7 @@ def table_experiment():
         final_result_df = final_result_df.append(result_row, ignore_index=True)
 
 
-    order = ['Stocks', 'OUR', 'OURr', 'AnT', 'PoS', 'ApT', 'L', 'MpT', 'MlT', 'MaxC', 'MinC', 'IdleR']
+    order = ['Stocks', 'OUR', 'OURr', 'BaHr', 'AnT', 'PoS', 'ApT', 'L', 'MpT', 'MlT', 'MaxC', 'MinC', 'IdleR']
     final_result_df = final_result_df[order]
 
     final_result_df.applymap(lambda x:'{0:.2f}'.format(x) if type(x) != str else x).to_csv('transactions.csv', index=False)

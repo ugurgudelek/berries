@@ -103,13 +103,14 @@ class IndicatorDataset():
 
     """
 
-    def __init__(self, dataset_name, input_path, stock_names, save_dataset, train_valid_ratio):
+    def __init__(self, dataset_name, input_path, stock_names, save_dataset, train_valid_ratio, label_window):
 
         self.dataset_name = dataset_name
         self.input_path = input_path
         self.train_valid_ratio = train_valid_ratio
         self.stock_names = stock_names
         self.save_dataset = save_dataset
+        self.label_window = label_window
 
         self.standardizer = IndicatorStandardizer()
 
@@ -121,8 +122,20 @@ class IndicatorDataset():
         raw_train_dataset = raw_dataset.iloc[:train_len, :]
         raw_valid_dataset = raw_dataset.iloc[train_len:, :]
 
-        self.preprocessed_train_dataset = self.preprocess_dataset(dataset=raw_train_dataset, kind='train')
-        self.preprocessed_valid_dataset = self.preprocess_dataset(dataset=raw_valid_dataset, kind='validation')
+        self.preprocessed_train_dataset = self.preprocess_dataset(dataset=raw_train_dataset, kind='train', label_window=label_window)
+        self.preprocessed_valid_dataset = self.preprocess_dataset(dataset=raw_valid_dataset, kind='validation', label_window=label_window)
+
+        utils.plot_wrt_labels(self.preprocessed_valid_dataset.loc[self.preprocessed_valid_dataset['name']=='dia'].iloc[:35],
+                              timeseries_col='raw_adjusted_close', condition_func=lambda row: row['label_sell'] == 1,
+                        text='sell', arrow_len=10)
+
+        utils.plot_wrt_labels(self.preprocessed_valid_dataset.loc[self.preprocessed_valid_dataset['name']=='dia'].iloc[:35],
+                              timeseries_col='raw_adjusted_close', condition_func=lambda row: row['label_buy'] == 1,
+                        text='buy', arrow_len=10)
+
+        plt.ylim((150,200))
+        plt.legend()
+        plt.show()
 
         print('Train ----\n'
               'Shape: {} \n'
@@ -149,7 +162,7 @@ class IndicatorDataset():
         self.train_dataset = InnerIndicatorDataset(dataset=self.preprocessed_train_dataset)
         self.valid_dataset = InnerIndicatorDataset(dataset=self.preprocessed_valid_dataset)
 
-    def preprocess_dataset(self, dataset, kind='train'):
+    def preprocess_dataset(self, dataset, kind='train', label_window=28):
 
         dataset['date'] = dataset['date'].astype('datetime64[ns]')
         dataset['high'] = dataset['high'].values.astype(np.float)
@@ -158,7 +171,7 @@ class IndicatorDataset():
         dataset['volume'] = dataset['volume'].values.astype(np.float)
 
         # labelize with up,down,hold
-        dataset = self.labelize_with_windows_slide(dataset)
+        dataset = self.labelize_with_windows_slide(dataset, window=label_window)
 
         # calculate technical analysis values from stock data
         # this creates a new dataset depends on technical analysis

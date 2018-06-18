@@ -264,7 +264,7 @@ def exp_pipeline():
     stock_names = ['dia', 'ewa', 'ewc', 'ewg', 'ewh', 'ewj', 'eww', 'spy', 'xlb',
                    'xle', 'xlf', 'xli', 'xlk', 'xlp', 'xlu', 'xlv', 'xly']
 
-    exp_name = 'stock_exp'
+    exp_name = 'stock_exp_7day_2'
     for stock_name in stock_names:
 
         print('Experiment starting for {} ...'.format(stock_name))
@@ -305,7 +305,7 @@ def inception_exp():
     # self.fc = nn.Linear(2048, num_classes)
 
 
-# exp_pipeline()
+exp_pipeline()
 # stress_test()
 # resume_test()
-inception_exp()
+# inception_exp()
