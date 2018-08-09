@@ -102,7 +102,7 @@ class Estimator:
         vaccs = np.array([])
         for i, (vX, vy, info) in enumerate(self.valid_dataloader):
             vX, vy = Variable(vX.float(), requires_grad=False), Variable(vy.float(), requires_grad=False)
-            vy = vy.view(vy.shape[0], 1)
+
             if self.use_cuda:
                 vX, vy = vX.cuda(), vy.cuda()
             voutput, vloss, vacc = self.validate_on_batch(vX, vy)

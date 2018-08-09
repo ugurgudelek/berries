@@ -45,7 +45,7 @@ class InnerIndicatorDataset(torch.utils.data.Dataset):
         self.transform = transforms.Compose([transforms.ToTensor()])
 
     def __len__(self):
-        return self.dataset.shape[0]
+        return self.dataset.shape[0] - self.seq_len
 
     def __getitem__(self, ix):
         X = self.X.iloc[ix: ix + self.seq_len, :]
