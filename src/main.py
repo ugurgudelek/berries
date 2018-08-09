@@ -3,6 +3,10 @@ from model import LSTM
 from dataset import IndicatorDataset
 import torch
 
+from torch.utils.data import DataLoader
+
+from tqdm import trange
+
 
 # todo: model tahminlerini sklearn tarzı bir hale getirip, gökberkin istediği tabloları ve plotları oluştur.
 
@@ -20,14 +24,14 @@ class Config:
         self.EPOCH_SIZE = 20
 
         self.SEQ_LEN = 128
-        self.INPUT_SIZE = 6
+        self.INPUT_SIZE = 15
         self.OUTPUT_SIZE = 3  # down, steady, up
 
         self.LABEL_WINDOW = 7
 
         self.TRAIN_VALID_RATIO = 0.90
-        self.TRAIN_BATCH_SIZE = 64
-        self.VALID_BATCH_SIZE = 1
+        self.TRAIN_BATCH_SIZE = 2
+        self.VALID_BATCH_SIZE = 2
         self.TRAIN_SHUFFLE = True
         self.VALID_SHUFFLE = False
 
@@ -52,7 +56,8 @@ if __name__ == "__main__":
     dataset = IndicatorDataset(dataset_name=config.DATASET_NAME,
                                input_path=config.INPUT_PATH,
                                train_valid_ratio=config.TRAIN_VALID_RATIO,
-                               save_dataset=True)
+                               save_dataset=True,
+                               seq_len=config.SEQ_LEN)
     model = LSTM(input_size=config.INPUT_SIZE,
                  seq_length=config.SEQ_LEN,
                  num_layers=1,
@@ -60,9 +65,22 @@ if __name__ == "__main__":
                  batch_size=config.TRAIN_BATCH_SIZE,
                  use_cuda=config.USE_CUDA)
 
-    # estimator = Estimator(dataset=dataset,
-    #                       model=model,
-    #                       use_cuda=config.USE_CUDA,
-    #                       summary_writer_path='../summary',
-    #                       exp_dir=config.EXPERIMENT_DIR,
-    #                       batch_size=config.TRAIN_BATCH_SIZE)
+    estimator = Estimator(dataset=dataset,
+                          model=model,
+                          use_cuda=config.USE_CUDA,
+                          exp_dir=config.EXPERIMENT_DIR,
+                          batch_size=config.TRAIN_BATCH_SIZE)
+
+
+
+    epoch = 0
+    with trange(epoch, config.EPOCH_SIZE) as t:
+        for epoch in t:
+            tloss, vloss, tacc, vacc = estimator.run_epoch(epoch, t)
+            print(tloss, vloss, tacc, vacc)
+
+            estimator.writer.add_scalar('training_loss', tloss, epoch)
+            estimator.writer.add_scalar('validation_loss', vloss, epoch)
+            estimator.writer.add_scalar('training_acc', tacc, epoch)
+            estimator.writer.add_scalar('validation_acc', vacc, epoch)
+    print()

@@ -5,8 +5,11 @@ from torch.utils.data import DataLoader
 from torch.autograd import Variable
 
 import numpy as np
+import pandas as pd
+import collections
 
-
+from model import LSTM
+from dataset import IndicatorDataset
 
 from tqdm import tqdm, trange
 from tensorboardX import SummaryWriter
@@ -19,7 +22,7 @@ class Estimator:
 
     # todo: buraları sadece bu probleme uygun basit bir hale getir. Şu an çok generic.
 
-    def __init__(self, dataset, model, use_cuda=True, summary_writer_path='../summary', exp_name='exp', batch_size=10):
+    def __init__(self, dataset, model, use_cuda=True, exp_dir='../experiment', batch_size=10):
 
         self.model = model
 
@@ -29,38 +32,54 @@ class Estimator:
 
 
         self.criterion = nn.MSELoss()
-        self.optimizer = optim.Adam(self.model.parameters(), 0.001)
+        self.optimizer = optim.Adam(self.model.parameters(), 0.005)
 
         self.dataset = dataset
 
         self.train_dataloader = DataLoader(dataset.train_dataset,
                                            batch_size=batch_size,
-                                           shuffle=True,
-                                           drop_last=True) # to override default_collate_fn
+                                           shuffle=False,
+                                           drop_last=True, collate_fn=Estimator.custom_collate_fn)
         self.valid_dataloader = DataLoader(dataset.valid_dataset,
                                            batch_size=batch_size,
                                            shuffle=False,
-                                           drop_last=True) # to override default_collate_fn
+                                           drop_last=True, collate_fn=Estimator.custom_collate_fn)
 
 
-        self.writer = SummaryWriter(log_dir=os.path.join(summary_writer_path, exp_name))
+        self.writer = SummaryWriter(log_dir=os.path.join(exp_dir, 'summary'))
 
     # def __new__(cls, *args, **kwargs):
     #     cls.__init__(cls, *args, **kwargs)
     #     return cls
+
+    @staticmethod
+    def custom_collate_fn(batch):
+
+        if isinstance(batch[0], np.ndarray):
+            return torch.stack([torch.from_numpy(b) for b in batch], 0)
+
+        elif isinstance(batch[0], collections.Sequence):
+            transposed = zip(*batch)
+            return [Estimator.custom_collate_fn(samples) for samples in transposed]
+
+        elif isinstance(batch[0], dict):
+            return pd.DataFrame(list(batch)).to_dict('list')
+        else:
+
+            raise Exception('Update custom_collate_fn!!')
 
     def run_epoch(self, epoch, t):
 
         # Train
         tlosses = np.array([])
         taccs  =np.array([])
-        for step, (tX, ty) in enumerate(self.train_dataloader):
+        for step, (tX, ty, info) in enumerate(self.train_dataloader):
 
             if step % 100 == 0:
                 t.set_description('EPOCH : {} || STEP : {}'.format(epoch, step))
 
             tX, ty = Variable(tX.float(), requires_grad=False), Variable(ty.float(), requires_grad=False)
-            ty = ty.view(ty.shape[0], 1)
+
 
 
             if self.use_cuda:
@@ -81,7 +100,7 @@ class Estimator:
         # Validate
         voutputs, vlosses = np.array([]), np.array([])
         vaccs = np.array([])
-        for i, (vX, vy) in enumerate(self.valid_dataloader):
+        for i, (vX, vy, info) in enumerate(self.valid_dataloader):
             vX, vy = Variable(vX.float(), requires_grad=False), Variable(vy.float(), requires_grad=False)
             vy = vy.view(vy.shape[0], 1)
             if self.use_cuda:
@@ -102,19 +121,13 @@ class Estimator:
         # forward + backward + optimize
         #self.model.hidden = self.model.init_hidden()  # detach history of initial hidden
 
-        # one hot encoded ys
-        y_onehot = torch.FloatTensor(batch_size, 3.0)
-
-        # In your for loop
-        y_onehot.zero_()
-        y_onehot.scatter_(1, ys.cpu().type(torch.LongTensor), 1)
 
         output = self.model(Xs)
-        loss = self.criterion(output, y_onehot.cuda())
+        loss = self.criterion(output, ys)
         # print(loss.cpu().data.numpy(), np.sum(output.cpu().data.numpy()))
 
         out_argmax = np.argmax(output.cpu().data.numpy(), axis=1)
-        ys_argmax = np.argmax(y_onehot.cpu().data.numpy(), axis=1)
+        ys_argmax = np.argmax(ys.cpu().data.numpy(), axis=1)
         acc = np.sum(out_argmax == ys_argmax) / out_argmax.__len__()
 
 
@@ -186,42 +199,4 @@ class Estimator:
 
 if __name__ == "__main__":
 
-    print('cuda:', torch.cuda.is_available())
-
-    batch_size = 1000
-    seq_len = 256
-    model = LSTM(input_size=4,
-                 seq_length=seq_len,
-                 num_layers=1,
-                 out_size=3,
-                 batch_size=batch_size,
-                 use_cuda=True)
-
-    # dataset = VibrationDataset(csv_path='../dataset/Two_Patterns_TRAIN.csv',
-    #                            train_valid_ratio=0.9,
-    #                            seq_length=seq_len)
-
-    # estimator = Estimator(dataset=dataset, model=model,
-    #                       batch_size=batch_size, summary_comment='two_patterns')
-
-    dataset = VibrationDataset(csv_path='../dataset/raw_reading-1.csv',
-                               train_valid_ratio=0.9,
-                               seq_length=seq_len)
-
-    estimator = Estimator(dataset=dataset, model=model,
-                          batch_size=batch_size, exp_name='vibration_reading1_1000_batch1000_acc_az')
-
-
-
-
-    epoch = 0
-    with trange(epoch, 1000) as t:
-        for epoch in t:
-            tloss, vloss, tacc, vacc = estimator.run_epoch(0, t)
-            print(tloss, vloss, tacc, vacc)
-
-            estimator.writer.add_scalar('training_loss', tloss, epoch)
-            estimator.writer.add_scalar('validation_loss', vloss, epoch)
-            estimator.writer.add_scalar('training_acc', tacc, epoch)
-            estimator.writer.add_scalar('validation_acc', vacc, epoch)
-    print()
+    pass

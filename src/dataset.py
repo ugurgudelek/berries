@@ -20,28 +20,39 @@ class InnerIndicatorDataset(torch.utils.data.Dataset):
         dataset(pd.DataFrame):
     """
 
-    def __init__(self, dataset):
+    def __init__(self, dataset, seq_len):
         self.dataset = dataset
 
-        self.X = self.dataset.drop(['date', 'open', 'high', 'low', 'close', 'name',
-                                    'label_sell', 'label_buy', 'label_hold', 'raw_adjusted_close'], axis=1)
+        self.X = self.dataset.drop(['date', 'name', 'open', 'high', 'low', 'close',
+                                    'label', 'raw_adjusted_close'], axis=1)
 
-        self.y = self.dataset[['label_sell', 'label_buy', 'label_hold']]
+        self.y = self.dataset[['label']]
+
+        # turn categorical to one hot encoding
+        self.y = pd.get_dummies(self.y)
+
         self.name = self.dataset[['name']]
 
-        self.image_width = self.X.shape[1]
+        self.feature_dim = self.X.shape[1]
+        self.output_dim = self.y.shape[1]
+        self.data_dim = self.X.shape[0]
+        self.seq_len = seq_len
+
+        # self._X = self.X.values.reshape(-1, self.feature_dim, self.seq_len)
+        # self._y = self.y.values.reshape(-1, self.output_dim, self.seq_len)
+
 
         self.transform = transforms.Compose([transforms.ToTensor()])
 
     def __len__(self):
-        return self.dataset.shape[0] - self.image_width - 1
+        return self.dataset.shape[0]
 
     def __getitem__(self, ix):
-        X = self.X.iloc[ix: ix + self.image_width, :]
-        y = self.y.iloc[ix + self.image_width - 1, :]
+        X = self.X.iloc[ix: ix + self.seq_len, :]
+        y = self.y.iloc[ix + self.seq_len - 1, :]
 
-        name = self.dataset['name'].iloc[ix + self.image_width - 1]
-        date = self.dataset['date'].iloc[ix + self.image_width - 1]
+        name = self.dataset['name'].iloc[ix + self.seq_len - 1]
+        date = self.dataset['date'].iloc[ix + self.seq_len - 1]
         extra_info = {'name': name, 'date': date}
 
         # change type to numpy
@@ -94,12 +105,13 @@ class IndicatorDataset():
 
     """
 
-    def __init__(self, dataset_name, input_path, save_dataset, train_valid_ratio):
+    def __init__(self, dataset_name, input_path, save_dataset, train_valid_ratio, seq_len):
 
         self.dataset_name = dataset_name
         self.input_path = input_path
         self.train_valid_ratio = train_valid_ratio
         self.save_dataset = save_dataset
+        self.seq_len = seq_len
 
         self.standardizer = IndicatorStandardizer()
 
@@ -134,8 +146,8 @@ class IndicatorDataset():
                 os.path.join('/'.join(input_path.split('/')[:-1]), 'valid_preprocessed_indicator_dataset.csv'),
                 index=False)
 
-        self.train_dataset = InnerIndicatorDataset(dataset=self.preprocessed_train_dataset)
-        self.valid_dataset = InnerIndicatorDataset(dataset=self.preprocessed_valid_dataset)
+        self.train_dataset = InnerIndicatorDataset(dataset=self.preprocessed_train_dataset, seq_len=self.seq_len)
+        self.valid_dataset = InnerIndicatorDataset(dataset=self.preprocessed_valid_dataset, seq_len=self.seq_len)
 
     def preprocess_dataset(self, dataset, kind='train'):
 
@@ -175,8 +187,8 @@ class IndicatorDataset():
 
 
         # # equalize up,down and hold labels
-        if kind == 'train':
-            dataset = self.updown_scaling(dataset)
+        # if kind == 'train':
+        #     dataset = self.updown_scaling(dataset)
 
         return dataset
 
@@ -191,6 +203,7 @@ class IndicatorDataset():
             return pd.concat((stock_data_subset, stock_data_neg_subset), axis=1)
 
         return stocks.groupby('name').apply(inner_func).dropna()
+
     def updown_scaling(self, stocks):
 
         def inner_func(stock_data):
@@ -351,43 +364,20 @@ class IndicatorDataset():
         volume = dataframe['volume'].values
 
         dataframe['rsi_15'] = RSI(close, timeperiod=15) / 50 - 1
-        dataframe['rsi_20'] = RSI(close, timeperiod=20) / 50 - 1
-        # dataframe['rsi_25'] = RSI(close, timeperiod=25)/50 - 1
-        dataframe['rsi_30'] = RSI(close, timeperiod=30) / 50 - 1
-
-        # dataframe['sma_15'] = SMA(close, timeperiod=15)
         dataframe['sma_20'] = SMA(close, timeperiod=20)
-        # dataframe['sma_25'] = SMA(close, timeperiod=25)
-        dataframe['sma_30'] = SMA(close, timeperiod=30)
 
         dataframe['macd_12'], macdsignal, dataframe['macdhist_12'] = MACD(close, fastperiod=12, slowperiod=26,
                                                                           signalperiod=9)
-        dataframe['macd_14'], macdsignal, dataframe['macdhist_14'] = MACD(close, fastperiod=14, slowperiod=28,
-                                                                          signalperiod=10)
-        dataframe['macd_16'], macdsignal, dataframe['macdhist_16'] = MACD(close, fastperiod=16, slowperiod=30,
-                                                                          signalperiod=11)
 
         dataframe['willR_14'] = WILLR(high, low, close, timeperiod=14) / 50 + 1
-        # dataframe['willR_18'] = WILLR(high, low, close, timeperiod=18)/50 + 1
-        dataframe['willR_22'] = WILLR(high, low, close, timeperiod=22) / 50 + 1
 
         dataframe['ultimate_osc_7'] = ULTOSC(high, low, close, timeperiod1=7, timeperiod2=14, timeperiod3=28) / 50 - 1
-        # dataframe['ultimate_osc_8'] = ULTOSC(high, low, close, timeperiod1=8, timeperiod2=16, timeperiod3=32)/50 - 1
-        dataframe['ultimate_osc_9'] = ULTOSC(high, low, close, timeperiod1=9, timeperiod2=18, timeperiod3=36) / 50 - 1
 
         dataframe['mfi_14'] = MFI(high, low, close, volume, timeperiod=14) / 50 - 1
-        dataframe['mfi_18'] = MFI(high, low, close, volume, timeperiod=18) / 50 - 1
-        dataframe['mfi_22'] = MFI(high, low, close, volume, timeperiod=22) / 50 - 1
 
         slowk, slowd = STOCH(high, low, close, fastk_period=14, slowk_period=3, slowk_matype=0, slowd_period=3,
                              slowd_matype=0)
         dataframe['kddiff_14'] = slowk - slowd
-        slowk, slowd = STOCH(high, low, close, fastk_period=18, slowk_period=3, slowk_matype=0, slowd_period=3,
-                             slowd_matype=0)
-        dataframe['kddiff_18'] = slowk - slowd
-        slowk, slowd = STOCH(high, low, close, fastk_period=22, slowk_period=3, slowk_matype=0, slowd_period=3,
-                             slowd_matype=0)
-        dataframe['kddiff_22'] = slowk - slowd
 
         return dataframe
 
