@@ -11,6 +11,7 @@ import collections
 from model import LSTM
 from dataset import IndicatorDataset
 
+
 from tqdm import tqdm, trange
 from tensorboardX import SummaryWriter
 import os
@@ -22,7 +23,7 @@ class Estimator:
 
     # todo: buraları sadece bu probleme uygun basit bir hale getir. Şu an çok generic.
 
-    def __init__(self, dataset, model, use_cuda=True, exp_dir='../experiment', batch_size=10):
+    def __init__(self, dataset, model, use_cuda=True, exp_dir='../experiment', train_batch_size=10, valid_batch_size=1):
 
         self.model = model
 
@@ -37,11 +38,11 @@ class Estimator:
         self.dataset = dataset
 
         self.train_dataloader = DataLoader(dataset.train_dataset,
-                                           batch_size=batch_size,
+                                           batch_size=train_batch_size,
                                            shuffle=False,
                                            drop_last=True, collate_fn=Estimator.custom_collate_fn)
         self.valid_dataloader = DataLoader(dataset.valid_dataset,
-                                           batch_size=batch_size,
+                                           batch_size=valid_batch_size,
                                            shuffle=False,
                                            drop_last=True, collate_fn=Estimator.custom_collate_fn)
 
@@ -79,8 +80,6 @@ class Estimator:
                 t.set_description('EPOCH : {} || STEP : {}'.format(epoch, step))
 
             tX, ty = Variable(tX.float(), requires_grad=False), Variable(ty.float(), requires_grad=False)
-
-
 
             if self.use_cuda:
                 tX, ty = tX.cuda(), ty.cuda()
@@ -154,7 +153,7 @@ class Estimator:
         self.model.eval()
 
         # self.model.hidden = self.model.init_hidden(batch_size=1)
-        pX = Variable(FloatTensor(Xs), requires_grad=False).unsqueeze(0)
+        pX = Variable(torch.FloatTensor(Xs), requires_grad=False).unsqueeze(0)
         if self.use_cuda:
             pX = pX.cuda()
         output = self.model(pX)
@@ -170,12 +169,12 @@ class Estimator:
         voutputs, vlosses = np.array([]), np.array([])
         vXs, vys = np.array([]), np.array([])
 
-        names,dates = np.array([]), np.array([])
+        names,dates = [],[]
         for i, (vX, vy, extra_info) in enumerate(self.valid_dataloader):
             vX, vy = Variable(vX.float(), requires_grad=False), Variable(vy.float(), requires_grad=False)
             if self.use_cuda:
                 vX, vy = vX.cuda(), vy.cuda()
-            voutput, vloss = self.validate_on_batch(vX, vy)
+            voutput, vloss, vacc = self.validate_on_batch(vX, vy)
 
 
             voutput, vloss = voutput.cpu(), vloss.cpu()
@@ -189,8 +188,8 @@ class Estimator:
             vys = np.concatenate((vys, vy.cpu().data.numpy()),
                                       axis=0) if vys.size else vy.cpu().data.numpy()
 
-            dates = np.append(dates, extra_info['date'])
-            names = np.append(names, extra_info['name'])
+            dates += extra_info['date']
+            names += extra_info['name']
 
         epoch_validation_loss = vlosses.mean()
 

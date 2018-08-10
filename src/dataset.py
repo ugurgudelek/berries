@@ -51,8 +51,8 @@ class InnerIndicatorDataset(torch.utils.data.Dataset):
         X = self.X.iloc[ix: ix + self.seq_len, :]
         y = self.y.iloc[ix + self.seq_len - 1, :]
 
-        name = self.dataset['name'].iloc[ix + self.seq_len - 1]
-        date = self.dataset['date'].iloc[ix + self.seq_len - 1]
+        name = self.dataset['name'].iloc[ix: ix + self.seq_len - 1]
+        date = self.dataset['date'].iloc[ix: ix + self.seq_len - 1]
         extra_info = {'name': name, 'date': date}
 
         # change type to numpy
@@ -118,11 +118,11 @@ class IndicatorDataset():
         raw_dataset = pd.read_csv(input_path)
         raw_dataset['name'] = 'spy'
         train_len = int(raw_dataset.shape[0] * train_valid_ratio)
-        raw_train_dataset = raw_dataset.iloc[:train_len, :]
-        raw_valid_dataset = raw_dataset.iloc[train_len:, :]
+        self.raw_train_dataset = raw_dataset.iloc[:train_len, :]
+        self.raw_valid_dataset = raw_dataset.iloc[train_len:, :]
 
-        self.preprocessed_train_dataset = self.preprocess_dataset(dataset=raw_train_dataset, kind='train')
-        self.preprocessed_valid_dataset = self.preprocess_dataset(dataset=raw_valid_dataset, kind='validation')
+        self.preprocessed_train_dataset = self.preprocess_dataset(dataset=self.raw_train_dataset, kind='train')
+        self.preprocessed_valid_dataset = self.preprocess_dataset(dataset=self.raw_valid_dataset, kind='validation')
 
         print('Train ----\n'
               'Shape: {} \n'
@@ -158,7 +158,8 @@ class IndicatorDataset():
         dataset['volume'] = dataset['volume'].values.astype(np.float)
 
         # labelize with up,down,hold
-        dataset = self.label_wrt_center_max_min(dataset, window=11)
+        dataset = self.label_wrt_center_max_min(dataset, window=15)
+        dataset = self.dilate(dataset, window=3)
 
         # calculate technical analysis values from stock data
         # this creates a new dataset depends on technical analysis
@@ -192,13 +193,23 @@ class IndicatorDataset():
 
         return dataset
 
+    def get_data(self, name, date):
+        return self.raw_train_dataset.loc[
+            (self.raw_train_dataset['name'] == name)&
+            (self.raw_train_dataset['date'] == date)]
+
+    def get_data_seq(self, name, first_date, last_date):
+        return self.raw_train_dataset.loc[
+            (self.raw_train_dataset['name'] == name) &
+            (self.raw_train_dataset['date'] >= first_date)&
+            (self.raw_train_dataset['date'] <= last_date)]
 
     def differentiate(self, stocks, subset):
 
         def inner_func(stock_data):
             stock_data_subset = stock_data[subset]
             stock_data_neg_subset = stock_data.drop(subset, axis=1)
-            stock_data_subset = stock_data_subset.diff(periods=1)
+            stock_data_subset = stock_data_subset.pct_change()
 
             return pd.concat((stock_data_subset, stock_data_neg_subset), axis=1)
 
@@ -207,16 +218,19 @@ class IndicatorDataset():
     def updown_scaling(self, stocks):
 
         def inner_func(stock_data):
-            buy_count = stock_data['label_buy'].sum()
-            sell_count = stock_data['label_sell'].sum()
-            hold_count = stock_data['label_hold'].sum()
+            top_count = stock_data.loc[stock_data['label'] == 'top'].sum()
+            mid_count = stock_data.loc[stock_data['label'] == 'mid'].sum()
+            bot_count = stock_data.loc[stock_data['label'] == 'bot'].sum()
 
-            new_downs = utils.pick_random_samples(df=stock_data, on='label_buy', condition=1,
-                                                  n=int(hold_count - buy_count))
-            new_ups = utils.pick_random_samples(df=stock_data, on='label_sell', condition=1,
-                                                n=int(hold_count - sell_count))
+            def pick_random_samples(df, on, condition, n):
+                return df.loc[df[on] == condition].sample(n=n, replace=True)
 
-            return pd.concat((stock_data, new_ups, new_downs))
+            new_tops = pick_random_samples(df=stock_data, on='label', condition='top',
+                                                  n=int(mid_count - top_count))
+            new_bots = pick_random_samples(df=stock_data, on='label', condition='bot',
+                                                n=int(mid_count - bot_count))
+
+            return pd.concat((stock_data, new_tops, new_bots))
 
         return stocks.groupby('name').apply(inner_func).sort_values(by=['date', 'name']).reset_index(drop=True)
 
@@ -249,6 +263,9 @@ class IndicatorDataset():
         def is_center_min(window_data):
             return np.min(window_data) == window_data[len(window_data)//2]
 
+
+
+
         def inner_func(stock_data):
             stock_data['maxs'] = stock_data['adjusted_close'].rolling(window, center=True, min_periods=window).apply(is_center_max)
             stock_data['mins'] = stock_data['adjusted_close'].rolling(window, center=True, min_periods=window).apply(is_center_min)
@@ -256,6 +273,8 @@ class IndicatorDataset():
             stock_data['label'] = 'mid'
             stock_data.loc[stock_data['maxs'] == 1, 'label'] = 'top'
             stock_data.loc[stock_data['mins'] == 1, 'label'] = 'bot'
+
+
 
             stock_data = stock_data.drop(['maxs','mins'], axis=1)
 
@@ -269,6 +288,21 @@ class IndicatorDataset():
             return stock_data
 
         return stocks.groupby('name').apply(inner_func).dropna()
+
+    def dilate(self, stocks, window=3):
+
+        def inner_func(stock_data):
+            stock_data['label2'] = stock_data['label']
+            stock_data['label2'] = np.convolve((stock_data['label'] == 'top').values, np.ones(window),'same')
+            stock_data['label'].loc[stock_data['label2'] == 1] = 'top'
+
+            stock_data['label2'] = stock_data['label']
+            stock_data['label2'] = np.convolve((stock_data['label'] == 'bot').values, np.ones(window), 'same')
+            stock_data['label'].loc[stock_data['label2'] == 1] = 'bot'
+
+            return stock_data.drop('label2', axis=1)
+
+        return stocks.groupby('name').apply(inner_func)
 
     def _read_dir(self, stocks_dir, stock_names):
         """

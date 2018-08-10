@@ -39,7 +39,7 @@ class LSTM(nn.Module):
                             bidirectional=False)
 
         self.fc = nn.Sequential(
-            nn.Linear(in_features=self.seq_length, out_features=100),
+            nn.Linear(in_features=10, out_features=100),
             nn.ReLU(inplace=True),
             nn.Linear(in_features=100, out_features=self.out_size)
         )
@@ -77,14 +77,15 @@ class LSTM(nn.Module):
         # x shape: (seq_len, batch, input_size)
         # hidden shape:(num_layers * num_directions,batch_size, hidden_size)
 
-        if self.hidden is None:
-            self.hidden = self.init_hidden()
+        # if self.hidden is None:
+        self.hidden = self.init_hidden()
 
         x = x.view(self.seq_length, -1, self.input_size)
         lstm_out, self.hidden = self.lstm(x, self.hidden)
 
-        # return all sequence, all batches, only last hidden
-        out = lstm_out[:, :, -1].view(-1, self.seq_length)
+        # return last sequence
+        # output of shape (seq_len, batch, num_directions * hidden_size)
+        out = lstm_out[-1]
         fc_out = self.fc(out)
 
         soft_out = self.softmax(fc_out)

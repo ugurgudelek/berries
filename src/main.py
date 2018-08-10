@@ -6,9 +6,14 @@ import torch
 from torch.utils.data import DataLoader
 
 from tqdm import trange
+import pandas as pd
+import numpy as np
+
+import matplotlib.pyplot as plt
+
+from sklearn.metrics import f1_score, confusion_matrix
 
 
-# todo: model tahminlerini sklearn tarzı bir hale getirip, gökberkin istediği tabloları ve plotları oluştur.
 
 class Config:
     """
@@ -30,15 +35,15 @@ class Config:
         self.LABEL_WINDOW = 7
 
         self.TRAIN_VALID_RATIO = 0.90
-        self.TRAIN_BATCH_SIZE = 2
-        self.VALID_BATCH_SIZE = 2
+        self.TRAIN_BATCH_SIZE = 10
+        self.VALID_BATCH_SIZE = 10
         self.TRAIN_SHUFFLE = True
         self.VALID_SHUFFLE = False
 
         self.DATASET_NAME = 'IndicatorDataset'
-        self.INPUT_PATH = '../input/spy.csv'
+        self.INPUT_PATH = '../input/xlf.csv'
 
-        self.EXPERIMENT_DIR = '../experiment/spy_only'
+        self.EXPERIMENT_DIR = '../experiment/xlf_window_15'
 
         self.USE_CUDA = torch.cuda.is_available()
         if self.USE_CUDA:
@@ -69,9 +74,8 @@ if __name__ == "__main__":
                           model=model,
                           use_cuda=config.USE_CUDA,
                           exp_dir=config.EXPERIMENT_DIR,
-                          batch_size=config.TRAIN_BATCH_SIZE)
-
-
+                          train_batch_size=config.TRAIN_BATCH_SIZE,
+                          valid_batch_size=config.VALID_BATCH_SIZE)
 
     epoch = 0
     with trange(epoch, config.EPOCH_SIZE) as t:
@@ -84,3 +88,32 @@ if __name__ == "__main__":
             estimator.writer.add_scalar('training_acc', tacc, epoch)
             estimator.writer.add_scalar('validation_acc', vacc, epoch)
     print()
+
+    ix, (sample_x, sample_y, ext_info) = dataset.train_dataset.get_sample()
+    # prediction = estimator.predict(sample_x)
+    pXs, pys, poutputs, plosses, (pdates, pnames) = estimator.predict_all_validation()
+    prediction_df = pd.DataFrame(dict(y0=pys[:, 0], y1=pys[:, 1], y2=pys[:, 2], yhat0=poutputs[:, 0], yhat1=poutputs[:, 1], yhat2=poutputs[:, 2]))
+
+    def onehot2label(row):
+        row = row.values
+        return pd.Series(dict(y=np.argmax(row[:3]), yhat=np.argmax(row[3:])))
+
+    labeled_pred_df = prediction_df.apply(onehot2label, axis=1)
+
+    f1 = f1_score(y_true=labeled_pred_df['y'], y_pred=labeled_pred_df['yhat'], average=None)
+    print('f1 score:\n{score}'.format(score=f1))
+
+    confusion = confusion_matrix(y_true=labeled_pred_df['y'], y_pred=labeled_pred_df['yhat'])
+    print('confusion matrix:\n{confusion}'.format(confusion=confusion))
+
+
+
+    # plt.plot(sample_x[0][0])
+    # plt.show()
+    #
+    # raw_sample = dataset.get_data_seq(name=ext_info['name'].iloc[0],
+    #                                   first_date=ext_info['date'].iloc[0],
+    #                                   last_date=ext_info['date'].iloc[-1])
+    # plt.plot(raw_sample['date'], raw_sample['close'], '-r')
+    # plt.show()
+    # print()
