@@ -41,9 +41,9 @@ class Config:
         self.VALID_SHUFFLE = False
 
         self.DATASET_NAME = 'IndicatorDataset'
-        self.INPUT_PATH = '../input/xlf.csv'
+        self.INPUT_PATH = '../input/spy_spline.csv'
 
-        self.EXPERIMENT_DIR = '../experiment/xlf_window_15'
+        self.EXPERIMENT_DIR = '../experiment/spy_spline'
 
         self.USE_CUDA = torch.cuda.is_available()
         if self.USE_CUDA:
