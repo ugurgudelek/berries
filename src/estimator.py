@@ -131,12 +131,13 @@ class Estimator:
 
 
         if train:
-            loss.backward()
+            loss.backward(retain_graph=True)
             self.optimizer.step()
 
         # detach to not backpropagate whole lstm network
-        self.model.hidden[0].detach_()
-        self.model.hidden[1].detach_()
+        # todo: actually below lines should be like self.model.hidden[0].detach_() aka inplace version. but not it working okey..
+        self.model.hidden[0].detach()
+        self.model.hidden[1].detach()
 
         return output, loss, acc
 
