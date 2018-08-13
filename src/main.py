@@ -33,6 +33,7 @@ class Config:
         self.OUTPUT_SIZE = 3  # down, steady, up
 
         self.LABEL_WINDOW = 7
+        self.LABEL_TYPE = 'regression'
 
         self.TRAIN_VALID_RATIO = 0.90
         self.TRAIN_BATCH_SIZE = 10
@@ -42,6 +43,7 @@ class Config:
 
         self.DATASET_NAME = 'IndicatorDataset'
         self.INPUT_PATH = '../input/spy_spline.csv'
+
 
         self.EXPERIMENT_DIR = '../experiment/spy_spline'
 
@@ -62,7 +64,8 @@ if __name__ == "__main__":
                                input_path=config.INPUT_PATH,
                                train_valid_ratio=config.TRAIN_VALID_RATIO,
                                save_dataset=True,
-                               seq_len=config.SEQ_LEN)
+                               seq_len=config.SEQ_LEN,
+                               label_type=config.LABEL_TYPE)
     model = LSTM(input_size=config.INPUT_SIZE,
                  seq_length=config.SEQ_LEN,
                  num_layers=1,
