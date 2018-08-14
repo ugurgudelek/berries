@@ -239,33 +239,78 @@ class IndicatorDataset():
 
         return stocks.groupby('name').apply(inner_func).dropna()
 
-    @staticmethod
-    def find_nearest_(stock_data, on, equal_to):
-        for ix,row in stock_data.iterrows():
-            if row[on] == equal_to:
-                pass
+    def filter_consequtive_same_label(self, stocks):
 
+        def inner_func(stock_data):
+            state = None
+            for i,row in stock_data.iterrows():
+                if row['label'] == 'mid':
+                    continue
+                if state is None:
+                    state = row['label']
+                    continue
+                if state == row['label']:
+                    stock_data.loc[i,'label'] = 'mid'
+                else:
+                    state = row['label']
+            return stock_data
+
+        return stocks.groupby('name').apply(inner_func).dropna()
+
+    def crop_firstnonbot_and_lastnontop(self, stocks):
+
+        def inner_func(stock_data):
+            first_bot_idx = stock_data.loc[stock_data['label'] == 'bot'].index.values[0]
+            last_top_idx = stock_data.loc[stock_data['label'] == 'top'].index.values[-1]
+
+            return stock_data.iloc[first_bot_idx:last_top_idx+1, :]
+
+        return stocks.groupby('name').apply(inner_func).dropna().reset_index(drop=True)
+
+    @staticmethod
+    def nearest_neighbour(arr, search_space):
+        """
+        requires sorted search_space
+        :return (np.ndarray) nearest neighbours of arr in search_space
+        """
+        ret = []
+        for a in arr:
+            min_idx = np.argmin(np.abs(search_space - a))
+            ret.append(min_idx)
+        return np.array(ret)
 
     def label_wrt_distance(self, stocks, window=7):
 
         # point turning points then process for distance
         # after this line, stocks has 'label' column which has top-mid-bot values.
         stocks = self.label_top_bot_mid(stocks=stocks, window=window)
+        stocks = self.filter_consequtive_same_label(stocks=stocks)
+        stocks = self.crop_firstnonbot_and_lastnontop(stocks=stocks)
 
-        x, y = np.mgrid[0:5, 2:8]
-        data = list(zip(x.ravel(), y.ravel()))
-        tree = spatial.KDTree(data)
-
-        def distance(window_data):
-            pass
+        #todo: make distance func
 
         def inner_func(stock_data):
-            mid = stock_data.loc[stock_data['label'] == 'mid'].index
-            top = stock_data.loc[stock_data['label'] == 'top'].index
-            bot = stock_data.loc[stock_data['label'] == 'bot'].index
+            mid = stock_data.loc[stock_data['label'] == 'mid'].index.values
+            top = stock_data.loc[stock_data['label'] == 'top'].index.values
+            bot = stock_data.loc[stock_data['label'] == 'bot'].index.values
 
+            stock_data['nn_top_idx'] = 0
+            stock_data['nn_bot_idx'] = 0
 
-            tree = spatial.KDTree(list(zip(bot.ravel(), top.ravel())))
+            # apply for mid values only
+            stock_data.loc[mid, 'nn_top_idx'] = top[IndicatorDataset.nearest_neighbour(arr=mid, search_space=top)]
+            stock_data.loc[mid, 'nn_bot_idx'] = bot[IndicatorDataset.nearest_neighbour(arr=mid, search_space=bot)]
+
+            # apply for bot values only
+            stock_data.loc[bot, 'nn_top_idx'] = np.inf
+            stock_data.loc[bot, 'nn_bot_idx'] = bot
+
+            # apply for top values only
+            stock_data.loc[top, 'nn_top_idx'] = top
+            stock_data.loc[top, 'nn_bot_idx'] = np.inf
+
+            print()
+            # tree = spatial.KDTree(list(zip(bot.ravel(), top.ravel())))
 
             stock_data['maxs'] = stock_data['adjusted_close'].rolling(window, center=True, min_periods=window).apply(distance)
 
