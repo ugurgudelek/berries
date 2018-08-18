@@ -10,6 +10,7 @@ import os
 import warnings
 from sklearn import preprocessing
 from collections import defaultdict
+from scipy import spatial
 
 import matplotlib.pyplot as plt
 
@@ -20,7 +21,7 @@ class InnerIndicatorDataset(torch.utils.data.Dataset):
         dataset(pd.DataFrame):
     """
 
-    def __init__(self, dataset, seq_len):
+    def __init__(self, dataset, seq_len, problem_type):
         self.dataset = dataset
 
         self.X = self.dataset.drop(['date', 'name', 'open', 'high', 'low', 'close',
@@ -28,8 +29,9 @@ class InnerIndicatorDataset(torch.utils.data.Dataset):
 
         self.y = self.dataset[['label']]
 
-        # turn categorical to one hot encoding
-        self.y = pd.get_dummies(self.y)
+        if problem_type=='classification':
+            # turn categorical to one hot encoding
+            self.y = pd.get_dummies(self.y)
 
         self.name = self.dataset[['name']]
 
@@ -105,13 +107,14 @@ class IndicatorDataset():
 
     """
 
-    def __init__(self, dataset_name, input_path, save_dataset, train_valid_ratio, seq_len):
+    def __init__(self, dataset_name, input_path, save_dataset, train_valid_ratio, seq_len, label_type='classification'):
 
         self.dataset_name = dataset_name
         self.input_path = input_path
         self.train_valid_ratio = train_valid_ratio
         self.save_dataset = save_dataset
         self.seq_len = seq_len
+        self.label_type = label_type
 
         self.standardizer = IndicatorStandardizer()
 
@@ -121,8 +124,8 @@ class IndicatorDataset():
         self.raw_train_dataset = raw_dataset.iloc[:train_len, :]
         self.raw_valid_dataset = raw_dataset.iloc[train_len:, :]
 
-        self.preprocessed_train_dataset = self.preprocess_dataset(dataset=self.raw_train_dataset, kind='train')
-        self.preprocessed_valid_dataset = self.preprocess_dataset(dataset=self.raw_valid_dataset, kind='validation')
+        self.preprocessed_train_dataset = self.preprocess_dataset(dataset=self.raw_train_dataset, kind='train', label_type=self.label_type)
+        self.preprocessed_valid_dataset = self.preprocess_dataset(dataset=self.raw_valid_dataset, kind='validation', label_type=self.label_type)
 
         print('Train ----\n'
               'Shape: {} \n'
@@ -146,10 +149,11 @@ class IndicatorDataset():
                 os.path.join('/'.join(input_path.split('/')[:-1]), 'valid_preprocessed_indicator_dataset.csv'),
                 index=False)
 
-        self.train_dataset = InnerIndicatorDataset(dataset=self.preprocessed_train_dataset, seq_len=self.seq_len)
-        self.valid_dataset = InnerIndicatorDataset(dataset=self.preprocessed_valid_dataset, seq_len=self.seq_len)
+        self.train_dataset = InnerIndicatorDataset(dataset=self.preprocessed_train_dataset, seq_len=self.seq_len, problem_type=self.label_type)
+        self.valid_dataset = InnerIndicatorDataset(dataset=self.preprocessed_valid_dataset, seq_len=self.seq_len, problem_type=self.label_type)
+        print()
 
-    def preprocess_dataset(self, dataset, kind='train'):
+    def preprocess_dataset(self, dataset, kind='train', label_type='classification'):
 
         dataset['date'] = dataset['date'].astype('datetime64[ns]')
         dataset['high'] = dataset['high'].values.astype(np.float)
@@ -157,9 +161,14 @@ class IndicatorDataset():
         dataset['adjusted_close'] = dataset['adjusted_close'].values.astype(np.float)
         dataset['volume'] = dataset['volume'].values.astype(np.float)
 
-        # labelize with up,down,hold
-        dataset = self.label_wrt_center_max_min(dataset, window=15)
-        dataset = self.dilate(dataset, window=3)
+        if label_type == 'classification':
+            # labelize with up,down,hold
+            dataset = self.label_top_bot_mid(dataset, window=15)
+            dataset = self.dilate(dataset, window=3)
+        if label_type == 'regression':
+            # labelize with respect to distance
+            dataset = self.label_wrt_distance(dataset, window=15)
+
 
         # calculate technical analysis values from stock data
         # this creates a new dataset depends on technical analysis
@@ -192,6 +201,134 @@ class IndicatorDataset():
         #     dataset = self.updown_scaling(dataset)
 
         return dataset
+
+    @staticmethod
+    def is_center_max(window_data):
+        return np.max(window_data) == window_data[len(window_data)//2]
+    @staticmethod
+    def is_center_min(window_data):
+        return np.min(window_data) == window_data[len(window_data)//2]
+
+    @staticmethod
+    def plot_top_bot_turning_point(stock_data):
+        close = stock_data['adjusted_close'].values
+        labels = stock_data['label'].values
+        x = range(len(close))
+
+        # (r,g,b,a)
+        colormap = {'mid':(0.2, 0.4, 0.6, 0), 'top':(1, 0, 0, 0.7), 'bot':(0, 0, 1, 0.7)}
+        colors = [colormap[label] for label in labels]
+
+        plt.scatter(x=x, y=close, c=colors)
+        plt.plot(x, close, lw=1, label='close')
+        plt.legend()
+
+
+    def label_top_bot_mid(self, stocks, window=7):
+
+        def inner_func(stock_data):
+            stock_data['maxs'] = stock_data['adjusted_close'].rolling(window, center=True, min_periods=window).apply(IndicatorDataset.is_center_max)
+            stock_data['mins'] = stock_data['adjusted_close'].rolling(window, center=True, min_periods=window).apply(IndicatorDataset.is_center_min)
+
+            stock_data['label'] = 'mid'
+            stock_data.loc[stock_data['maxs'] == 1, 'label'] = 'top'
+            stock_data.loc[stock_data['mins'] == 1, 'label'] = 'bot'
+
+
+
+            stock_data = stock_data.drop(['maxs','mins'], axis=1)
+
+            return stock_data
+
+        return stocks.groupby('name').apply(inner_func).dropna()
+
+    def label_wrt_distance(self, stocks, window=7):
+
+        # point turning points then process for distance
+        # after this line, stocks has 'label' column which has top-mid-bot values.
+        stocks = self.label_top_bot_mid(stocks=stocks, window=window)
+        stocks = self.filter_consequtive_same_label(stocks=stocks)
+        stocks = self.crop_firstnonbot_and_lastnontop(stocks=stocks)
+
+        def distance(idxs, turning_points):
+            """
+            Assumes turning_points start with increasing segment.
+            :param idxs:
+            :param turning_points:
+            :return:
+            """
+            segments = np.array(list(zip(turning_points[:-1], turning_points[1:])))
+
+            def calc_dist(x, lower, upper):
+                return (x-lower)/(upper-lower)
+
+            state = True
+            dist = np.zeros_like(idxs, dtype=np.float)
+            for (lower,upper) in segments:
+                for i in range(lower,upper):
+                    if state:
+                        dist[i] = calc_dist(i, lower, upper)
+                    else:
+                        dist[i] = 1 - calc_dist(i, lower, upper)
+
+                state = not state
+
+            return dist
+
+        def inner_func(stock_data):
+            mid_idxs = stock_data.loc[stock_data['label'] == 'mid'].index.values
+            top_idxs = stock_data.loc[stock_data['label'] == 'top'].index.values
+            bot_idxs = stock_data.loc[stock_data['label'] == 'bot'].index.values
+
+            turning_points = np.sort(np.concatenate((bot_idxs, top_idxs)))
+            stock_data['label'] = distance(stock_data.index.values, turning_points)
+
+            return stock_data
+
+        return stocks.groupby('name').apply(inner_func).dropna()
+
+    def filter_consequtive_same_label(self, stocks):
+
+        def inner_func(stock_data):
+            state = None
+            for i,row in stock_data.iterrows():
+                if row['label'] == 'mid':
+                    continue
+                if state is None:
+                    state = row['label']
+                    continue
+                if state == row['label']:
+                    stock_data.loc[i,'label'] = 'mid'
+                else:
+                    state = row['label']
+            return stock_data
+
+        return stocks.groupby('name').apply(inner_func).dropna()
+
+    def crop_firstnonbot_and_lastnontop(self, stocks):
+
+        def inner_func(stock_data):
+            first_bot_idx = stock_data.loc[stock_data['label'] == 'bot'].index.values[0]
+            last_top_idx = stock_data.loc[stock_data['label'] == 'top'].index.values[-1]
+
+            return stock_data.loc[first_bot_idx:last_top_idx, :]
+
+        return stocks.groupby('name').apply(inner_func).dropna().reset_index(drop=True)
+
+    @staticmethod
+    def nearest_neighbour(arr, search_space):
+        """
+        requires sorted search_space
+        :return (np.ndarray) nearest neighbours of arr in search_space
+        """
+        ret = []
+        for a in arr:
+            min_idx = np.argmin(np.abs(search_space - a))
+            ret.append(min_idx)
+        return np.array(ret)
+
+
+
 
     def get_data(self, name, date):
         return self.raw_train_dataset.loc[
@@ -255,39 +392,7 @@ class IndicatorDataset():
     #
     #     return stocks.groupby('name').apply(inner_func).dropna()
 
-    def label_wrt_center_max_min(self, stocks, window=7):
 
-        def is_center_max(window_data):
-            return np.max(window_data) == window_data[len(window_data)//2]
-
-        def is_center_min(window_data):
-            return np.min(window_data) == window_data[len(window_data)//2]
-
-
-
-
-        def inner_func(stock_data):
-            stock_data['maxs'] = stock_data['adjusted_close'].rolling(window, center=True, min_periods=window).apply(is_center_max)
-            stock_data['mins'] = stock_data['adjusted_close'].rolling(window, center=True, min_periods=window).apply(is_center_min)
-
-            stock_data['label'] = 'mid'
-            stock_data.loc[stock_data['maxs'] == 1, 'label'] = 'top'
-            stock_data.loc[stock_data['mins'] == 1, 'label'] = 'bot'
-
-
-
-            stock_data = stock_data.drop(['maxs','mins'], axis=1)
-
-            # plt.plot(stock_data['adjusted_close'])
-            # only_maxs = stock_data.loc[stock_data['label'] == 'top', 'adjusted_close']
-            # only_mins = stock_data.loc[stock_data['label'] == 'bot', 'adjusted_close']
-            # plt.scatter(x=only_maxs.index.values, y=only_maxs, c='r')
-            # plt.scatter(x=only_mins.index.values, y=only_mins, c='y')
-            # plt.grid(which='minor')
-            # plt.show()
-            return stock_data
-
-        return stocks.groupby('name').apply(inner_func).dropna()
 
     def dilate(self, stocks, window=3):
 

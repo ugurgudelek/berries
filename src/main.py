@@ -13,26 +13,34 @@ import matplotlib.pyplot as plt
 
 from sklearn.metrics import f1_score, confusion_matrix
 
-
+import os
 
 class Config:
     """
     """
     # todo: config dosyasını kaldırıp main içerisinde oluşturmayı tekrar düşün.
     # todo: şimdilk sadece problem bazlı çalışalım.
+    
+    # todo: fit ve predict methodlarını modelin içine almayı düşün.
+    # todo: plot grafiklerini daha anlamlı hale getir.
+    # todo: dataset classını toparla.
+    # todo: classification ve regression için modelleri ayırmayı düşünebilirsin.
+
 
     def __init__(self):
         """
         """
         self.RANDOM_SEED = 42
         self.MODEL_NAME = 'LSTM'
-        self.EPOCH_SIZE = 20
+        self.EPOCH_SIZE = 5
 
         self.SEQ_LEN = 128
         self.INPUT_SIZE = 15
-        self.OUTPUT_SIZE = 3  # down, steady, up
+        # self.OUTPUT_SIZE = 3  # down, steady, up
+        self.OUTPUT_SIZE = 1
 
         self.LABEL_WINDOW = 7
+        self.LABEL_TYPE = 'regression'
 
         self.TRAIN_VALID_RATIO = 0.90
         self.TRAIN_BATCH_SIZE = 10
@@ -43,7 +51,8 @@ class Config:
         self.DATASET_NAME = 'IndicatorDataset'
         self.INPUT_PATH = '../input/spy_spline.csv'
 
-        self.EXPERIMENT_DIR = '../experiment/spy_spline_2'
+
+        self.EXPERIMENT_DIR = '../experiment/spy_spline_5epoch'
 
         self.USE_CUDA = torch.cuda.is_available()
         if self.USE_CUDA:
@@ -62,7 +71,8 @@ if __name__ == "__main__":
                                input_path=config.INPUT_PATH,
                                train_valid_ratio=config.TRAIN_VALID_RATIO,
                                save_dataset=True,
-                               seq_len=config.SEQ_LEN)
+                               seq_len=config.SEQ_LEN,
+                               label_type=config.LABEL_TYPE)
     model = LSTM(input_size=config.INPUT_SIZE,
                  seq_length=config.SEQ_LEN,
                  num_layers=1,
@@ -89,22 +99,34 @@ if __name__ == "__main__":
             estimator.writer.add_scalar('validation_acc', vacc, epoch)
     print()
 
-    ix, (sample_x, sample_y, ext_info) = dataset.train_dataset.get_sample()
+    # ix, (sample_x, sample_y, ext_info) = dataset.train_dataset.get_sample()
     # prediction = estimator.predict(sample_x)
-    pXs, pys, poutputs, plosses, (pdates, pnames) = estimator.predict_all_validation()
-    prediction_df = pd.DataFrame(dict(y0=pys[:, 0], y1=pys[:, 1], y2=pys[:, 2], yhat0=poutputs[:, 0], yhat1=poutputs[:, 1], yhat2=poutputs[:, 2]))
 
-    def onehot2label(row):
-        row = row.values
-        return pd.Series(dict(y=np.argmax(row[:3]), yhat=np.argmax(row[3:])))
+    if config.LABEL_TYPE == 'classification':
+        pXs, pys, poutputs, plosses, (pdates, pnames) = estimator.predict_all_validation()
+        prediction_df = pd.DataFrame(
+            dict(y0=pys[:, 0], y1=pys[:, 1], y2=pys[:, 2], yhat0=poutputs[:, 0], yhat1=poutputs[:, 1],
+                 yhat2=poutputs[:, 2]))
 
-    labeled_pred_df = prediction_df.apply(onehot2label, axis=1)
 
-    f1 = f1_score(y_true=labeled_pred_df['y'], y_pred=labeled_pred_df['yhat'], average=None)
-    print('f1 score:\n{score}'.format(score=f1))
+        def onehot2label(row):
+            row = row.values
+            return pd.Series(dict(y=np.argmax(row[:3]), yhat=np.argmax(row[3:])))
 
-    confusion = confusion_matrix(y_true=labeled_pred_df['y'], y_pred=labeled_pred_df['yhat'])
-    print('confusion matrix:\n{confusion}'.format(confusion=confusion))
+        labeled_pred_df = prediction_df.apply(onehot2label, axis=1)
+
+        f1 = f1_score(y_true=labeled_pred_df['y'], y_pred=labeled_pred_df['yhat'], average=None)
+        print('f1 score:\n{score}'.format(score=f1))
+
+        confusion = confusion_matrix(y_true=labeled_pred_df['y'], y_pred=labeled_pred_df['yhat'])
+        print('confusion matrix:\n{confusion}'.format(confusion=confusion))
+        
+    if config.LABEL_TYPE == 'regression':
+        pXs, pys, poutputs, plosses, (pdates, pnames) = estimator.predict_all_validation()
+        prediction_df = pd.DataFrame(dict(y=pys.flatten(), yhat=poutputs.flatten()))
+        prediction_df.to_csv(os.path.join(config.EXPERIMENT_DIR, 'prediction.csv'), index=False)
+        prediction_df.plot()
+        plt.show()
 
 
 
