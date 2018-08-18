@@ -21,7 +21,7 @@ class InnerIndicatorDataset(torch.utils.data.Dataset):
         dataset(pd.DataFrame):
     """
 
-    def __init__(self, dataset, seq_len):
+    def __init__(self, dataset, seq_len, problem_type):
         self.dataset = dataset
 
         self.X = self.dataset.drop(['date', 'name', 'open', 'high', 'low', 'close',
@@ -29,8 +29,9 @@ class InnerIndicatorDataset(torch.utils.data.Dataset):
 
         self.y = self.dataset[['label']]
 
-        # turn categorical to one hot encoding
-        self.y = pd.get_dummies(self.y)
+        if problem_type=='classification':
+            # turn categorical to one hot encoding
+            self.y = pd.get_dummies(self.y)
 
         self.name = self.dataset[['name']]
 
@@ -148,8 +149,9 @@ class IndicatorDataset():
                 os.path.join('/'.join(input_path.split('/')[:-1]), 'valid_preprocessed_indicator_dataset.csv'),
                 index=False)
 
-        self.train_dataset = InnerIndicatorDataset(dataset=self.preprocessed_train_dataset, seq_len=self.seq_len)
-        self.valid_dataset = InnerIndicatorDataset(dataset=self.preprocessed_valid_dataset, seq_len=self.seq_len)
+        self.train_dataset = InnerIndicatorDataset(dataset=self.preprocessed_train_dataset, seq_len=self.seq_len, problem_type=self.label_type)
+        self.valid_dataset = InnerIndicatorDataset(dataset=self.preprocessed_valid_dataset, seq_len=self.seq_len, problem_type=self.label_type)
+        print()
 
     def preprocess_dataset(self, dataset, kind='train', label_type='classification'):
 
@@ -162,10 +164,11 @@ class IndicatorDataset():
         if label_type == 'classification':
             # labelize with up,down,hold
             dataset = self.label_top_bot_mid(dataset, window=15)
+            dataset = self.dilate(dataset, window=3)
         if label_type == 'regression':
             # labelize with respect to distance
             dataset = self.label_wrt_distance(dataset, window=15)
-        dataset = self.dilate(dataset, window=3)
+
 
         # calculate technical analysis values from stock data
         # this creates a new dataset depends on technical analysis
@@ -219,7 +222,7 @@ class IndicatorDataset():
         plt.scatter(x=x, y=close, c=colors)
         plt.plot(x, close, lw=1, label='close')
         plt.legend()
-        plt.show()
+
 
     def label_top_bot_mid(self, stocks, window=7):
 
@@ -234,6 +237,51 @@ class IndicatorDataset():
 
 
             stock_data = stock_data.drop(['maxs','mins'], axis=1)
+
+            return stock_data
+
+        return stocks.groupby('name').apply(inner_func).dropna()
+
+    def label_wrt_distance(self, stocks, window=7):
+
+        # point turning points then process for distance
+        # after this line, stocks has 'label' column which has top-mid-bot values.
+        stocks = self.label_top_bot_mid(stocks=stocks, window=window)
+        stocks = self.filter_consequtive_same_label(stocks=stocks)
+        stocks = self.crop_firstnonbot_and_lastnontop(stocks=stocks)
+
+        def distance(idxs, turning_points):
+            """
+            Assumes turning_points start with increasing segment.
+            :param idxs:
+            :param turning_points:
+            :return:
+            """
+            segments = np.array(list(zip(turning_points[:-1], turning_points[1:])))
+
+            def calc_dist(x, lower, upper):
+                return (x-lower)/(upper-lower)
+
+            state = True
+            dist = np.zeros_like(idxs, dtype=np.float)
+            for (lower,upper) in segments:
+                for i in range(lower,upper):
+                    if state:
+                        dist[i] = calc_dist(i, lower, upper)
+                    else:
+                        dist[i] = 1 - calc_dist(i, lower, upper)
+
+                state = not state
+
+            return dist
+
+        def inner_func(stock_data):
+            mid_idxs = stock_data.loc[stock_data['label'] == 'mid'].index.values
+            top_idxs = stock_data.loc[stock_data['label'] == 'top'].index.values
+            bot_idxs = stock_data.loc[stock_data['label'] == 'bot'].index.values
+
+            turning_points = np.sort(np.concatenate((bot_idxs, top_idxs)))
+            stock_data['label'] = distance(stock_data.index.values, turning_points)
 
             return stock_data
 
@@ -263,7 +311,7 @@ class IndicatorDataset():
             first_bot_idx = stock_data.loc[stock_data['label'] == 'bot'].index.values[0]
             last_top_idx = stock_data.loc[stock_data['label'] == 'top'].index.values[-1]
 
-            return stock_data.iloc[first_bot_idx:last_top_idx+1, :]
+            return stock_data.loc[first_bot_idx:last_top_idx, :]
 
         return stocks.groupby('name').apply(inner_func).dropna().reset_index(drop=True)
 
@@ -279,44 +327,8 @@ class IndicatorDataset():
             ret.append(min_idx)
         return np.array(ret)
 
-    def label_wrt_distance(self, stocks, window=7):
 
-        # point turning points then process for distance
-        # after this line, stocks has 'label' column which has top-mid-bot values.
-        stocks = self.label_top_bot_mid(stocks=stocks, window=window)
-        stocks = self.filter_consequtive_same_label(stocks=stocks)
-        stocks = self.crop_firstnonbot_and_lastnontop(stocks=stocks)
 
-        #todo: make distance func
-
-        def inner_func(stock_data):
-            mid = stock_data.loc[stock_data['label'] == 'mid'].index.values
-            top = stock_data.loc[stock_data['label'] == 'top'].index.values
-            bot = stock_data.loc[stock_data['label'] == 'bot'].index.values
-
-            stock_data['nn_top_idx'] = 0
-            stock_data['nn_bot_idx'] = 0
-
-            # apply for mid values only
-            stock_data.loc[mid, 'nn_top_idx'] = top[IndicatorDataset.nearest_neighbour(arr=mid, search_space=top)]
-            stock_data.loc[mid, 'nn_bot_idx'] = bot[IndicatorDataset.nearest_neighbour(arr=mid, search_space=bot)]
-
-            # apply for bot values only
-            stock_data.loc[bot, 'nn_top_idx'] = np.inf
-            stock_data.loc[bot, 'nn_bot_idx'] = bot
-
-            # apply for top values only
-            stock_data.loc[top, 'nn_top_idx'] = top
-            stock_data.loc[top, 'nn_bot_idx'] = np.inf
-
-            print()
-            # tree = spatial.KDTree(list(zip(bot.ravel(), top.ravel())))
-
-            stock_data['maxs'] = stock_data['adjusted_close'].rolling(window, center=True, min_periods=window).apply(distance)
-
-            return stock_data
-
-        return stocks.groupby('name').apply(inner_func).dropna()
 
     def get_data(self, name, date):
         return self.raw_train_dataset.loc[

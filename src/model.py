@@ -88,8 +88,8 @@ class LSTM(nn.Module):
         out = lstm_out[-1]
         fc_out = self.fc(out)
 
-        soft_out = self.softmax(fc_out)
-        return soft_out
+        # soft_out = self.softmax(fc_out)
+        return fc_out
 
 from torch.nn.modules.module import _addindent
 import torch
