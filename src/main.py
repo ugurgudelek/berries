@@ -20,6 +20,12 @@ class Config:
     """
     # todo: config dosyasını kaldırıp main içerisinde oluşturmayı tekrar düşün.
     # todo: şimdilk sadece problem bazlı çalışalım.
+    
+    # todo: fit ve predict methodlarını modelin içine almayı düşün.
+    # todo: plot grafiklerini daha anlamlı hale getir.
+    # todo: dataset classını toparla.
+    # todo: classification ve regression için modelleri ayırmayı düşünebilirsin.
+
 
     def __init__(self):
         """
