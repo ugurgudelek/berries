@@ -26,7 +26,7 @@ class Config:
         """
         self.RANDOM_SEED = 42
         self.MODEL_NAME = 'LSTM'
-        self.EPOCH_SIZE = 20
+        self.EPOCH_SIZE = 5
 
         self.SEQ_LEN = 128
         self.INPUT_SIZE = 15
@@ -46,7 +46,7 @@ class Config:
         self.INPUT_PATH = '../input/spy_spline.csv'
 
 
-        self.EXPERIMENT_DIR = '../experiment/spy_spline'
+        self.EXPERIMENT_DIR = '../experiment/spy_spline_5epoch'
 
         self.USE_CUDA = torch.cuda.is_available()
         if self.USE_CUDA:
@@ -95,10 +95,14 @@ if __name__ == "__main__":
 
     # ix, (sample_x, sample_y, ext_info) = dataset.train_dataset.get_sample()
     # prediction = estimator.predict(sample_x)
-    pXs, pys, poutputs, plosses, (pdates, pnames) = estimator.predict_all_validation()
-    prediction_df = pd.DataFrame(dict(y0=pys[:, 0], y1=pys[:, 1], y2=pys[:, 2], yhat0=poutputs[:, 0], yhat1=poutputs[:, 1], yhat2=poutputs[:, 2]))
 
     if config.LABEL_TYPE == 'classification':
+        pXs, pys, poutputs, plosses, (pdates, pnames) = estimator.predict_all_validation()
+        prediction_df = pd.DataFrame(
+            dict(y0=pys[:, 0], y1=pys[:, 1], y2=pys[:, 2], yhat0=poutputs[:, 0], yhat1=poutputs[:, 1],
+                 yhat2=poutputs[:, 2]))
+
+
         def onehot2label(row):
             row = row.values
             return pd.Series(dict(y=np.argmax(row[:3]), yhat=np.argmax(row[3:])))
@@ -112,7 +116,11 @@ if __name__ == "__main__":
         print('confusion matrix:\n{confusion}'.format(confusion=confusion))
         
     if config.LABEL_TYPE == 'regression':
+        pXs, pys, poutputs, plosses, (pdates, pnames) = estimator.predict_all_validation()
+        prediction_df = pd.DataFrame(dict(y=pys.flatten(), yhat=poutputs.flatten()))
         prediction_df.to_csv(os.path.join(config.EXPERIMENT_DIR, 'prediction.csv'), index=False)
+        prediction_df.plot()
+        plt.show()
 
 
 
