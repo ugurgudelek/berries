@@ -65,6 +65,15 @@ class InnerIndicatorDataset(torch.utils.data.Dataset):
 
         return X, y, extra_info
 
+    def get_all(self):
+        xs, ys, _ = self.__getitem__(0)
+        for ix in range(1,self.__len__()):
+            X, y, info = self.__getitem__(ix)
+            xs = np.append(xs, X, axis=0)
+            ys = np.append(ys, y, axis=0)
+
+        return xs,ys
+
     def _reshape(self, data):
         # (in_channels, width, height)
         return data.reshape((1, data.shape[0], data.shape[1]))

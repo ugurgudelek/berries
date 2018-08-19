@@ -8,8 +8,6 @@ class LSTM(nn.Module):
     """
     """
 
-    # todo: lstm modelinin girdi ve çıktı dimensionlarını kontrol et.
-
     def __init__(self, input_size, seq_length, num_layers, out_size, batch_size, use_cuda):
         super(LSTM, self).__init__()
 
@@ -71,6 +69,12 @@ class LSTM(nn.Module):
     #     b = weight.new(self.num_layers, bsz, 10 - 1).zero_()
     #     return Variable(torch.cat([a, b], 2))
 
+    def detach(self):
+        # detach to not backpropagate whole lstm network
+        # todo: actually below lines should be like self.model.hidden[0].detach_() aka inplace version. but not it working okey..
+        self.hidden[0].detach()
+        self.hidden[1].detach()
+
     def forward(self, x):
 
         # Reshape input
@@ -90,6 +94,13 @@ class LSTM(nn.Module):
 
         # soft_out = self.softmax(fc_out)
         return fc_out
+
+
+
+
+
+
+
 
 from torch.nn.modules.module import _addindent
 import torch

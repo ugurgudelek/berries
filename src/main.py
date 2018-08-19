@@ -14,6 +14,10 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import f1_score, confusion_matrix
 
 import os
+import collections
+
+from torch.autograd import Variable
+from torch import FloatTensor
 
 class Config:
     """
@@ -80,6 +84,32 @@ if __name__ == "__main__":
                  batch_size=config.TRAIN_BATCH_SIZE,
                  use_cuda=config.USE_CUDA)
 
+
+
+    def custom_collate_fn(batch):
+
+        if isinstance(batch[0], np.ndarray):
+            return torch.stack([torch.from_numpy(b) for b in batch], 0)
+
+        elif isinstance(batch[0], collections.Sequence):
+            transposed = zip(*batch)
+            return [custom_collate_fn(samples) for samples in transposed]
+
+        elif isinstance(batch[0], dict):
+            return pd.DataFrame(list(batch)).to_dict('list')
+        else:
+
+            raise Exception('Update custom_collate_fn!!')
+
+    train_dataloader = DataLoader(dataset.train_dataset,
+                                       batch_size=config.TRAIN_BATCH_SIZE,
+                                       shuffle=False,
+                                       drop_last=True, collate_fn=custom_collate_fn)
+    valid_dataloader = DataLoader(dataset.valid_dataset,
+                                       batch_size=config.VALID_BATCH_SIZE,
+                                       shuffle=False,
+                                       drop_last=True, collate_fn=custom_collate_fn)
+
     estimator = Estimator(dataset=dataset,
                           model=model,
                           use_cuda=config.USE_CUDA,
@@ -87,11 +117,18 @@ if __name__ == "__main__":
                           train_batch_size=config.TRAIN_BATCH_SIZE,
                           valid_batch_size=config.VALID_BATCH_SIZE)
 
+
     epoch = 0
     with trange(epoch, config.EPOCH_SIZE) as t:
         for epoch in t:
-            tloss, vloss, tacc, vacc = estimator.run_epoch(epoch, t)
-            print(tloss, vloss, tacc, vacc)
+            estimator.fit(dataloader=train_dataloader)
+
+            xs, ys = dataset.valid_dataset.get_all()
+            xs = Variable(FloatTensor(xs).float(), requires_grad=False)
+            ys = Variable(FloatTensor(ys).float(), requires_grad=False)
+            prediction, loss = estimator.predict(xs=xs)
+
+
 
             estimator.writer.add_scalar('training_loss', tloss, epoch)
             estimator.writer.add_scalar('validation_loss', vloss, epoch)
