@@ -36,12 +36,14 @@ class Config:
         """
         self.RANDOM_SEED = 42
         self.MODEL_NAME = 'LSTM'
-        self.EPOCH_SIZE = 5
+        self.EPOCH_SIZE = 1
 
         self.SEQ_LEN = 128
         self.INPUT_SIZE = 15
         # self.OUTPUT_SIZE = 3  # down, steady, up
         self.OUTPUT_SIZE = 1
+        self.NUM_LAYERS = 2
+        self.HIDDEN_SIZE = 10
 
         self.LABEL_WINDOW = 7
         self.LABEL_TYPE = 'regression'
@@ -66,10 +68,25 @@ class Config:
 
         print('CUDA AVAILABLE:{}'.format(self.USE_CUDA))
 
+    def __str__(self):
+        string = ''
+        for attr_key, attr_val in self.__dict__.items():
+            string += attr_key
+            string += '='
+            string += str(attr_val)
+            string += '\n'
+        return string
+
+    def save(self):
+        path = os.path.join(self.EXPERIMENT_DIR, 'config.ini')
+        with open(path, 'w') as file:
+            file.write(self.__str__())
+
 
 if __name__ == "__main__":
 
     config = Config()
+    config.save()
 
     dataset = IndicatorDataset(dataset_name=config.DATASET_NAME,
                                input_path=config.INPUT_PATH,
@@ -77,10 +94,12 @@ if __name__ == "__main__":
                                save_dataset=True,
                                seq_len=config.SEQ_LEN,
                                label_type=config.LABEL_TYPE)
+
     model = LSTM(input_size=config.INPUT_SIZE,
                  seq_length=config.SEQ_LEN,
-                 num_layers=1,
+                 num_layers=config.NUM_LAYERS,
                  out_size=config.OUTPUT_SIZE,
+                 hidden_size=config.HIDDEN_SIZE,
                  batch_size=config.TRAIN_BATCH_SIZE,
                  use_cuda=config.USE_CUDA)
 
@@ -113,31 +132,28 @@ if __name__ == "__main__":
     estimator = Estimator(dataset=dataset,
                           model=model,
                           use_cuda=config.USE_CUDA,
-                          exp_dir=config.EXPERIMENT_DIR,
-                          train_batch_size=config.TRAIN_BATCH_SIZE,
-                          valid_batch_size=config.VALID_BATCH_SIZE)
+                          exp_dir=config.EXPERIMENT_DIR)
 
 
     epoch = 0
     with trange(epoch, config.EPOCH_SIZE) as t:
         for epoch in t:
-            estimator.fit(dataloader=train_dataloader)
+            training_loss = estimator.fit(dataloader=train_dataloader)
 
-            xs, ys = dataset.valid_dataset.get_all()
-            xs = Variable(FloatTensor(xs).float(), requires_grad=False)
-            ys = Variable(FloatTensor(ys).float(), requires_grad=False)
-            prediction, loss = estimator.predict(xs=xs)
+            xs, ys = dataset.valid_dataset.get_all_data(transforms=[FloatTensor, Variable])
+
+            prediction, validation_loss = estimator.validate(xs=xs, ys=ys)
+            prediction = prediction.data.numpy()
+            validation_loss = validation_loss.item()
 
 
+            estimator.writer.add_scalar('training_loss', training_loss, epoch)
+            estimator.writer.add_scalar('validation_loss', validation_loss, epoch)
 
-            estimator.writer.add_scalar('training_loss', tloss, epoch)
-            estimator.writer.add_scalar('validation_loss', vloss, epoch)
-            estimator.writer.add_scalar('training_acc', tacc, epoch)
-            estimator.writer.add_scalar('validation_acc', vacc, epoch)
-    print()
-
-    # ix, (sample_x, sample_y, ext_info) = dataset.train_dataset.get_sample()
-    # prediction = estimator.predict(sample_x)
+    prediction_df = pd.DataFrame(dict(y=ys.data.numpy().flatten(), yhat=prediction.flatten()))
+    prediction_df.to_csv(os.path.join(config.EXPERIMENT_DIR, 'prediction.csv'), index=False)
+    prediction_df.plot()
+    plt.show()
 
     if config.LABEL_TYPE == 'classification':
         pXs, pys, poutputs, plosses, (pdates, pnames) = estimator.predict_all_validation()
@@ -158,21 +174,3 @@ if __name__ == "__main__":
         confusion = confusion_matrix(y_true=labeled_pred_df['y'], y_pred=labeled_pred_df['yhat'])
         print('confusion matrix:\n{confusion}'.format(confusion=confusion))
         
-    if config.LABEL_TYPE == 'regression':
-        pXs, pys, poutputs, plosses, (pdates, pnames) = estimator.predict_all_validation()
-        prediction_df = pd.DataFrame(dict(y=pys.flatten(), yhat=poutputs.flatten()))
-        prediction_df.to_csv(os.path.join(config.EXPERIMENT_DIR, 'prediction.csv'), index=False)
-        prediction_df.plot()
-        plt.show()
-
-
-
-    # plt.plot(sample_x[0][0])
-    # plt.show()
-    #
-    # raw_sample = dataset.get_data_seq(name=ext_info['name'].iloc[0],
-    #                                   first_date=ext_info['date'].iloc[0],
-    #                                   last_date=ext_info['date'].iloc[-1])
-    # plt.plot(raw_sample['date'], raw_sample['close'], '-r')
-    # plt.show()
-    # print()
