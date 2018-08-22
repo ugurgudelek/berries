@@ -8,7 +8,7 @@ class LSTM(nn.Module):
     """
     """
 
-    def __init__(self, input_size, seq_length, num_layers, out_size, batch_size, use_cuda):
+    def __init__(self, input_size, seq_length, num_layers, out_size,hidden_size, batch_size, use_cuda):
         super(LSTM, self).__init__()
 
         self.input_size = input_size
@@ -16,6 +16,7 @@ class LSTM(nn.Module):
         self.num_layers = num_layers
         self.out_size = out_size
         self.batch_size = batch_size
+        self.hidden_size = hidden_size
 
         self.use_cuda = use_cuda
 
@@ -29,7 +30,7 @@ class LSTM(nn.Module):
         #   h_n (num_layers * num_directions, batch, hidden_size)
         #   c_n (num_layers * num_directions, batch, hidden_size)
         self.lstm = nn.LSTM(input_size=self.input_size,
-                            hidden_size=10,
+                            hidden_size=self.hidden_size,
                             num_layers=self.num_layers,
                             bias=True,
                             batch_first=False,
@@ -55,19 +56,13 @@ class LSTM(nn.Module):
         """
         if batch_size is None:
             batch_size = self.batch_size
-        (h0,c0) = (Variable(torch.zeros(self.num_layers,batch_size,10)),  # h_0
-                Variable(torch.zeros(self.num_layers,batch_size,10)))  # c_0
+        (h0,c0) = (Variable(torch.zeros(self.num_layers,batch_size,self.hidden_size)),  # h_0
+                Variable(torch.zeros(self.num_layers,batch_size,self.hidden_size)))  # c_0
 
         if self.use_cuda:
             return h0.cuda(), c0.cuda()
 
         return h0, c0
-
-    # def init_hidden_2(self, bsz):
-    #     weight = next(self.parameters()).data
-    #     a = weight.new(self.num_layers, bsz, 1).normal_(-1, 1)
-    #     b = weight.new(self.num_layers, bsz, 10 - 1).zero_()
-    #     return Variable(torch.cat([a, b], 2))
 
     def detach(self):
         # detach to not backpropagate whole lstm network
@@ -81,8 +76,12 @@ class LSTM(nn.Module):
         # x shape: (seq_len, batch, input_size)
         # hidden shape:(num_layers * num_directions,batch_size, hidden_size)
 
-        # if self.hidden is None:
-        self.hidden = self.init_hidden()
+        # reset the LSTM hidden state. Must be applied before you run a new batch. Otherwise the LSTM will treat
+        # a new batch as a continuation of a sequence
+
+        # send batch size to auto update hiddens
+        batch_size = x.shape[0]
+        self.hidden = self.init_hidden(batch_size=batch_size)
 
         x = x.view(self.seq_length, -1, self.input_size)
         lstm_out, self.hidden = self.lstm(x, self.hidden)
