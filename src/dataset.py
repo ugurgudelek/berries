@@ -65,14 +65,23 @@ class InnerIndicatorDataset(torch.utils.data.Dataset):
 
         return X, y, extra_info
 
-    def get_all(self):
+    def get_all_data(self, transforms=None):
         xs, ys, _ = self.__getitem__(0)
         for ix in range(1,self.__len__()):
             X, y, info = self.__getitem__(ix)
             xs = np.append(xs, X, axis=0)
             ys = np.append(ys, y, axis=0)
 
-        return xs,ys
+
+        # tranform
+        # example:
+        # transforms=[FloatTensor, Variable])
+        # xs = Variable(FloatTensor(xs))
+        if transforms is not None:
+            for transform in transforms:
+                xs, ys = transform(xs), transform(ys)
+
+        return xs.unsqueeze_(-1), ys.unsqueeze_(-1)
 
     def _reshape(self, data):
         # (in_channels, width, height)
