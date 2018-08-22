@@ -24,9 +24,8 @@ class Estimator:
     """
     """
 
-    # todo: buraları sadece bu probleme uygun basit bir hale getir. Şu an çok generic.
 
-    def __init__(self, dataset, model, use_cuda=True, exp_dir='../experiment', train_batch_size=10, valid_batch_size=1):
+    def __init__(self, model, use_cuda=True, exp_dir='../experiment'):
 
         self.model = model
 
@@ -38,36 +37,20 @@ class Estimator:
         self.criterion = nn.MSELoss()
         self.optimizer = optim.Adam(self.model.parameters(), 0.005)
 
-        self.dataset = dataset
-
-
-
-
         self.writer = SummaryWriter(log_dir=os.path.join(exp_dir, 'summary'))
-
 
         self._train_on_batch = partial(self._on_batch, train=True)
         self._validate_on_batch = partial(self._on_batch, train=False)
 
-
-
         self.predict = partial(self._on_batch, ys=None, train=False)
         self.fit = partial(self._on_dataloader, train=True)
-
-
-
-
-    # def __new__(cls, *args, **kwargs):
-    #     cls.__init__(cls, *args, **kwargs)
-    #     return cls
-
-
+        self.validate = self._validate_on_batch
 
 
     def _on_dataloader(self, dataloader, train):
         """Never call this function directly!"""
 
-        ret_dict = defaultdict(dict)
+        losses = np.array([])
         for step, (xs, ys, info) in enumerate(dataloader):
             xs = Variable(xs.float(), requires_grad=False)
             ys = Variable(ys.float(), requires_grad=False)
@@ -80,13 +63,9 @@ class Estimator:
             else:
                 output,loss = self._validate_on_batch(xs, ys)
 
-            ret_dict[step]['xs'] = xs
-            ret_dict[step]['ys'] = ys
-            ret_dict[step]['info'] = info
-            ret_dict[step]['output'] = output
-            ret_dict[step]['loss'] = loss
+            losses = np.append(losses, loss.item())
 
-        return ret_dict
+        return losses.mean()
 
 
     def _on_batch(self, xs, ys, train):
