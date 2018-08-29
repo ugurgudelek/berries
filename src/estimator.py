@@ -8,13 +8,10 @@ import numpy as np
 import pandas as pd
 import collections
 
-from model import LSTM
-from dataset import IndicatorDataset
-
-
 from tqdm import tqdm, trange
 from tensorboardX import SummaryWriter
 import os
+import time
 
 from functools import partial
 from collections import defaultdict
@@ -37,15 +34,23 @@ class Estimator:
         self.criterion = nn.MSELoss()
         self.optimizer = optim.Adam(self.model.parameters(), 0.005)
 
-        self.writer = SummaryWriter(log_dir=os.path.join(exp_dir, 'summary'))
+        self.writer = SummaryWriter(log_dir=os.path.join(exp_dir, 'summary', str(int(time.time()))))
 
+
+        # ============== FIT - PREDICT - VALIDATE METHODS ====================
         self._train_on_batch = partial(self._on_batch, train=True)
         self._validate_on_batch = partial(self._on_batch, train=False)
 
-        self.predict = partial(self._on_batch, ys=None, train=False)
-        self.fit = partial(self._on_dataloader, train=True)
-        self.validate = self._validate_on_batch
 
+        # Predict given xs at once
+        self.predict = partial(self._on_batch, ys=None, train=False)
+
+        # Fit model for given dataloader xs and ys
+        self.fit = partial(self._on_dataloader, train=True)
+
+        # Validate given xs and ys at once - same as _validate_on_batch
+        # todo: make validation work on dataloader.
+        self.validate = self._validate_on_batch
 
     def _on_dataloader(self, dataloader, train):
         """Never call this function directly!"""
@@ -88,8 +93,7 @@ class Estimator:
 
                 self.model.detach()
 
-
-        return output,loss
+        return output, loss
 
 
 
