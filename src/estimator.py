@@ -34,7 +34,7 @@ class Estimator:
         self.criterion = nn.MSELoss()
         self.optimizer = optim.Adam(self.model.parameters(), 0.005)
 
-        self.writer = SummaryWriter(log_dir=os.path.join(exp_dir, 'summary', str(int(time.time()))))
+        self.writer = SummaryWriter(log_dir=os.path.join(exp_dir, 'summary'))
 
 
         # ============== FIT - PREDICT - VALIDATE METHODS ====================
