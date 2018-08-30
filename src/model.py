@@ -1,15 +1,101 @@
 import torch
 from torch import nn
 from torch.autograd import Variable
+import torch.nn.init as init
+import os
+import matplotlib.pyplot as plt
+
+class GenericModel():
+
+    def to_onnx(self, directory):
+        # todo: below line not working right now. so check:
+        # https://github.com/lanpa/tensorboardX/issues/166
+        # estimator.writer.add_graph(model, (dummy_input,))
+
+        assert 'dummy_input' in dir(self), 'dummy_input method should be implemented in model class!'
+        torch.onnx.export(self, self.dummy_input(), os.path.join(directory, 'model.onnx'), verbose=True)
+
+    def to_txt(self, directory):
+        with open(os.path.join(directory, 'model.txt'), 'w') as f:
+            f.write(self.__str__())
+
+    def get_layers(self):
+        layers = []
+
+        def _recursive_get_layers(network):
+            for layer in network.children():
+                if isinstance(layer,
+                              nn.Sequential):  # if sequential layer, apply recursively to layers in sequential layer
+                    _recursive_get_layers(layer)
+                if list(layer.children()).__len__() == 0:  # if leaf node, add it to list
+                    layers.append(layer)
+
+        _recursive_get_layers(network=self)  # start with whole network
+
+        return layers
 
 
+    def weight_bias_name(self):
+        "Generator for weight, bias, name"
+        layers = self.get_layers()
+        title = None
+        weights = None
+        for i, layer in enumerate(layers):
+            # LSTM Layer
+            if isinstance(layer, nn.LSTM):
+                num_lstm_layer = layer.state_dict().keys().__len__()//4  # input,hidden,weight,bias for each
 
-class LSTM(nn.Module):
+                for i_h in ['i', 'h']:
+                    for layer_num in range(num_lstm_layer):
+                        name = '{i_or_h}h_l{layer_num}'.format(i_or_h=i_h, layer_num=layer_num)
+                        weight_key = 'weight_'+name
+                        bias_key = 'bias_'+name
+
+                        weight = layer.state_dict()[weight_key].data.numpy()
+                        bias = layer.state_dict()[bias_key].data.numpy()
+
+                        yield weight, bias, 'lstm_'+name
+
+            # FC Layer
+            if isinstance(layer, nn.Linear):
+                name = layer._get_name()
+                weight = layer.state_dict()['weight'].data.numpy()
+                bias = layer.state_dict()['bias'].data.numpy()
+
+                yield weight, bias, name
+
+    @staticmethod
+    def visualize_weights(names, weights, biases):
+        # todo: delete 3,4 and make this method generic
+        f, axarr = plt.subplots(3, 4)  # (nrows, ncols)
+
+        def _process_weight(ax, name, weight):
+            ax.set_title(name)
+            ax.imshow(weight, )
+            # ax.colorbar()
+
+        def _maybe_reshape(arr):
+            if np.ndim(arr) == 1:
+                return np.expand_dims(arr, axis=1)
+            if arr.shape[0] == 1:
+                return np.transpose(arr)
+            return arr
+
+        idx = 0
+        for (name, weight, bias) in zip(names, weights, biases):
+            _process_weight(axarr[idx // 4][idx % 4], name + '_weight', _maybe_reshape(weight))
+            idx += 1
+            _process_weight(axarr[idx // 4][idx % 4], name + '_bias', _maybe_reshape(bias))
+            idx += 1
+
+        return f
+
+class LSTM(nn.Module, GenericModel):
     """
     """
 
-    def __init__(self, input_size, seq_length, num_layers, out_size,hidden_size, batch_size, use_cuda):
-        super(LSTM, self).__init__()
+    def __init__(self, input_size, seq_length, num_layers, out_size, hidden_size, batch_size, use_cuda):
+        nn.Module.__init__(self)
 
         self.input_size = input_size
         self.seq_length = seq_length
@@ -37,17 +123,22 @@ class LSTM(nn.Module):
                             dropout=0.2,
                             bidirectional=False)
 
-        self.fc = nn.Sequential(
-            nn.Linear(in_features=10, out_features=100),
-            nn.ReLU(inplace=True),
-            nn.Linear(in_features=100, out_features=self.out_size)
-        )
+        self.fc = nn.Sequential(nn.Linear(in_features=10, out_features=100),
+                                nn.ReLU(),
+                                nn.Linear(in_features=100, out_features=self.out_size))
 
-        self.softmax = nn.Softmax(dim=1)
+        # self.softmax = nn.Softmax(dim=1)
 
         self.hidden = None
 
+        self.initialize()
 
+    def initialize(self):
+        for w in self.lstm.parameters():
+            init.normal_(w)  # inplace
+
+        for w in self.fc.parameters():
+            init.normal_(w)  # inplace
 
     def init_hidden(self, batch_size=None):
         """
@@ -56,8 +147,8 @@ class LSTM(nn.Module):
         """
         if batch_size is None:
             batch_size = self.batch_size
-        (h0,c0) = (Variable(torch.zeros(self.num_layers,batch_size,self.hidden_size)),  # h_0
-                Variable(torch.zeros(self.num_layers,batch_size,self.hidden_size)))  # c_0
+        (h0, c0) = (Variable(torch.zeros(self.num_layers, batch_size, self.hidden_size)),  # h_0
+                    Variable(torch.zeros(self.num_layers, batch_size, self.hidden_size)))  # c_0
 
         if self.use_cuda:
             return h0.cuda(), c0.cuda()
@@ -94,16 +185,15 @@ class LSTM(nn.Module):
         # soft_out = self.softmax(fc_out)
         return fc_out
 
-
-
-
-
-
+    def dummy_input(self):
+        return Variable(torch.rand(self.batch_size, 1, self.input_size, self.seq_length)).type(torch.FloatTensor)
 
 
 from torch.nn.modules.module import _addindent
 import torch
 import numpy as np
+
+
 def torch_summarize(model, show_weights=True, show_parameters=True):
     """Summarizes torch model by showing trainable parameters and weights."""
     tmpstr = model.__class__.__name__ + ' (\n'
@@ -125,12 +215,11 @@ def torch_summarize(model, show_weights=True, show_parameters=True):
         if show_weights:
             tmpstr += ', weights={}'.format(weights)
         if show_parameters:
-            tmpstr +=  ', parameters={}'.format(params)
+            tmpstr += ', parameters={}'.format(params)
         tmpstr += '\n'
 
     tmpstr = tmpstr + ')'
     return tmpstr
-
 
 
 if __name__ == "__main__":
