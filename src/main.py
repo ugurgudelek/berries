@@ -1,13 +1,18 @@
 from estimator import Estimator
-from model import LSTM
+from model import LSTM, GenericModel
 from dataset import IndicatorDataset
 import torch
+from torch import nn
+
+from tensorboardX import SummaryWriter
 
 from torch.utils.data import DataLoader
 
 from tqdm import trange
 import pandas as pd
 import numpy as np
+
+import time
 
 import matplotlib.pyplot as plt
 
@@ -70,7 +75,7 @@ class Config:
         self.DATASET_NAME = 'IndicatorDataset'
         self.INPUT_PATH = '../input/spy_spline.csv'
 
-        self.EXPERIMENT_DIR = '../experiment/spy_spline_5epoch'
+        self.EXPERIMENT_DIR = '../experiment/spy_spline_5epoch_' + str(int(time.time()))
 
         self.USE_CUDA = torch.cuda.is_available()
         if self.USE_CUDA:
@@ -90,7 +95,9 @@ class Config:
         return string
 
     def save(self):
+        os.makedirs(self.EXPERIMENT_DIR, exist_ok=True)
         path = os.path.join(self.EXPERIMENT_DIR, 'config.ini')
+
         with open(path, 'w') as file:
             file.write(self.__str__())
 
@@ -100,21 +107,21 @@ if __name__ == "__main__":
     config = Config()
     config.save()
 
-    dataset = IndicatorDataset(dataset_name=config.DATASET_NAME,
-                               input_path=config.INPUT_PATH,
-                               train_valid_ratio=config.TRAIN_VALID_RATIO,
-                               save_dataset=True,
-                               seq_len=config.SEQ_LEN,
-                               label_type=config.LABEL_TYPE)
-
-    train_dataloader = DataLoader(dataset.train_dataset,
-                                  batch_size=config.TRAIN_BATCH_SIZE,
-                                  shuffle=False,
-                                  drop_last=True, collate_fn=custom_collate_fn)
-    valid_dataloader = DataLoader(dataset.valid_dataset,
-                                  batch_size=config.VALID_BATCH_SIZE,
-                                  shuffle=False,
-                                  drop_last=True, collate_fn=custom_collate_fn)
+    # dataset = IndicatorDataset(dataset_name=config.DATASET_NAME,
+    #                            input_path=config.INPUT_PATH,
+    #                            train_valid_ratio=config.TRAIN_VALID_RATIO,
+    #                            save_dataset=True,
+    #                            seq_len=config.SEQ_LEN,
+    #                            label_type=config.LABEL_TYPE)
+    #
+    # train_dataloader = DataLoader(dataset.train_dataset,
+    #                               batch_size=config.TRAIN_BATCH_SIZE,
+    #                               shuffle=False,
+    #                               drop_last=True, collate_fn=custom_collate_fn)
+    # valid_dataloader = DataLoader(dataset.valid_dataset,
+    #                               batch_size=config.VALID_BATCH_SIZE,
+    #                               shuffle=False,
+    #                               drop_last=True, collate_fn=custom_collate_fn)
 
     model = LSTM(input_size=config.INPUT_SIZE,
                  seq_length=config.SEQ_LEN,
@@ -123,54 +130,80 @@ if __name__ == "__main__":
                  hidden_size=config.HIDDEN_SIZE,
                  batch_size=config.TRAIN_BATCH_SIZE,
                  use_cuda=config.USE_CUDA)
+    model.to_onnx(directory=config.EXPERIMENT_DIR)
+    model.to_txt(directory=config.EXPERIMENT_DIR)
 
-    estimator = Estimator(model=model,
-                          use_cuda=config.USE_CUDA,
-                          exp_dir=config.EXPERIMENT_DIR)
-
-    epoch = 0
-    with trange(epoch, config.EPOCH_SIZE) as t:
-        for epoch in t:
-            # Fit the model
-            training_loss = estimator.fit(dataloader=train_dataloader)
-
-            # Predict validation set
-            xs, ys = dataset.valid_dataset.get_all_data(transforms=[FloatTensor, Variable])
-            prediction, validation_loss = estimator.validate(xs=xs, ys=ys)
-            prediction = prediction.data.numpy()
-            validation_loss = validation_loss.item()
-
-            # Log loss
-            estimator.writer.add_scalar('training_loss', training_loss, epoch)
-            estimator.writer.add_scalar('validation_loss', validation_loss, epoch)
-
-            # todo: add weight image 2d cnn & 1d dense & think how can we do this RNN
-            # todo: add buy&sell strategy class
-            # todo: add buy&sell metric table creation
-            # todo: think auc&roc or another metric graphs
-            # todo: add model to the tensorboard
-
-    prediction_df = pd.DataFrame(dict(y=ys.data.numpy().flatten(), yhat=prediction.flatten()))
-    prediction_df.to_csv(os.path.join(config.EXPERIMENT_DIR, 'prediction.csv'), index=False)
-    prediction_df.plot()
-    plt.show()
-
-    if config.LABEL_TYPE == 'classification':
-        pXs, pys, poutputs, plosses, (pdates, pnames) = estimator.predict_all_validation()
-        prediction_df = pd.DataFrame(
-            dict(y0=pys[:, 0], y1=pys[:, 1], y2=pys[:, 2], yhat0=poutputs[:, 0], yhat1=poutputs[:, 1],
-                 yhat2=poutputs[:, 2]))
+    # estimator = Estimator(model=model,
+    #                       use_cuda=config.USE_CUDA,
+    #                       exp_dir=config.EXPERIMENT_DIR)
 
 
-        def onehot2label(row):
-            row = row.values
-            return pd.Series(dict(y=np.argmax(row[:3]), yhat=np.argmax(row[3:])))
 
 
-        labeled_pred_df = prediction_df.apply(onehot2label, axis=1)
+    layers = model.get_layers()
 
-        f1 = f1_score(y_true=labeled_pred_df['y'], y_pred=labeled_pred_df['yhat'], average=None)
-        print('f1 score:\n{score}'.format(score=f1))
+    wbn = model.weight_bias_name()
 
-        confusion = confusion_matrix(y_true=labeled_pred_df['y'], y_pred=labeled_pred_df['yhat'])
-        print('confusion matrix:\n{confusion}'.format(confusion=confusion))
+    weights, biases, names = list(zip(*[(weight,bias,name) for weight,bias,name in wbn]))
+
+    GenericModel.visualize_weights(names=names, weights=weights, biases=biases).show()
+    # tobecontinued...............
+
+    # for key, item in model.state_dict().items():
+    #     item = item.data.numpy()
+    #     if item.ndim == 1:
+    #         item = np.expand_dims(item, axis=1)
+    #     fig = plt.figure()
+    #     fig.suptitle(key)
+    #     plt.imshow(item)
+    #     plt.show()
+    #
+    # print('modules:', model._modules)
+    # print('parameters:', model._modules['lstm']._parameters)
+    #
+    # epoch = 0
+    # with trange(epoch, config.EPOCH_SIZE) as t:
+    #     for epoch in t:
+    #         # Fit the model
+    #         training_loss = estimator.fit(dataloader=train_dataloader)
+    #
+    #         # Predict validation set
+    #         xs, ys = dataset.valid_dataset.get_all_data(transforms=[FloatTensor, Variable])
+    #         prediction, validation_loss = estimator.validate(xs=xs, ys=ys)
+    #         prediction = prediction.data.numpy()
+    #         validation_loss = validation_loss.item()
+    #
+    #         # Log loss
+    #         estimator.writer.add_scalar('training_loss', training_loss, epoch)
+    #         estimator.writer.add_scalar('validation_loss', validation_loss, epoch)
+    #
+    #         # todo: add weight image 2d cnn & 1d dense & think how can we do this RNN
+    #         # todo: add buy&sell strategy class
+    #         # todo: add buy&sell metric table creation
+    #         # todo: think auc&roc or another metric graphs
+    #         # done: add model to the tensorboard or onnx - onnx DONE, tensorboard later
+    #
+    # prediction_df = pd.DataFrame(dict(y=ys.data.numpy().flatten(), yhat=prediction.flatten()))
+    # prediction_df.to_csv(os.path.join(config.EXPERIMENT_DIR, 'prediction.csv'), index=False)
+    # prediction_df.plot()
+    # plt.show()
+    #
+    # if config.LABEL_TYPE == 'classification':
+    #     pXs, pys, poutputs, plosses, (pdates, pnames) = estimator.predict_all_validation()
+    #     prediction_df = pd.DataFrame(
+    #         dict(y0=pys[:, 0], y1=pys[:, 1], y2=pys[:, 2], yhat0=poutputs[:, 0], yhat1=poutputs[:, 1],
+    #              yhat2=poutputs[:, 2]))
+    #
+    #
+    #     def onehot2label(row):
+    #         row = row.values
+    #         return pd.Series(dict(y=np.argmax(row[:3]), yhat=np.argmax(row[3:])))
+    #
+    #
+    #     labeled_pred_df = prediction_df.apply(onehot2label, axis=1)
+    #
+    #     f1 = f1_score(y_true=labeled_pred_df['y'], y_pred=labeled_pred_df['yhat'], average=None)
+    #     print('f1 score:\n{score}'.format(score=f1))
+    #
+    #     confusion = confusion_matrix(y_true=labeled_pred_df['y'], y_pred=labeled_pred_df['yhat'])
+    #     print('confusion matrix:\n{confusion}'.format(confusion=confusion))
