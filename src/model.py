@@ -64,9 +64,13 @@ class GenericModel():
 
                 yield weight, bias, name
 
-    @staticmethod
-    def visualize_weights(names, weights, biases):
+
+    def visualize_weights(self):
         # todo: delete 3,4 and make this method generic
+
+        wbn = self.weight_bias_name()
+        weights, biases, names = list(zip(*[(weight, bias, name) for weight, bias, name in wbn]))
+
         f, axarr = plt.subplots(3, 4)  # (nrows, ncols)
 
         def _process_weight(ax, name, weight):
