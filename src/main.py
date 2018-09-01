@@ -58,7 +58,7 @@ class Config:
         """
         self.RANDOM_SEED = 42
         self.MODEL_NAME = 'LSTM'
-        self.EPOCH_SIZE = 1
+        self.EPOCH_SIZE = 3
 
         self.SEQ_LEN = 128
         self.INPUT_SIZE = 15
@@ -165,12 +165,18 @@ if __name__ == "__main__":
             estimator.writer.add_scalar('training_loss', training_loss, epoch)
             estimator.writer.add_scalar('validation_loss', validation_loss, epoch)
 
+    train_xs, train_ys = dataset.train_dataset.get_all_data(transforms=[FloatTensor, Variable])
+    train_prediction, train_loss = estimator.validate(xs=train_xs, ys=train_ys)
+    train_prediction = train_prediction.data.numpy()
 
-
-    prediction_df = pd.DataFrame(dict(y=ys.data.numpy().flatten(), yhat=prediction.flatten()))
-    prediction_df.to_csv(os.path.join(config.EXPERIMENT_DIR, 'prediction.csv'), index=False)
+    prediction_df = pd.DataFrame(dict(y=train_ys.data.numpy().flatten(), yhat=train_prediction.flatten()))
     prediction_df.plot()
     plt.show()
+
+    # prediction_df = pd.DataFrame(dict(y=ys.data.numpy().flatten(), yhat=prediction.flatten()))
+    # prediction_df.to_csv(os.path.join(config.EXPERIMENT_DIR, 'prediction.csv'), index=False)
+    # prediction_df.plot()
+    # plt.show()
     #
     # if config.LABEL_TYPE == 'classification':
     #     pXs, pys, poutputs, plosses, (pdates, pnames) = estimator.predict_all_validation()
