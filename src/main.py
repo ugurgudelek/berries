@@ -25,6 +25,16 @@ from torch.autograd import Variable
 from torch import FloatTensor
 
 
+
+# done: plot grafiklerini daha anlamlı hale getir.
+# todo: dataset classını toparla.
+# todo: classification ve regression için modelleri ayırmayı düşünebilirsin.
+# todo: add weight image 2d cnn & 1d dense & think how can we do this RNN
+# in_progress: add buy&sell strategy class
+# todo: add buy&sell metric table creation
+# todo: think auc&roc or another metric graphs
+# done: add model to the tensorboard or onnx - onnx DONE, tensorboard later
+
 def custom_collate_fn(batch):
     if isinstance(batch[0], np.ndarray):
         return torch.stack([torch.from_numpy(b) for b in batch], 0)
@@ -42,12 +52,6 @@ def custom_collate_fn(batch):
 class Config:
     """
     """
-
-    # todo: config dosyasını kaldırıp main içerisinde oluşturmayı tekrar düşün.
-
-    # todo: plot grafiklerini daha anlamlı hale getir.
-    # todo: dataset classını toparla.
-    # todo: classification ve regression için modelleri ayırmayı düşünebilirsin.
 
     def __init__(self):
         """
@@ -107,21 +111,21 @@ if __name__ == "__main__":
     config = Config()
     config.save()
 
-    # dataset = IndicatorDataset(dataset_name=config.DATASET_NAME,
-    #                            input_path=config.INPUT_PATH,
-    #                            train_valid_ratio=config.TRAIN_VALID_RATIO,
-    #                            save_dataset=True,
-    #                            seq_len=config.SEQ_LEN,
-    #                            label_type=config.LABEL_TYPE)
-    #
-    # train_dataloader = DataLoader(dataset.train_dataset,
-    #                               batch_size=config.TRAIN_BATCH_SIZE,
-    #                               shuffle=False,
-    #                               drop_last=True, collate_fn=custom_collate_fn)
-    # valid_dataloader = DataLoader(dataset.valid_dataset,
-    #                               batch_size=config.VALID_BATCH_SIZE,
-    #                               shuffle=False,
-    #                               drop_last=True, collate_fn=custom_collate_fn)
+    dataset = IndicatorDataset(dataset_name=config.DATASET_NAME,
+                               input_path=config.INPUT_PATH,
+                               train_valid_ratio=config.TRAIN_VALID_RATIO,
+                               save_dataset=True,
+                               seq_len=config.SEQ_LEN,
+                               label_type=config.LABEL_TYPE)
+
+    train_dataloader = DataLoader(dataset.train_dataset,
+                                  batch_size=config.TRAIN_BATCH_SIZE,
+                                  shuffle=False,
+                                  drop_last=True, collate_fn=custom_collate_fn)
+    valid_dataloader = DataLoader(dataset.valid_dataset,
+                                  batch_size=config.VALID_BATCH_SIZE,
+                                  shuffle=False,
+                                  drop_last=True, collate_fn=custom_collate_fn)
 
     model = LSTM(input_size=config.INPUT_SIZE,
                  seq_length=config.SEQ_LEN,
@@ -133,60 +137,40 @@ if __name__ == "__main__":
     model.to_onnx(directory=config.EXPERIMENT_DIR)
     model.to_txt(directory=config.EXPERIMENT_DIR)
 
-    # estimator = Estimator(model=model,
-    #                       use_cuda=config.USE_CUDA,
-    #                       exp_dir=config.EXPERIMENT_DIR)
+    estimator = Estimator(model=model,
+                          use_cuda=config.USE_CUDA,
+                          exp_dir=config.EXPERIMENT_DIR)
 
-
-
-
-    layers = model.get_layers()
-
-    wbn = model.weight_bias_name()
-
-    weights, biases, names = list(zip(*[(weight,bias,name) for weight,bias,name in wbn]))
-
-    GenericModel.visualize_weights(names=names, weights=weights, biases=biases).show()
-    # tobecontinued...............
-
-    # for key, item in model.state_dict().items():
-    #     item = item.data.numpy()
-    #     if item.ndim == 1:
-    #         item = np.expand_dims(item, axis=1)
-    #     fig = plt.figure()
-    #     fig.suptitle(key)
-    #     plt.imshow(item)
-    #     plt.show()
+    # layers = model.get_layers()
     #
-    # print('modules:', model._modules)
-    # print('parameters:', model._modules['lstm']._parameters)
+    # wbn = model.weight_bias_name()
     #
-    # epoch = 0
-    # with trange(epoch, config.EPOCH_SIZE) as t:
-    #     for epoch in t:
-    #         # Fit the model
-    #         training_loss = estimator.fit(dataloader=train_dataloader)
+    # weights, biases, names = list(zip(*[(weight,bias,name) for weight,bias,name in wbn]))
     #
-    #         # Predict validation set
-    #         xs, ys = dataset.valid_dataset.get_all_data(transforms=[FloatTensor, Variable])
-    #         prediction, validation_loss = estimator.validate(xs=xs, ys=ys)
-    #         prediction = prediction.data.numpy()
-    #         validation_loss = validation_loss.item()
-    #
-    #         # Log loss
-    #         estimator.writer.add_scalar('training_loss', training_loss, epoch)
-    #         estimator.writer.add_scalar('validation_loss', validation_loss, epoch)
-    #
-    #         # todo: add weight image 2d cnn & 1d dense & think how can we do this RNN
-    #         # todo: add buy&sell strategy class
-    #         # todo: add buy&sell metric table creation
-    #         # todo: think auc&roc or another metric graphs
-    #         # done: add model to the tensorboard or onnx - onnx DONE, tensorboard later
-    #
-    # prediction_df = pd.DataFrame(dict(y=ys.data.numpy().flatten(), yhat=prediction.flatten()))
-    # prediction_df.to_csv(os.path.join(config.EXPERIMENT_DIR, 'prediction.csv'), index=False)
-    # prediction_df.plot()
-    # plt.show()
+    # model.visualize_weights().show()
+
+    epoch = 0
+    with trange(epoch, config.EPOCH_SIZE) as t:
+        for epoch in t:
+            # Fit the model
+            training_loss = estimator.fit(dataloader=train_dataloader)
+
+            # Predict validation set
+            xs, ys = dataset.valid_dataset.get_all_data(transforms=[FloatTensor, Variable])
+            prediction, validation_loss = estimator.validate(xs=xs, ys=ys)
+            prediction = prediction.data.numpy()
+            validation_loss = validation_loss.item()
+
+            # Log loss
+            estimator.writer.add_scalar('training_loss', training_loss, epoch)
+            estimator.writer.add_scalar('validation_loss', validation_loss, epoch)
+
+
+
+    prediction_df = pd.DataFrame(dict(y=ys.data.numpy().flatten(), yhat=prediction.flatten()))
+    prediction_df.to_csv(os.path.join(config.EXPERIMENT_DIR, 'prediction.csv'), index=False)
+    prediction_df.plot()
+    plt.show()
     #
     # if config.LABEL_TYPE == 'classification':
     #     pXs, pys, poutputs, plosses, (pdates, pnames) = estimator.predict_all_validation()
