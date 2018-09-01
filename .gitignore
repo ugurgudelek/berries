@@ -2,3 +2,9 @@
 *.idea
 *.pyc
 experiment/
+src/alexnet.onnx
+src/model.onnx
+src/onnx_test.py
+src/net2.onnx
+*.ugurlaptop
+src/tgraph test.py
