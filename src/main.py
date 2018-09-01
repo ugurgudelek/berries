@@ -58,7 +58,7 @@ class Config:
         """
         self.RANDOM_SEED = 42
         self.MODEL_NAME = 'LSTM'
-        self.EPOCH_SIZE = 3
+        self.EPOCH_SIZE = 5
 
         self.SEQ_LEN = 128
         self.INPUT_SIZE = 15
@@ -67,7 +67,7 @@ class Config:
         self.NUM_LAYERS = 2
         self.HIDDEN_SIZE = 10
 
-        self.LABEL_WINDOW = 7
+        # self.LABEL_WINDOW = 7
         self.LABEL_TYPE = 'regression'
 
         self.TRAIN_VALID_RATIO = 0.90
@@ -79,7 +79,7 @@ class Config:
         self.DATASET_NAME = 'IndicatorDataset'
         self.INPUT_PATH = '../input/spy_spline.csv'
 
-        self.EXPERIMENT_DIR = '../experiment/spy_spline_5epoch_' + str(int(time.time()))
+        self.EXPERIMENT_DIR = '../experiment/spy_spline_' + str(int(time.time()))
 
         self.USE_CUDA = torch.cuda.is_available()
         if self.USE_CUDA:
@@ -165,17 +165,56 @@ if __name__ == "__main__":
             estimator.writer.add_scalar('training_loss', training_loss, epoch)
             estimator.writer.add_scalar('validation_loss', validation_loss, epoch)
 
+
+    def turning_points(data, on, window=15):
+        data = data.copy()
+        data['maxs'] = data[on].rolling(window, center=True, min_periods=window).apply(
+            IndicatorDataset.is_center_max)
+        data['mins'] = data[on].rolling(window, center=True, min_periods=window).apply(
+            IndicatorDataset.is_center_min)
+
+        data['label'] = 'mid'
+        data.loc[data['maxs'] == 1, 'label'] = 'top'
+        data.loc[data['mins'] == 1, 'label'] = 'bot'
+
+        data = data.drop(['maxs', 'mins'], axis=1)
+
+        return data['label']
+
+    def plot_top_bot_turning_point(p):
+        p['y_label'] = turning_points(p, 'y')
+        p['yhat_label'] = turning_points(p, 'yhat')
+
+        x = range(len(p))
+
+        # (r,g,b,a)
+        true_colormap = {'mid':(0.2, 0.4, 0.6, 0), 'top':(1, 0, 0, 0.7), 'bot':(0, 1, 0, 0.7)}
+        pred_colormap = {'mid': (0.2, 0.4, 0.6, 0), 'top': (0, 0, 1, 0.7), 'bot': (0, 1, 1, 0.7)}
+
+        plt.scatter(x=x, y=p['y'], c=[true_colormap[label] for label in p['y_label']], label='y')
+        plt.scatter(x=x, y=p['yhat'], c=[pred_colormap[label] for label in p['yhat_label']], label='yhat')
+        plt.plot(x, p['y'], lw=3, label='close', c='b', alpha=1)
+        plt.plot(x, p['yhat'], lw=1, label='prediction', c='g', alpha=0.5)
+        plt.legend()
+
+
+
+    # Training Plots
     train_xs, train_ys = dataset.train_dataset.get_all_data(transforms=[FloatTensor, Variable])
     train_prediction, train_loss = estimator.validate(xs=train_xs, ys=train_ys)
     train_prediction = train_prediction.data.numpy()
 
-    prediction_df = pd.DataFrame(dict(y=train_ys.data.numpy().flatten(), yhat=train_prediction.flatten()))
-    prediction_df.plot()
-    plt.show()
+    train_prediction_df = pd.DataFrame(dict(y=train_ys.data.numpy().flatten(), yhat=train_prediction.flatten()))
 
-    # prediction_df = pd.DataFrame(dict(y=ys.data.numpy().flatten(), yhat=prediction.flatten()))
-    # prediction_df.to_csv(os.path.join(config.EXPERIMENT_DIR, 'prediction.csv'), index=False)
-    # prediction_df.plot()
+    plot_top_bot_turning_point(train_prediction_df)
+
+    # Validation Plots
+    valid_xs, valid_ys = dataset.valid_dataset.get_all_data(transforms=[FloatTensor, Variable])
+    valid_prediction, valid_loss = estimator.validate(xs=valid_xs, ys=valid_ys)
+    valid_prediction = valid_prediction.data.numpy()
+
+    valid_prediction_df = pd.DataFrame(dict(y=valid_ys.data.numpy().flatten(), yhat=valid_prediction.flatten()))
+    valid_prediction_df.plot()
     # plt.show()
     #
     # if config.LABEL_TYPE == 'classification':
