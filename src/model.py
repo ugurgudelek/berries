@@ -128,7 +128,8 @@ class LSTM(nn.Module, GenericModel):
                             bidirectional=False)
 
         self.fc = nn.Sequential(nn.Linear(in_features=10, out_features=100),
-                                nn.ReLU(),
+                                nn.BatchNorm1d(num_features=100),
+                                nn.SELU(),
                                 nn.Linear(in_features=100, out_features=self.out_size))
 
         # self.softmax = nn.Softmax(dim=1)
