@@ -31,6 +31,7 @@ from torch import FloatTensor
 # todo: classification ve regression için modelleri ayırmayı düşünebilirsin.
 # todo: add weight image 2d cnn & 1d dense & think how can we do this RNN
 # in_progress: add buy&sell strategy class
+# in_progress: smoot output of the lstm to work with buysell class
 # todo: add buy&sell metric table creation
 # todo: think auc&roc or another metric graphs
 # done: add model to the tensorboard or onnx - onnx DONE, tensorboard later
@@ -64,7 +65,7 @@ class Config:
         self.INPUT_SIZE = 15
         # self.OUTPUT_SIZE = 3  # down, steady, up
         self.OUTPUT_SIZE = 1
-        self.NUM_LAYERS = 2
+        self.NUM_LAYERS = 3
         self.HIDDEN_SIZE = 10
 
         # self.LABEL_WINDOW = 7
@@ -77,9 +78,9 @@ class Config:
         self.VALID_SHUFFLE = False
 
         self.DATASET_NAME = 'IndicatorDataset'
-        self.INPUT_PATH = '../input/spy_spline.csv'
+        self.INPUT_PATH = '../input/spy.csv'
 
-        self.EXPERIMENT_DIR = '../experiment/spy_spline_' + str(int(time.time()))
+        self.EXPERIMENT_DIR = '../experiment/spy_real_batchnorm_selu_3layer' + str(int(time.time()))
 
         self.USE_CUDA = torch.cuda.is_available()
         if self.USE_CUDA:
@@ -149,6 +150,9 @@ if __name__ == "__main__":
     #
     # model.visualize_weights().show()
 
+    # train_xs, train_ys = dataset.train_dataset.get_all_data(transforms=[FloatTensor, Variable])
+    valid_xs, valid_ys = dataset.valid_dataset.get_all_data(transforms=[FloatTensor, Variable])
+
     epoch = 0
     with trange(epoch, config.EPOCH_SIZE) as t:
         for epoch in t:
@@ -156,14 +160,13 @@ if __name__ == "__main__":
             training_loss = estimator.fit(dataloader=train_dataloader)
 
             # Predict validation set
-            xs, ys = dataset.valid_dataset.get_all_data(transforms=[FloatTensor, Variable])
-            prediction, validation_loss = estimator.validate(xs=xs, ys=ys)
-            prediction = prediction.data.numpy()
-            validation_loss = validation_loss.item()
+            valid_prediction, valid_loss = estimator.validate(xs=valid_xs, ys=valid_ys)
+            valid_prediction = valid_prediction.data.numpy()
+            valid_loss = valid_loss.item()
 
             # Log loss
             estimator.writer.add_scalar('training_loss', training_loss, epoch)
-            estimator.writer.add_scalar('validation_loss', validation_loss, epoch)
+            estimator.writer.add_scalar('validation_loss', valid_loss, epoch)
 
 
     def turning_points(data, on, window=15):
@@ -200,16 +203,16 @@ if __name__ == "__main__":
 
 
     # Training Plots
-    train_xs, train_ys = dataset.train_dataset.get_all_data(transforms=[FloatTensor, Variable])
-    train_prediction, train_loss = estimator.validate(xs=train_xs, ys=train_ys)
-    train_prediction = train_prediction.data.numpy()
 
-    train_prediction_df = pd.DataFrame(dict(y=train_ys.data.numpy().flatten(), yhat=train_prediction.flatten()))
-
-    plot_top_bot_turning_point(train_prediction_df)
+    # train_prediction, train_loss = estimator.validate(xs=train_xs, ys=train_ys)
+    # train_prediction = train_prediction.data.numpy()
+    #
+    # train_prediction_df = pd.DataFrame(dict(y=train_ys.data.numpy().flatten(), yhat=train_prediction.flatten()))
+    #
+    # plot_top_bot_turning_point(train_prediction_df)
 
     # Validation Plots
-    valid_xs, valid_ys = dataset.valid_dataset.get_all_data(transforms=[FloatTensor, Variable])
+
     valid_prediction, valid_loss = estimator.validate(xs=valid_xs, ys=valid_ys)
     valid_prediction = valid_prediction.data.numpy()
 
