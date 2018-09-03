@@ -301,6 +301,10 @@ class IndicatorDataset():
             turning_points = np.sort(np.concatenate((bot_idxs, top_idxs)))
             stock_data['label'] = distance(stock_data.index.values, turning_points)
 
+            # at this point "label" values are between 0-1 range.
+            # let me add -0.5 bias
+            stock_data['label'] = stock_data['label'] - 0.5
+
             return stock_data
 
         return stocks.groupby('name').apply(inner_func).dropna()
