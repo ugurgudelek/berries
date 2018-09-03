@@ -59,34 +59,39 @@ class Config:
         """
         self.RANDOM_SEED = 42
         self.MODEL_NAME = 'LSTM'
-        self.EPOCH_SIZE = 5
+        self.EPOCH_SIZE = 100
 
-        self.SEQ_LEN = 128
+        self.SEQ_LEN = 256
         self.INPUT_SIZE = 15
         # self.OUTPUT_SIZE = 3  # down, steady, up
         self.OUTPUT_SIZE = 1
-        self.NUM_LAYERS = 3
-        self.HIDDEN_SIZE = 10
+        self.NUM_LAYERS = 4
+        self.HIDDEN_SIZE = 40
 
         # self.LABEL_WINDOW = 7
         self.LABEL_TYPE = 'regression'
 
         self.TRAIN_VALID_RATIO = 0.90
-        self.TRAIN_BATCH_SIZE = 10
-        self.VALID_BATCH_SIZE = 10
+        self.TRAIN_BATCH_SIZE = 100
+        self.VALID_BATCH_SIZE = 100
         self.TRAIN_SHUFFLE = True
         self.VALID_SHUFFLE = False
 
         self.DATASET_NAME = 'IndicatorDataset'
         self.INPUT_PATH = '../input/spy.csv'
 
-        self.EXPERIMENT_DIR = '../experiment/spy_real_batchnorm_selu_3layer' + str(int(time.time()))
+        self.EXPERIMENT_DIR = '../experiment/spy_' + str(int(time.time()))
 
         self.USE_CUDA = torch.cuda.is_available()
         if self.USE_CUDA:
             if torch.cuda.get_device_name(0) == 'GeForce GT 650M':
                 self.USE_CUDA = False
                 print('USE_CUDA is set to False because this GPU is too old.')
+
+        if self.USE_CUDA:
+            self.DEVICE = 'cuda'
+        else:
+            self.DEVICE = 'cpu'
 
         print('CUDA AVAILABLE:{}'.format(self.USE_CUDA))
 
@@ -134,12 +139,12 @@ if __name__ == "__main__":
                  out_size=config.OUTPUT_SIZE,
                  hidden_size=config.HIDDEN_SIZE,
                  batch_size=config.TRAIN_BATCH_SIZE,
-                 use_cuda=config.USE_CUDA)
+                 device=config.DEVICE).to(config.DEVICE)
     model.to_onnx(directory=config.EXPERIMENT_DIR)
     model.to_txt(directory=config.EXPERIMENT_DIR)
 
     estimator = Estimator(model=model,
-                          use_cuda=config.USE_CUDA,
+                          device=config.DEVICE,
                           exp_dir=config.EXPERIMENT_DIR)
 
     # layers = model.get_layers()
@@ -150,7 +155,7 @@ if __name__ == "__main__":
     #
     # model.visualize_weights().show()
 
-    # train_xs, train_ys = dataset.train_dataset.get_all_data(transforms=[FloatTensor, Variable])
+    train_xs, train_ys = dataset.train_dataset.get_all_data(transforms=[FloatTensor, Variable])
     valid_xs, valid_ys = dataset.valid_dataset.get_all_data(transforms=[FloatTensor, Variable])
 
     epoch = 0
@@ -161,7 +166,7 @@ if __name__ == "__main__":
 
             # Predict validation set
             valid_prediction, valid_loss = estimator.validate(xs=valid_xs, ys=valid_ys)
-            valid_prediction = valid_prediction.data.numpy()
+            valid_prediction = valid_prediction.to('cpu').data.numpy()
             valid_loss = valid_loss.item()
 
             # Log loss
@@ -196,27 +201,104 @@ if __name__ == "__main__":
 
         plt.scatter(x=x, y=p['y'], c=[true_colormap[label] for label in p['y_label']], label='y')
         plt.scatter(x=x, y=p['yhat'], c=[pred_colormap[label] for label in p['yhat_label']], label='yhat')
-        plt.plot(x, p['y'], lw=3, label='close', c='b', alpha=1)
+        plt.plot(x, p['y'], '--b', label='close', alpha=1)
         plt.plot(x, p['yhat'], lw=1, label='prediction', c='g', alpha=0.5)
         plt.legend()
 
+    def label_wrt_distance(self, stocks, window=7):
+    # tobecontinued.........
+    # todo: change prediction to zigzag
+        # point turning points then process for distance
+        # after this line, stocks has 'label' column which has top-mid-bot values.
+        stocks = label_top_bot_mid(stocks=stocks, window=window)
+        stocks = filter_consequtive_same_label(stocks=stocks)
+        stocks = crop_firstnonbot_and_lastnontop(stocks=stocks)
+
+        def distance(idxs, turning_points):
+            """
+            Assumes turning_points start with increasing segment.
+            :param idxs:
+            :param turning_points:
+            :return:
+            """
+            segments = np.array(list(zip(turning_points[:-1], turning_points[1:])))
+
+            def calc_dist(x, lower, upper):
+                return (x-lower)/(upper-lower)
+
+            state = True
+            dist = np.zeros_like(idxs, dtype=np.float)
+            for (lower,upper) in segments:
+                for i in range(lower,upper):
+                    if state:
+                        dist[i] = calc_dist(i, lower, upper)
+                    else:
+                        dist[i] = 1 - calc_dist(i, lower, upper)
+
+                state = not state
+
+            return dist
+
+        def inner_func(stock_data):
+            mid_idxs = stock_data.loc[stock_data['label'] == 'mid'].index.values
+            top_idxs = stock_data.loc[stock_data['label'] == 'top'].index.values
+            bot_idxs = stock_data.loc[stock_data['label'] == 'bot'].index.values
+
+            turning_points = np.sort(np.concatenate((bot_idxs, top_idxs)))
+            stock_data['label'] = distance(stock_data.index.values, turning_points)
+
+            # at this point "label" values are between 0-1 range.
+            # let me add -0.5 bias
+            stock_data['label'] = stock_data['label'] - 0.5
+
+            return stock_data
+
+        return stocks.groupby('name').apply(inner_func).dropna()
+
+    def filter_consequtive_same_label(self, stocks):
+
+        def inner_func(stock_data):
+            state = None
+            for i,row in stock_data.iterrows():
+                if row['label'] == 'mid':
+                    continue
+                if state is None:
+                    state = row['label']
+                    continue
+                if state == row['label']:
+                    stock_data.loc[i,'label'] = 'mid'
+                else:
+                    state = row['label']
+            return stock_data
+
+        return stocks.groupby('name').apply(inner_func).dropna()
+
+    def crop_firstnonbot_and_lastnontop(self, stocks):
+
+        def inner_func(stock_data):
+            first_bot_idx = stock_data.loc[stock_data['label'] == 'bot'].index.values[0]
+            last_top_idx = stock_data.loc[stock_data['label'] == 'top'].index.values[-1]
+
+            return stock_data.loc[first_bot_idx:last_top_idx, :]
+
+        return stocks.groupby('name').apply(inner_func).dropna().reset_index(drop=True)
 
 
     # Training Plots
 
-    # train_prediction, train_loss = estimator.validate(xs=train_xs, ys=train_ys)
-    # train_prediction = train_prediction.data.numpy()
-    #
-    # train_prediction_df = pd.DataFrame(dict(y=train_ys.data.numpy().flatten(), yhat=train_prediction.flatten()))
-    #
-    # plot_top_bot_turning_point(train_prediction_df)
+    train_prediction, train_loss = estimator.validate(xs=train_xs, ys=train_ys)
+    train_prediction = train_prediction.to('cpu').data.numpy()
+
+    train_prediction_df = pd.DataFrame(dict(y=train_ys.data.numpy().flatten(), yhat=train_prediction.flatten()))
+
+    plot_top_bot_turning_point(train_prediction_df.iloc[:300])
 
     # Validation Plots
 
     valid_prediction, valid_loss = estimator.validate(xs=valid_xs, ys=valid_ys)
-    valid_prediction = valid_prediction.data.numpy()
+    valid_prediction = valid_prediction.to('cpu').data.numpy()
 
-    valid_prediction_df = pd.DataFrame(dict(y=valid_ys.data.numpy().flatten(), yhat=valid_prediction.flatten()))
+    valid_prediction_df = pd.DataFrame(dict(y=valid_ys.data.to('cpu').numpy().flatten(), yhat=valid_prediction.flatten()))
     valid_prediction_df.plot()
     # plt.show()
     #
