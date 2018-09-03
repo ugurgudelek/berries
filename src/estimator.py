@@ -22,14 +22,11 @@ class Estimator:
     """
 
 
-    def __init__(self, model, use_cuda=True, exp_dir='../experiment'):
+    def __init__(self, model, device, exp_dir='../experiment'):
 
         self.model = model
 
-        self.use_cuda = use_cuda
-        if self.use_cuda:
-            self.model = self.model.cuda()
-
+        self.device = device
 
         self.criterion = nn.MSELoss()
         self.optimizer = optim.Adam(self.model.parameters(), 0.005)
@@ -60,9 +57,6 @@ class Estimator:
             xs = Variable(xs.float(), requires_grad=False)
             ys = Variable(ys.float(), requires_grad=False)
 
-            if self.use_cuda:
-                xs, ys = xs.cuda(), ys.cuda()
-
             if train:
                 output,loss = self._train_on_batch(xs, ys)
             else:
@@ -75,23 +69,39 @@ class Estimator:
 
     def _on_batch(self, xs, ys, train):
         """Never call this function directly!"""
+        # if this call for validation or test, change model mode to evaluation
+        # this is necessary because dropout and batch normalization should behave differently on evaluation mode
+        if not train:
+            self.model.eval()
+
         self.optimizer.zero_grad()  # pytorch accumulates gradients.
 
+        xs = xs.to(self.device)
         # forward
         output = self.model(xs)
         loss = None
 
         if ys is not None:
+            ys = ys.to(self.device)
+
             # loss
             loss = self.criterion(output, ys)
 
             if train:
+
                 # backward
                 loss.backward(retain_graph=True)
                 #optimize
                 self.optimizer.step()
 
-                self.model.detach()
+        # detach first hiddens of previous iteration
+        if self.model.name == 'LSTM':
+            self.model.detach()
+
+        # if this call for validation or test, model mode has changed to eval before,
+        # now we need to revert this behaviour
+        if not train:
+            self.model.train()
 
         return output, loss
 
