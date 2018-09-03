@@ -98,7 +98,7 @@ class LSTM(nn.Module, GenericModel):
     """
     """
 
-    def __init__(self, input_size, seq_length, num_layers, out_size, hidden_size, batch_size, use_cuda):
+    def __init__(self, input_size, seq_length, num_layers, out_size, hidden_size, batch_size, device):
         nn.Module.__init__(self)
 
         self.input_size = input_size
@@ -108,7 +108,8 @@ class LSTM(nn.Module, GenericModel):
         self.batch_size = batch_size
         self.hidden_size = hidden_size
 
-        self.use_cuda = use_cuda
+        self.name = 'LSTM'
+        self.device = device
 
         # Inputs: input, (h_0,c_0)
         #   input(seq_len, batch, input_size)
@@ -124,13 +125,18 @@ class LSTM(nn.Module, GenericModel):
                             num_layers=self.num_layers,
                             bias=True,
                             batch_first=False,
-                            dropout=0.2,
+                            dropout=0,
                             bidirectional=False)
 
-        self.fc = nn.Sequential(nn.Linear(in_features=10, out_features=100),
+        self.fc = nn.Sequential(nn.Linear(in_features=self.hidden_size, out_features=100),
                                 nn.BatchNorm1d(num_features=100),  # todo: test batchnorm
                                 nn.SELU(),  # todo: test RELU vs SELU
-                                # nn.ReLU(),
+                                nn.Linear(in_features=100, out_features=100),
+                                nn.BatchNorm1d(num_features=100),
+                                nn.SELU(),
+                                nn.Linear(in_features=100, out_features=100),
+                                nn.BatchNorm1d(num_features=100),
+                                nn.SELU(),
                                 nn.Linear(in_features=100, out_features=self.out_size))
 
         # self.softmax = nn.Softmax(dim=1)
@@ -157,10 +163,7 @@ class LSTM(nn.Module, GenericModel):
         (h0, c0) = (Variable(torch.zeros(self.num_layers, batch_size, self.hidden_size)),  # h_0
                     Variable(torch.zeros(self.num_layers, batch_size, self.hidden_size)))  # c_0
 
-        if self.use_cuda:
-            return h0.cuda(), c0.cuda()
-
-        return h0, c0
+        return h0.to(self.device), c0.to(self.device)
 
     def detach(self):
         # detach to not backpropagate whole lstm network
@@ -193,7 +196,7 @@ class LSTM(nn.Module, GenericModel):
         return fc_out
 
     def dummy_input(self):
-        return Variable(torch.rand(self.batch_size, 1, self.input_size, self.seq_length)).type(torch.FloatTensor)
+        return Variable(torch.rand(self.batch_size, 1, self.input_size, self.seq_length)).type(torch.FloatTensor).to(self.device)
 
 
 from torch.nn.modules.module import _addindent
