@@ -24,7 +24,7 @@ import collections
 from torch.autograd import Variable
 from torch import FloatTensor
 
-
+# todo: try: calculate pct_change and label outliers
 
 # done: plot grafiklerini daha anlamlı hale getir.
 # todo: dataset classını toparla.
@@ -174,132 +174,25 @@ if __name__ == "__main__":
             estimator.writer.add_scalar('validation_loss', valid_loss, epoch)
 
 
-    def turning_points(data, on, window=15):
-        data = data.copy()
-        data['maxs'] = data[on].rolling(window, center=True, min_periods=window).apply(
-            IndicatorDataset.is_center_max)
-        data['mins'] = data[on].rolling(window, center=True, min_periods=window).apply(
-            IndicatorDataset.is_center_min)
 
-        data['label'] = 'mid'
-        data.loc[data['maxs'] == 1, 'label'] = 'top'
-        data.loc[data['mins'] == 1, 'label'] = 'bot'
-
-        data = data.drop(['maxs', 'mins'], axis=1)
-
-        return data['label']
-
-    def plot_top_bot_turning_point(p):
-        p['y_label'] = turning_points(p, 'y')
-        p['yhat_label'] = turning_points(p, 'yhat')
-
-        x = range(len(p))
-
-        # (r,g,b,a)
-        true_colormap = {'mid':(0.2, 0.4, 0.6, 0), 'top':(1, 0, 0, 0.7), 'bot':(0, 1, 0, 0.7)}
-        pred_colormap = {'mid': (0.2, 0.4, 0.6, 0), 'top': (0, 0, 1, 0.7), 'bot': (0, 1, 1, 0.7)}
-
-        plt.scatter(x=x, y=p['y'], c=[true_colormap[label] for label in p['y_label']], label='y')
-        plt.scatter(x=x, y=p['yhat'], c=[pred_colormap[label] for label in p['yhat_label']], label='yhat')
-        plt.plot(x, p['y'], '--b', label='close', alpha=1)
-        plt.plot(x, p['yhat'], lw=1, label='prediction', c='g', alpha=0.5)
-        plt.legend()
-
-    def label_wrt_distance(self, stocks, window=7):
-    # tobecontinued.........
-    # todo: change prediction to zigzag
-        # point turning points then process for distance
-        # after this line, stocks has 'label' column which has top-mid-bot values.
-        stocks = label_top_bot_mid(stocks=stocks, window=window)
-        stocks = filter_consequtive_same_label(stocks=stocks)
-        stocks = crop_firstnonbot_and_lastnontop(stocks=stocks)
-
-        def distance(idxs, turning_points):
-            """
-            Assumes turning_points start with increasing segment.
-            :param idxs:
-            :param turning_points:
-            :return:
-            """
-            segments = np.array(list(zip(turning_points[:-1], turning_points[1:])))
-
-            def calc_dist(x, lower, upper):
-                return (x-lower)/(upper-lower)
-
-            state = True
-            dist = np.zeros_like(idxs, dtype=np.float)
-            for (lower,upper) in segments:
-                for i in range(lower,upper):
-                    if state:
-                        dist[i] = calc_dist(i, lower, upper)
-                    else:
-                        dist[i] = 1 - calc_dist(i, lower, upper)
-
-                state = not state
-
-            return dist
-
-        def inner_func(stock_data):
-            mid_idxs = stock_data.loc[stock_data['label'] == 'mid'].index.values
-            top_idxs = stock_data.loc[stock_data['label'] == 'top'].index.values
-            bot_idxs = stock_data.loc[stock_data['label'] == 'bot'].index.values
-
-            turning_points = np.sort(np.concatenate((bot_idxs, top_idxs)))
-            stock_data['label'] = distance(stock_data.index.values, turning_points)
-
-            # at this point "label" values are between 0-1 range.
-            # let me add -0.5 bias
-            stock_data['label'] = stock_data['label'] - 0.5
-
-            return stock_data
-
-        return stocks.groupby('name').apply(inner_func).dropna()
-
-    def filter_consequtive_same_label(self, stocks):
-
-        def inner_func(stock_data):
-            state = None
-            for i,row in stock_data.iterrows():
-                if row['label'] == 'mid':
-                    continue
-                if state is None:
-                    state = row['label']
-                    continue
-                if state == row['label']:
-                    stock_data.loc[i,'label'] = 'mid'
-                else:
-                    state = row['label']
-            return stock_data
-
-        return stocks.groupby('name').apply(inner_func).dropna()
-
-    def crop_firstnonbot_and_lastnontop(self, stocks):
-
-        def inner_func(stock_data):
-            first_bot_idx = stock_data.loc[stock_data['label'] == 'bot'].index.values[0]
-            last_top_idx = stock_data.loc[stock_data['label'] == 'top'].index.values[-1]
-
-            return stock_data.loc[first_bot_idx:last_top_idx, :]
-
-        return stocks.groupby('name').apply(inner_func).dropna().reset_index(drop=True)
 
 
     # Training Plots
 
-    train_prediction, train_loss = estimator.validate(xs=train_xs, ys=train_ys)
-    train_prediction = train_prediction.to('cpu').data.numpy()
-
-    train_prediction_df = pd.DataFrame(dict(y=train_ys.data.numpy().flatten(), yhat=train_prediction.flatten()))
-
-    plot_top_bot_turning_point(train_prediction_df.iloc[:300])
-
-    # Validation Plots
-
-    valid_prediction, valid_loss = estimator.validate(xs=valid_xs, ys=valid_ys)
-    valid_prediction = valid_prediction.to('cpu').data.numpy()
-
-    valid_prediction_df = pd.DataFrame(dict(y=valid_ys.data.to('cpu').numpy().flatten(), yhat=valid_prediction.flatten()))
-    valid_prediction_df.plot()
+    # train_prediction, train_loss = estimator.validate(xs=train_xs, ys=train_ys)
+    # train_prediction = train_prediction.to('cpu').data.numpy()
+    #
+    # train_prediction_df = pd.DataFrame(dict(y=train_ys.data.numpy().flatten(), yhat=train_prediction.flatten()))
+    #
+    # plot_top_bot_turning_point(train_prediction_df.iloc[:300])
+    #
+    # # Validation Plots
+    #
+    # valid_prediction, valid_loss = estimator.validate(xs=valid_xs, ys=valid_ys)
+    # valid_prediction = valid_prediction.to('cpu').data.numpy()
+    #
+    # valid_prediction_df = pd.DataFrame(dict(y=valid_ys.data.to('cpu').numpy().flatten(), yhat=valid_prediction.flatten()))
+    # valid_prediction_df.plot()
     # plt.show()
     #
     # if config.LABEL_TYPE == 'classification':
