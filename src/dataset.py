@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 from talib import RSI, SMA, MACD, WILLR, ULTOSC, MFI, STOCH
 
-
+import plots
 
 import os
 import warnings
@@ -179,13 +179,6 @@ class IndicatorDataset():
         dataset['adjusted_close'] = dataset['adjusted_close'].values.astype(np.float)
         dataset['volume'] = dataset['volume'].values.astype(np.float)
 
-        if label_type == 'classification':
-            # labelize with up,down,hold
-            dataset = self.label_top_bot_mid(dataset, window=15)
-            dataset = self.dilate(dataset, window=3)
-        if label_type == 'regression':
-            # labelize with respect to distance
-            dataset = self.label_wrt_distance(dataset, window=15)
 
 
         # calculate technical analysis values from stock data
@@ -207,8 +200,25 @@ class IndicatorDataset():
         dataset = self.differentiate(dataset, subset=['open','high','low','close',
                                                       'adjusted_close'])
         dataset = self.standardize(dataset,
-                                    neg_subset=['date', 'name', 'label',
+                                    neg_subset=['date', 'name',
                                                 'raw_adjusted_close'], kind=kind)
+
+        if label_type == 'classification':
+            # labelize with up,down,hold
+            dataset = self.label_top_bot_mid(dataset, window=15)
+            dataset = self.dilate(dataset, window=3)
+        if label_type == 'regression':
+            # labelize with respect to distance
+            # dataset = self.label_wrt_distance(dataset, window=15)
+
+            dataset = dataset.reset_index(drop=True)
+            dataset = plots.zigzag(stock=dataset, on='adjusted_close', window=15)
+            dataset['label'] = dataset['zigzag']
+            dataset = dataset.drop('zigzag', axis=1)
+
+            dataset = dataset.drop(['volume', 'year', 'month', 'week', 'weekday', 'day'], axis=1)
+
+            print('Features: {}'.format(list(dataset.columns)))
 
         # sort dataset
         dataset = dataset.sort_values(by=['date', 'name']).reset_index(drop=True)
@@ -364,7 +374,7 @@ class IndicatorDataset():
             (self.raw_train_dataset['date'] <= last_date)]
 
     def differentiate(self, stocks, subset):
-
+        # todo: this function should be grouped by 'name'
         def inner_func(stock_data):
             stock_data_subset = stock_data[subset]
             stock_data_neg_subset = stock_data.drop(subset, axis=1)
@@ -372,7 +382,7 @@ class IndicatorDataset():
 
             return pd.concat((stock_data_subset, stock_data_neg_subset), axis=1)
 
-        return stocks.groupby('name').apply(inner_func).dropna()
+        return inner_func(stocks).dropna()
 
     def updown_scaling(self, stocks):
 
