@@ -125,7 +125,7 @@ class LSTM(nn.Module, GenericModel):
                             num_layers=self.num_layers,
                             bias=True,
                             batch_first=False,
-                            dropout=0,
+                            dropout=0.5,
                             bidirectional=False)
 
         self.fc = nn.Sequential(nn.Linear(in_features=self.hidden_size, out_features=100),
@@ -134,10 +134,10 @@ class LSTM(nn.Module, GenericModel):
                                 nn.Linear(in_features=100, out_features=100),
                                 nn.BatchNorm1d(num_features=100),
                                 nn.SELU(),
-                                nn.Linear(in_features=100, out_features=100),
-                                nn.BatchNorm1d(num_features=100),
+                                nn.Linear(in_features=100, out_features=10),
+                                nn.BatchNorm1d(num_features=10),
                                 nn.SELU(),
-                                nn.Linear(in_features=100, out_features=self.out_size))
+                                nn.Linear(in_features=10, out_features=self.out_size))
 
         # self.softmax = nn.Softmax(dim=1)
 

@@ -61,9 +61,8 @@ class Config:
         self.MODEL_NAME = 'LSTM'
         self.EPOCH_SIZE = 100
 
-        self.SEQ_LEN = 256
-        self.INPUT_SIZE = 15
-        # self.OUTPUT_SIZE = 3  # down, steady, up
+        self.SEQ_LEN = 128
+        self.INPUT_SIZE = 9
         self.OUTPUT_SIZE = 1
         self.NUM_LAYERS = 4
         self.HIDDEN_SIZE = 40
@@ -173,27 +172,23 @@ if __name__ == "__main__":
             estimator.writer.add_scalar('training_loss', training_loss, epoch)
             estimator.writer.add_scalar('validation_loss', valid_loss, epoch)
 
-
-
-
-
     # Training Plots
 
-    # train_prediction, train_loss = estimator.validate(xs=train_xs, ys=train_ys)
-    # train_prediction = train_prediction.to('cpu').data.numpy()
-    #
-    # train_prediction_df = pd.DataFrame(dict(y=train_ys.data.numpy().flatten(), yhat=train_prediction.flatten()))
-    #
+    train_prediction, train_loss = estimator.validate(xs=train_xs, ys=train_ys)
+    train_prediction = train_prediction.to('cpu').data.numpy()
+
+    train_prediction_df = pd.DataFrame(dict(y=train_ys.data.numpy().flatten(), yhat=train_prediction.flatten()))
+
     # plot_top_bot_turning_point(train_prediction_df.iloc[:300])
-    #
-    # # Validation Plots
-    #
-    # valid_prediction, valid_loss = estimator.validate(xs=valid_xs, ys=valid_ys)
-    # valid_prediction = valid_prediction.to('cpu').data.numpy()
-    #
-    # valid_prediction_df = pd.DataFrame(dict(y=valid_ys.data.to('cpu').numpy().flatten(), yhat=valid_prediction.flatten()))
-    # valid_prediction_df.plot()
-    # plt.show()
+
+    # Validation Plots
+
+    valid_prediction, valid_loss = estimator.validate(xs=valid_xs, ys=valid_ys)
+    valid_prediction = valid_prediction.to('cpu').data.numpy()
+
+    valid_prediction_df = pd.DataFrame(dict(y=valid_ys.data.to('cpu').numpy().flatten(), yhat=valid_prediction.flatten()))
+    valid_prediction_df.plot()
+    plt.show()
     #
     # if config.LABEL_TYPE == 'classification':
     #     pXs, pys, poutputs, plosses, (pdates, pnames) = estimator.predict_all_validation()
