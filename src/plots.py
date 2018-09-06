@@ -1,8 +1,17 @@
-from dataset import IndicatorDataset
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+
+
+def is_center_max(window_data):
+    return np.max(window_data) == window_data[len(window_data) // 2]
+
+
+
+def is_center_min(window_data):
+    return np.min(window_data) == window_data[len(window_data) // 2]
 
 def point2label(data, on, window=15):
     """
@@ -18,9 +27,9 @@ def point2label(data, on, window=15):
     """
     data = data.copy()
     data['maxs'] = data[on].rolling(window, center=True, min_periods=window).apply(
-        IndicatorDataset.is_center_max)
+        is_center_max, raw=True)
     data['mins'] = data[on].rolling(window, center=True, min_periods=window).apply(
-        IndicatorDataset.is_center_min)
+        is_center_min, raw=True)
 
     data['label'] = 'mid'
     data.loc[data['maxs'] == 1, 'label'] = 'top'
@@ -165,24 +174,25 @@ def zigzag(stock, on, window):
 
 
 
+if __name__ == "__main__":
 
 
-stock = pd.read_csv('../input/spy.csv')
-stock['pct_change'] = stock['adjusted_close'].pct_change()
-stock = stock.dropna(axis=0).reset_index(drop=True)
+    stock = pd.read_csv('../input/spy.csv')
+    stock['pct_change'] = stock['adjusted_close'].pct_change()
+    stock = stock.dropna(axis=0).reset_index(drop=True)
 
-stock = zigzag(stock, on='pct_change', window=15)
+    stock = zigzag(stock, on='pct_change', window=15)
 
-fig = plt.figure()
+    fig = plt.figure()
 
-plot_data_zigzag_tpoints(data=stock['pct_change'],
-                         point_labels=stock['label'],
-                         zigzag_distances=stock['zigzag'],
-                         linestyles={'data':'-r', 'zigzag':'--y'},
-                         label='pct_change')
-plt.plot(stock['close']/1500 - 0.2, label='close')
-plt.show()
+    plot_data_zigzag_tpoints(data=stock['pct_change'],
+                             point_labels=stock['label'],
+                             zigzag_distances=stock['zigzag'],
+                             linestyles={'data':'-r', 'zigzag':'--y'},
+                             label='pct_change')
+    plt.plot(stock['close']/1500 - 0.2, label='close')
+    plt.show()
 
 
-print()
+    print()
 
