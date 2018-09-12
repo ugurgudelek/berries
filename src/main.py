@@ -8,7 +8,7 @@ from tensorboardX import SummaryWriter
 
 from torch.utils.data import DataLoader
 
-from tqdm import trange
+from tqdm import trange, tqdm
 import pandas as pd
 import numpy as np
 
@@ -77,9 +77,9 @@ class Config:
         self.VALID_SHUFFLE = False
 
         self.DATASET_NAME = 'IndicatorDataset'
-        self.INPUT_PATH = '../input/spy.csv'
+        self.INPUT_PATH = '../input/xlf.csv'
 
-        self.EXPERIMENT_DIR = '../experiment/spy_' + str(int(time.time()))
+        self.EXPERIMENT_DIR = '../experiment/xlf_' + str(int(time.time()))
 
         self.USE_CUDA = torch.cuda.is_available()
         if self.USE_CUDA:
@@ -158,19 +158,21 @@ if __name__ == "__main__":
     valid_xs, valid_ys = dataset.valid_dataset.get_all_data(transforms=[FloatTensor, Variable])
 
     epoch = 0
-    with trange(epoch, config.EPOCH_SIZE) as t:
-        for epoch in t:
-            # Fit the model
-            training_loss = estimator.fit(dataloader=train_dataloader)
-
-            # Predict validation set
-            valid_prediction, valid_loss = estimator.validate(xs=valid_xs, ys=valid_ys)
-            valid_prediction = valid_prediction.to('cpu').data.numpy()
-            valid_loss = valid_loss.item()
-
-            # Log loss
-            estimator.writer.add_scalar('training_loss', training_loss, epoch)
-            estimator.writer.add_scalar('validation_loss', valid_loss, epoch)
+    with tqdm(total=100) as pbar:
+        pbar.update(10)
+    # with trange(epoch, config.EPOCH_SIZE) as t:
+    #     for epoch in t:
+    #         # Fit the model
+    #         training_loss = estimator.fit(dataloader=train_dataloader)
+    #
+    #         # Predict validation set
+    #         valid_prediction, valid_loss = estimator.validate(xs=valid_xs, ys=valid_ys)
+    #         valid_prediction = valid_prediction.to('cpu').data.numpy()
+    #         valid_loss = valid_loss.item()
+    #
+    #         # Log loss
+    #         estimator.writer.add_scalar('training_loss', training_loss, epoch)
+    #         estimator.writer.add_scalar('validation_loss', valid_loss, epoch)
 
     # Training Plots
 
