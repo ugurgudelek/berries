@@ -1,2 +1,3 @@
-# ai-framework
+# AI-Framework
 AI Framework to build faster prototype
+# IN PROGRESS...
