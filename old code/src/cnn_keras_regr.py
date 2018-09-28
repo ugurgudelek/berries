@@ -56,7 +56,16 @@ def fit(model, data, params):
     print("Fitting model to the training data...")
     print("")
     model.fit(train_images, train_labels, batch_size=params["batch_size"], epochs=params["epochs"], verbose=1,
-              validation_data=None)
+              validation_split=0.1, shuffle=False,
+              callbacks=[keras.callbacks.TensorBoard(log_dir='./logs/'+params['model_name'],
+                                                     histogram_freq=5,
+                                                     batch_size=params["batch_size"],
+                                                     write_graph=True,
+                                                     write_grads=True,
+                                                     write_images=True,
+                                                     embeddings_freq=0,
+                                                     embeddings_layer_names=None,
+                                                     embeddings_metadata=None)])
 
     return model
 
