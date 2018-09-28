@@ -1,0 +1,37 @@
+
+DONE : Fon isimlerini çıkartmamız lazım. Ya da hisselerin.
+DONE : Yahoo api denemesi yapmak lazım
+DONE : Quandly api denemesi
+DONE : Sınıfların çıkarılması
+DONE : Feature'ların correlation'a göre kümelenmesi
+
+
+* Dataset yapısı:
+
+    Trend indicators
+    TODO : Average directional index (A.D.X.) 
+    TODO : Commodity channel index (CCI) 
+    TODO : Detrended price oscillator (DPO) 
+    TODO : Know sure thing oscillator (KST) 
+    TODO : Ichimoku Kinkō Hyō 
+    DONE : Moving average convergence/divergence (MACD) 
+    TODO : Mass index Moving average (MA) 
+    TODO : Parabolic SAR (SAR) 
+    TODO : Smart money index (SMI) 
+    TODO : Trend line Trix Vortex Indicator (VI)
+    DONE : SMA
+    
+    Momentum indicators
+    DONE : Money flow index (MFI) 
+    DONE : Relative strength index (RSI)
+    TODO : True strength index (TSI)
+    DONE : Williams %R
+    DONE : Stochastic Oscillator
+    DONE : Ultimate oscillator
+    
+    Other indicators
+    TODO : Interest Rate		
+    TODO : Inflation Data
+    TODO : Google Search		
+    TODO : Google Search News	
+    TODO : Ülke bonosu		

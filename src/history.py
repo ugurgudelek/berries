@@ -67,4 +67,3 @@ class History:
 #             return np.inf
 #
 #         return arr[-1]
-

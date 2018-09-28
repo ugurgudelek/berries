@@ -13,6 +13,3 @@ experiment/energy
 # permission for resume exp checkpoints
 !experiment/finance_cnn/resume_exp/checkpoints/
 !experiment/finance_cnn/resume_exp/checkpoints/*
-
-
-

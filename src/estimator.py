@@ -360,4 +360,3 @@ class Estimator:
         epoch_validation_loss = vlosses.mean()
 
         return vXs, vys,  voutputs, vlosses, (dates,names)
-
