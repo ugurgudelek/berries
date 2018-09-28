@@ -1,15 +1,10 @@
+
+*.idea
 *.pyc
-
-.idea
-src/.cache
-src/.ipynb_checkpoints
-src/__pycache__
-
-dataset/energy
-experiment/energy
-
-*checkpoints
-
-# permission for resume exp checkpoints
-!experiment/finance_cnn/resume_exp/checkpoints/
-!experiment/finance_cnn/resume_exp/checkpoints/*
+experiment/
+src/alexnet.onnx
+src/model.onnx
+src/onnx_test.py
+src/net2.onnx
+*.ugurlaptop
+src/tgraph test.py

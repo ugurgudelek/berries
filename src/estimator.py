@@ -1,362 +1,240 @@
-import model
 import torch
 from torch import nn
 from torch import optim
 from torch.utils.data import DataLoader
-
 from torch.autograd import Variable
-from torch import FloatTensor
+
 import numpy as np
-import torchvision
-
-from tensorboardX import SummaryWriter
 import pandas as pd
-from dataset import LoadDataset
-
 import collections
-# class LoadEstimator:
-#     """
-#     todo: Please add docstring
-#     """
-#
-#     # TODO: save experiment settings
-#
-#     def __init__(self, config, resume=False):
-#         """
-#
-#         Args:
-#             config:
-#         """
-#         self.config = config
-#         # if we seed random func, they will generate same output everytime.
-#         if config.RANDOM_SEED is not None:
-#             torch.manual_seed(config.RANDOM_SEED)
-#             np.random.seed(config.RANDOM_SEED)
-#
-#         dataset = LoadFullDataset(csv_path=config.INPUT_PATH,
-#                                   train_valid_ratio=config.TRAIN_VALID_RATIO,
-#                                   train_day=config.TRAIN_DAY,
-#                                   seq_length=config.SEQ_LENGTH)
-#
-#         self.train_dataset = dataset.train_dataset
-#         self.valid_dataset = dataset.valid_dataset
-#
-#         self.train_dataloader = DataLoader(self.train_dataset, batch_size=config.BATCH_SIZE, drop_last=True)
-#         self.valid_dataloader = DataLoader(self.valid_dataset, batch_size=config.BATCH_SIZE, drop_last=True)
-#
-#         self.model = LoadLSTM(input_size=config.INPUT_SIZE,
-#                               seq_length=config.SEQ_LENGTH,
-#                               num_layers=config.NUM_LAYERS,
-#                               batch_size=config.BATCH_SIZE)
-#
-#         self.criterion = nn.MSELoss()
-#         self.optimizer = optim.Adadelta(self.model.parameters(), lr=1.0)
-#         self.history = History(what_to_store=['train_loss', 'valid_loss', 'test_loss'])
-#         self.plotter = Plotter(xlim=(0, config.SEQ_LENGTH), ylim=(0, 1), block=False)
-#
-#         self.experiment_dir = config.EXPERIMENT_DIR
-#         self.epoch = 0
-#
-#         if resume:
-#             self.load_from_latest_ckpt()
-#
-#     def load_from_latest_ckpt(self):
-#         """
-#
-#         Returns:
-#
-#         """
-#         latest_ckpt_path = Checkpoint.get_latest_checkpoint(self.experiment_dir)
-#
-#         print("model reading from {} ...".format(latest_ckpt_path))
-#
-#         latest_ckpt = Checkpoint.load(path=latest_ckpt_path)
-#
-#         self.model = latest_ckpt.model
-#         self.optimizer = latest_ckpt.optimizer
-#         self.epoch = latest_ckpt.epoch + 1  # increment by 1 to train next epoch
-#         self.history = latest_ckpt.history
-#
-#     def _train_on_batch(self, X_batch, y_batch):
-#         """
-#
-#         Args:
-#             X_batch:
-#             y_batch:
-#
-#         Returns:
-#
-#         """
-#
-#         self.optimizer.zero_grad()  # pytorch accumulates gradients.
-#         gc.collect()
-#         self.model.hidden = self.model.init_hidden()  # detach history of initial hidden
-#         lstm_out, hidden = self.model(X_batch)
-#
-#         # prediction = hidden[0][-1, :, :]
-#         prediction = lstm_out[-1, :, -1]
-#         loss = self.criterion(prediction, y_batch)
-#
-#         loss.backward()
-#         self.optimizer.step()
-#
-#         return lstm_out, hidden, prediction, loss
-#
-#     def _train_on_epoch(self, epoch):
-#         """
-#
-#         Args:
-#             epoch:
-#
-#         Returns:
-#
-#         """
-#         self.model.train(mode=True)
-#
-#         for batch_num, (X, y) in enumerate(self.train_dataloader):
-#             batch_size = X.size()[1]
-#             step = batch_size * batch_num
-#
-#             (X, y) = Variable(X.float(), requires_grad=False), Variable(y.float(), requires_grad=False)
-#             (lstm_out, hidden, prediction, train_loss) = self._train_on_batch(X_batch=X, y_batch=y)
-#
-#             self.history.append(label='train_loss', value=train_loss.data.numpy()[0].item())
-#
-#             print("epoch : {:>8} || batch_num : ({:>4}/{:<4}) || train_loss : {:.5f} || valid_loss  {:.5f}".format(
-#                 epoch, batch_num, len(self.train_dataloader), self.history.last('train_loss'),
-#                 self.history.last('valid_loss')))
-#
-#             if True:  # (batch_num + 1) % 10 == 0:
-#                 X_to_plot = X.data.numpy()[0, :, 0]
-#                 y_to_plot = y.data.numpy()[0]
-#                 prediction_to_plot = prediction.data.numpy()[0]
-#                 self.plotter.add(what_to_plot=X_to_plot, plot_type='line', label='X')
-#                 self.plotter.add(what_to_plot=y_to_plot, plot_type='line', label='true')
-#                 self.plotter.add(what_to_plot=prediction_to_plot, plot_type='line', label='pred')
-#                 self.plotter.add(what_to_plot=self.history.get('train_loss'), plot_type='line', label='train_loss')
-#                 self.plotter.add(what_to_plot=self.history.get('valid_loss'), plot_type='line', label='valid_loss')
-#                 self.plotter.plot()
-#
-#         # save model, optimizer, epoch, history to the experiment_dir/datetime_epoch
-#         Checkpoint(model=self.model, optimizer=self.optimizer,
-#                    epoch=self.epoch, history=self.history,
-#                    experiment_dir=self.experiment_dir).save()
-#
-#     def _validate(self):
-#         # TODO: Implement self._validate and append loss to the history container
-#         self.model.eval()
-#         valid_losses = []
-#         for batch_num, (X, y) in enumerate(self.valid_dataloader):
-#             (X, y) = Variable(X.float(), requires_grad=False), Variable(y.float(), requires_grad=False)
-#             self.model.hidden = self.model.init_hidden()
-#             lstm_out, hidden = self.model(X)
-#
-#             # prediction = hidden[0][-1, :, :]
-#             prediction = lstm_out[-1, :, -1]
-#             valid_loss = self.criterion(prediction, y)
-#
-#             valid_losses.append(valid_loss.data.numpy()[0].item())
-#
-#         self.history.append(label='valid_loss', value=sum(valid_losses) / len(valid_losses))
-#
-#     def test(self):
-#         # TODO: Implement self._test and append loss to the history container
-#         self.model.eval()
-#         valid_losses = []
-#         predictions = []
-#         Xs = []
-#         ys = []
-#         for batch_num, (X, y) in enumerate(self.valid_dataloader):
-#             (X, y) = Variable(X.float(), requires_grad=False), Variable(y.float(), requires_grad=False)
-#             self.model.hidden = self.model.init_hidden()
-#             lstm_out, hidden = self.model(X)
-#
-#             # prediction = hidden[0][-1, :, :]
-#             prediction = lstm_out[-1, :, -1]
-#             valid_loss = self.criterion(prediction, y)
-#
-#             valid_losses.append(valid_loss.data.numpy()[0].item())
-#
-#             Xs.append(X)
-#             ys.append(y)
-#             predictions.append(prediction.data.numpy()[0].item())
-#         # self.history.append(label='test_loss', value=test_loss.data.numpy()[0])
-#         return {'Xs': Xs, 'ys': ys, 'predictions': predictions, 'valid_losses': valid_losses}
-#
-#     def train(self, epoch_size=20):
-#         """
-#         Iterates from latest epoch to epoch_size because maybe model is resuming from latest checkpoint.
-#         Updates self.epoch every time too to be ready for next saving process.
-#         Args:
-#             epoch_size: how many epoch do we want to train the model?
-#
-#         Returns:
-#
-#         """
-#         for self.epoch in range(self.epoch, epoch_size):
-#             self._train_on_epoch(epoch=self.epoch)
-#             self._validate()
-#             # self._test()
+
+from tqdm import tqdm, trange
+from tensorboardX import SummaryWriter
+import os
+import time
+
+from functools import partial
+from collections import defaultdict
+
+
 class Estimator:
     """
-
     """
 
-    def __init__(self, dataset, model_args, dataloader_args, criterion_args, optimizer_args, use_cuda, writer_path):
 
-        model_cls = model.get_model_cls_from_name(model_args['model_name'])
-        self.model = model_cls(**model_args)
-        print('{} model constructed.'.format(model_args['model_name']))
+    def __init__(self, model, device, exp_dir='../experiment'):
 
-        self.use_cuda = use_cuda
-        if self.use_cuda:
-            self.model = self.model.cuda()
+        self.model = model
 
-        if criterion_args['criterion_name'] == 'MSE':
-            self.criterion = nn.MSELoss()
+        self.device = device
 
-        if optimizer_args['optimizer_name'] == 'Adam':
-            self.optimizer = optim.Adam(self.model.parameters(), lr=optimizer_args['lr'])
+        self.criterion = nn.MSELoss()
+        self.optimizer = optim.Adam(self.model.parameters(), 0.005)
 
-        self.dataset = dataset
+        self.writer = SummaryWriter(log_dir=os.path.join(exp_dir, 'summary'))
 
-        self.train_dataloader = DataLoader(dataset.train_dataset,
-                                           batch_size=dataloader_args['train_batch_size'],
-                                           shuffle=dataloader_args['train_shuffle'],
-                                           drop_last=True,
-                                           collate_fn=Estimator.custom_collate_fn) # to override default_collate_fn
-        self.valid_dataloader = DataLoader(dataset.valid_dataset,
-                                           batch_size=dataloader_args['valid_batch_size'],
-                                           shuffle=dataloader_args['valid_shuffle'],
-                                           drop_last=True,
-                                           collate_fn=Estimator.custom_collate_fn) # to override default_collate_fn
 
-        self.writer = SummaryWriter(log_dir=writer_path)
+        # ============== FIT - PREDICT - VALIDATE METHODS ====================
+        self._train_on_batch = partial(self._on_batch, train=True)
+        self._validate_on_batch = partial(self._on_batch, train=False)
 
-    def stress_dataset(self, col_num):
-        train_len = self.dataset.train_dataset.X.shape[0]
-        self.dataset.train_dataset.X.iloc[:, col_num] = np.random.rand(train_len)
 
-    @staticmethod
-    def custom_collate_fn(batch):
+        # Predict given xs at once
+        self.predict = partial(self._on_batch, ys=None, train=False)
 
-        if isinstance(batch[0], np.ndarray):
-            return torch.stack([torch.from_numpy(b) for b in batch], 0)
+        # Fit model for given dataloader xs and ys
+        self.fit = partial(self._on_dataloader, train=True)
 
-        elif isinstance(batch[0], collections.Sequence):
-            transposed = zip(*batch)
-            return [Estimator.custom_collate_fn(samples) for samples in transposed]
+        # Validate given xs and ys at once - same as _validate_on_batch
+        # todo: make validation work on dataloader.
+        self.validate = self._validate_on_batch
 
-        elif isinstance(batch[0], dict):
-            return pd.DataFrame(list(batch)).to_dict('list')
-        else:
+    def _on_dataloader(self, dataloader, train):
+        """Never call this function directly!"""
 
-            raise Exception('Update custom_collate_fn!!')
+        losses = np.array([])
+        for step, (xs, ys, info) in enumerate(dataloader):
+            xs = Variable(xs.float(), requires_grad=False)
+            ys = Variable(ys.float(), requires_grad=False)
 
-    def run_epoch(self, epoch, t):
+            if train:
+                output,loss = self._train_on_batch(xs, ys)
+            else:
+                output,loss = self._validate_on_batch(xs, ys)
 
-        # Train
-        toutputs, tlosses = np.array([]), np.array([])
-        for step, (tX, ty, extra_info) in enumerate(self.train_dataloader):
-            if step % 100 == 0:
-                t.set_description('EPOCH : {} || STEP : {}'.format(epoch, step))
+            losses = np.append(losses, loss.item())
 
-            tX, ty = Variable(tX.float(), requires_grad=False), Variable(ty.float(), requires_grad=False)
+        return losses.mean()
 
-            if self.use_cuda:
-                tX, ty = tX.cuda(), ty.cuda()
 
-            toutput, tloss = self.train_on_batch(tX, ty)
+    def _on_batch(self, xs, ys, train):
+        """Never call this function directly!"""
+        # if this call for validation or test, change model mode to evaluation
+        # this is necessary because dropout and batch normalization should behave differently on evaluation mode
+        if not train:
+            self.model.eval()
 
-            toutput, tloss = toutput.cpu(), tloss.cpu()
-            toutputs = np.concatenate((toutputs, toutput.data.numpy()),
-                                      axis=0) if toutputs.size else toutput.data.numpy()
-
-            tlosses = np.append(tlosses, tloss.item())
-
-        epoch_training_loss = tlosses.mean()
-
-        # Validate
-        voutputs, vlosses = np.array([]), np.array([])
-        for i, (vX, vy, extra_info) in enumerate(self.valid_dataloader):
-            vX, vy = Variable(vX.float(), requires_grad=False), Variable(vy.float(), requires_grad=False)
-            if self.use_cuda:
-                vX, vy = vX.cuda(), vy.cuda()
-            voutput, vloss = self.validate_on_batch(vX, vy)
-
-            voutput, vloss = voutput.cpu(), vloss.cpu()
-            voutputs = np.concatenate((voutputs, voutput.data.numpy()), axis=0) if voutputs.size else voutput.data.numpy()
-            vlosses = np.append(vlosses, vloss.item())
-
-        epoch_validation_loss = vlosses.mean()
-
-        return (toutputs, epoch_training_loss, voutputs, epoch_validation_loss)
-
-    def train_on_batch(self, Xs, ys, train=True):
         self.optimizer.zero_grad()  # pytorch accumulates gradients.
 
-        # forward + backward + optimize
-        #self.model.hidden = self.model.init_hidden()  # detach history of initial hidden
-        output = self.model(Xs)
-        loss = self.criterion(output, ys)
+        xs = xs.to(self.device)
+        # forward
+        output = self.model(xs)
+        loss = None
 
-        if train:
-            loss.backward(retain_graph=True)
-            self.optimizer.step()
+        if ys is not None:
+            ys = ys.to(self.device)
+
+            # loss
+            loss = self.criterion(output, ys)
+
+            if train:
+
+                # backward
+                loss.backward(retain_graph=True)
+                #optimize
+                self.optimizer.step()
+
+        # detach first hiddens of previous iteration
+        if self.model.name == 'LSTM':
+            self.model.detach()
+
+        # if this call for validation or test, model mode has changed to eval before,
+        # now we need to revert this behaviour
+        if not train:
+            self.model.train()
 
         return output, loss
 
-    def validate_on_batch(self, Xs, ys):
-        self.model.eval()
-
-        output, loss = self.train_on_batch(Xs, ys, train=False)
-
-        self.model.train()
-
-        return output, loss
-
-    def predict(self, Xs):
-        self.model.eval()
-
-        # self.model.hidden = self.model.init_hidden(batch_size=1)
-        pX = Variable(FloatTensor(Xs), requires_grad=False).unsqueeze(0)
-        if self.use_cuda:
-            pX = pX.cuda()
-        output = self.model(pX)
-
-        self.model.train()
-
-        return output.cpu().data.numpy()
 
 
-    def predict_all_validation(self):
+    # def run_epoch(self, epoch, t):
+    #
+    #     # Train
+    #     tlosses = np.array([])
+    #     taccs  =np.array([])
+    #     for step, (tX, ty, info) in enumerate(self.train_dataloader):
+    #
+    #         if step % 100 == 0:
+    #             t.set_description('EPOCH : {} || STEP : {}'.format(epoch, step))
+    #
+    #         tX, ty = Variable(tX.float(), requires_grad=False), Variable(ty.float(), requires_grad=False)
+    #
+    #         if self.use_cuda:
+    #             tX, ty = tX.cuda(), ty.cuda()
+    #
+    #         toutput, tloss,  tacc = self.train_on_batch(tX, ty)
+    #
+    #         toutput, tloss = toutput.cpu(), tloss.cpu()
+    #
+    #
+    #         tlosses = np.append(tlosses, tloss.item())
+    #         taccs = np.append(taccs, tacc)
+    #
+    #     epoch_training_loss = tlosses.mean()
+    #     epoch_training_acc = taccs.mean()
+    #
+    #
+    #     # Validate
+    #     voutputs, vlosses = np.array([]), np.array([])
+    #     vaccs = np.array([])
+    #     for i, (vX, vy, info) in enumerate(self.valid_dataloader):
+    #         vX, vy = Variable(vX.float(), requires_grad=False), Variable(vy.float(), requires_grad=False)
+    #
+    #         if self.use_cuda:
+    #             vX, vy = vX.cuda(), vy.cuda()
+    #         voutput, vloss, vacc = self.validate_on_batch(vX, vy)
+    #
+    #         voutput, vloss = voutput.cpu(), vloss.cpu()
+    #         voutputs = np.concatenate((voutputs, voutput.data.numpy()), axis=0) if voutputs.size else voutput.data.numpy()
+    #         vlosses = np.append(vlosses, vloss.item())
+    #         vaccs = np.append(vaccs, vacc)
+    #     epoch_validation_loss = vlosses.mean()
+    #     epoch_validation_acc = vaccs.mean()
+    #     return epoch_training_loss , epoch_validation_loss, epoch_training_acc, epoch_validation_acc
 
-        # Validate
-        voutputs, vlosses = np.array([]), np.array([])
-        vXs, vys = np.array([]), np.array([])
+    # def train_on_batch(self, Xs, ys, train=True):
+    #     self.optimizer.zero_grad()  # pytorch accumulates gradients.
+    #
+    #     # forward + backward + optimize
+    #     #self.model.hidden = self.model.init_hidden()  # detach history of initial hidden
+    #
+    #
+    #     output = self.model(Xs)
+    #     loss = self.criterion(output, ys)
+    #     # print(loss.cpu().data.numpy(), np.sum(output.cpu().data.numpy()))
+    #
+    #     out_argmax = np.argmax(output.cpu().data.numpy(), axis=1)
+    #     ys_argmax = np.argmax(ys.cpu().data.numpy(), axis=1)
+    #     acc = np.sum(out_argmax == ys_argmax) / out_argmax.__len__()
+    #
+    #
+    #     if train:
+    #         loss.backward(retain_graph=True)
+    #         self.optimizer.step()
+    #
+    #     # detach to not backpropagate whole lstm network
+    #     # todo: actually below lines should be like self.model.hidden[0].detach_() aka inplace version. but not it working okey..
+    #     self.model.hidden[0].detach()
+    #     self.model.hidden[1].detach()
+    #
+    #     return output, loss, acc
 
-        names,dates = np.array([]), np.array([])
-        for i, (vX, vy, extra_info) in enumerate(self.valid_dataloader):
-            vX, vy = Variable(vX.float(), requires_grad=False), Variable(vy.float(), requires_grad=False)
-            if self.use_cuda:
-                vX, vy = vX.cuda(), vy.cuda()
-            voutput, vloss = self.validate_on_batch(vX, vy)
+    # def validate_on_batch(self, Xs, ys):
+    #     self.model.eval()
+    #
+    #     output, loss, vacc = self.train_on_batch(Xs, ys, train=False)
+    #
+    #     self.model.train()
+    #
+    #     return output, loss, vacc
+
+    # def predict(self, Xs):
+    #     self.model.eval()
+    #
+    #     # self.model.hidden = self.model.init_hidden(batch_size=1)
+    #     pX = Variable(torch.FloatTensor(Xs), requires_grad=False).unsqueeze(0)
+    #     if self.use_cuda:
+    #         pX = pX.cuda()
+    #     output = self.model(pX)
+    #
+    #     self.model.train()
+    #
+    #     return output.cpu().data.numpy()
 
 
-            voutput, vloss = voutput.cpu(), vloss.cpu()
-            voutputs = np.concatenate((voutputs, voutput.data.numpy()),
-                                      axis=0) if voutputs.size else voutput.data.numpy()
-            vlosses = np.append(vlosses, vloss.item())
+    # def predict_all_validation(self):
+    #
+    #     # Validate
+    #     voutputs, vlosses = np.array([]), np.array([])
+    #     vXs, vys = np.array([]), np.array([])
+    #
+    #     names,dates = [],[]
+    #     for i, (vX, vy, extra_info) in enumerate(self.valid_dataloader):
+    #         vX, vy = Variable(vX.float(), requires_grad=False), Variable(vy.float(), requires_grad=False)
+    #         if self.use_cuda:
+    #             vX, vy = vX.cuda(), vy.cuda()
+    #         voutput, vloss, vacc = self.validate_on_batch(vX, vy)
+    #
+    #
+    #         voutput, vloss = voutput.cpu(), vloss.cpu()
+    #         voutputs = np.concatenate((voutputs, voutput.data.numpy()),
+    #                                   axis=0) if voutputs.size else voutput.data.numpy()
+    #         vlosses = np.append(vlosses, vloss.item())
+    #
+    #         vXs = np.concatenate((vXs, vX.cpu().data.numpy()),
+    #                                   axis=0) if vXs.size else vX.cpu().data.numpy()
+    #
+    #         vys = np.concatenate((vys, vy.cpu().data.numpy()),
+    #                                   axis=0) if vys.size else vy.cpu().data.numpy()
+    #
+    #         dates += extra_info['date']
+    #         names += extra_info['name']
+    #
+    #     epoch_validation_loss = vlosses.mean()
+    #
+    #     return vXs, vys,  voutputs, vlosses, (dates,names)
 
-            vXs = np.concatenate((vXs, vX.cpu().data.numpy()),
-                                      axis=0) if vXs.size else vX.cpu().data.numpy()
 
-            vys = np.concatenate((vys, vy.cpu().data.numpy()),
-                                      axis=0) if vys.size else vy.cpu().data.numpy()
+if __name__ == "__main__":
 
-            dates = np.append(dates, extra_info['date'])
-            names = np.append(names, extra_info['name'])
-
-        epoch_validation_loss = vlosses.mean()
-
-        return vXs, vys,  voutputs, vlosses, (dates,names)
+    pass

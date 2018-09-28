@@ -1,74 +1,120 @@
-"""
-Ugur Gudelek
-model
-ugurgudelek
-06-Mar-18
-finance-cnn
-"""
-
 import torch
 from torch import nn
 from torch.autograd import Variable
+import torch.nn.init as init
+import os
+import matplotlib.pyplot as plt
 
-import torch.nn.functional as F
+class GenericModel():
+
+    def to_onnx(self, directory):
+        # todo: below line not working right now. so check:
+        # https://github.com/lanpa/tensorboardX/issues/166
+        # estimator.writer.add_graph(model, (dummy_input,))
+
+        assert 'dummy_input' in dir(self), 'dummy_input method should be implemented in model class!'
+        torch.onnx.export(self, self.dummy_input(), os.path.join(directory, 'model.onnx'), verbose=True)
+
+    def to_txt(self, directory):
+        with open(os.path.join(directory, 'model.txt'), 'w') as f:
+            f.write(self.__str__())
+
+    def get_layers(self):
+        layers = []
+
+        def _recursive_get_layers(network):
+            for layer in network.children():
+                if isinstance(layer,
+                              nn.Sequential):  # if sequential layer, apply recursively to layers in sequential layer
+                    _recursive_get_layers(layer)
+                if list(layer.children()).__len__() == 0:  # if leaf node, add it to list
+                    layers.append(layer)
+
+        _recursive_get_layers(network=self)  # start with whole network
+
+        return layers
 
 
-def get_model_cls_from_name(name):
-    if name == 'CNN':
-        return CNN
+    def weight_bias_name(self):
+        "Generator for weight, bias, name"
+        layers = self.get_layers()
+        title = None
+        weights = None
+        for i, layer in enumerate(layers):
+            # LSTM Layer
+            if isinstance(layer, nn.LSTM):
+                num_lstm_layer = layer.state_dict().keys().__len__()//4  # input,hidden,weight,bias for each
 
-    if name == 'LSTM':
-        return LSTM
+                for i_h in ['i', 'h']:
+                    for layer_num in range(num_lstm_layer):
+                        name = '{i_or_h}h_l{layer_num}'.format(i_or_h=i_h, layer_num=layer_num)
+                        weight_key = 'weight_'+name
+                        bias_key = 'bias_'+name
 
-class CNN(nn.Module):
+                        weight = layer.state_dict()[weight_key].data.numpy()
+                        bias = layer.state_dict()[bias_key].data.numpy()
+
+                        yield weight, bias, 'lstm_'+name
+
+            # FC Layer
+            if isinstance(layer, nn.Linear):
+                name = layer._get_name()
+                weight = layer.state_dict()['weight'].data.numpy()
+                bias = layer.state_dict()['bias'].data.numpy()
+
+                yield weight, bias, name
+
+
+    def visualize_weights(self):
+        # todo: delete 3,4 and make this method generic
+
+        wbn = self.weight_bias_name()
+        weights, biases, names = list(zip(*[(weight, bias, name) for weight, bias, name in wbn]))
+
+        f, axarr = plt.subplots(3, 4)  # (nrows, ncols)
+
+        def _process_weight(ax, name, weight):
+            ax.set_title(name)
+            ax.imshow(weight, )
+            # ax.colorbar()
+
+        def _maybe_reshape(arr):
+            if np.ndim(arr) == 1:
+                return np.expand_dims(arr, axis=1)
+            if arr.shape[0] == 1:
+                return np.transpose(arr)
+            return arr
+
+        idx = 0
+        for (name, weight, bias) in zip(names, weights, biases):
+            _process_weight(axarr[idx // 4][idx % 4], name + '_weight', _maybe_reshape(weight))
+            idx += 1
+            _process_weight(axarr[idx // 4][idx % 4], name + '_bias', _maybe_reshape(bias))
+            idx += 1
+
+        return f
+
+class LSTM(nn.Module, GenericModel):
+    """
     """
 
-    """
-    def __init__(self, model_name, input_size, out_size, batch_size):
-        super(CNN, self).__init__()
-
-        self.cnn1 = nn.Sequential(
-            nn.Conv2d(1,4, kernel_size=3),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm2d(4),
-            nn.Dropout2d(p=0.2)
-        )
-
-        self.cnn2 = nn.Sequential(
-            nn.Conv2d(4, 8, kernel_size=3),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm2d(8),
-            nn.Dropout2d(p=0.2)
-        )
-        self.fc = nn.Sequential(
-            nn.Linear(4608, 500),
-            nn.Linear(500, out_size)
-        )
-
-    def forward(self, x):
-        output = self.cnn1(x)
-        output = self.cnn2(output)
-        output = output.view(output.size()[0], -1) # flatten
-        output = self.fc(output)
-        return output
-
-
-class LSTM(nn.Module):
-    """
-
-    """
-
-
-    def __init__(self, input_size, seq_length, num_layers, out_size, batch_size, use_cuda):
-        super(LSTM, self).__init__()
+    def __init__(self, input_size, seq_length, num_layers, out_size, hidden_size, batch_size, device):
+        nn.Module.__init__(self)
 
         self.input_size = input_size
         self.seq_length = seq_length
         self.num_layers = num_layers
         self.out_size = out_size
         self.batch_size = batch_size
+<<<<<<< HEAD
 
         self.use_cuda = use_cuda
+=======
+        self.hidden_size = hidden_size
+
+        self.name = 'LSTM'
+        self.device = device
+>>>>>>> a-path-to-nips-acml/master
 
         # Inputs: input, (h_0,c_0)
         #   input(seq_len, batch, input_size)
@@ -80,45 +126,55 @@ class LSTM(nn.Module):
         #   h_n (num_layers * num_directions, batch, hidden_size)
         #   c_n (num_layers * num_directions, batch, hidden_size)
         self.lstm = nn.LSTM(input_size=self.input_size,
-                            hidden_size=10,
+                            hidden_size=self.hidden_size,
                             num_layers=self.num_layers,
                             bias=True,
                             batch_first=False,
-                            dropout=0.2,
+                            dropout=0.5,
                             bidirectional=False)
 
-        # self.fc = nn.Sequential(
-        #     nn.Linear(in_features=self.seq_length, out_features=100),
-        #     nn.ReLU(inplace=True),
-        #     nn.Linear(in_features=100, out_features=self.out_size)
-        # )
+        self.fc = nn.Sequential(nn.Linear(in_features=self.hidden_size, out_features=100),
+                                nn.BatchNorm1d(num_features=100),  # todo: test batchnorm
+                                nn.SELU(),  # todo: test RELU vs SELU
+                                nn.Linear(in_features=100, out_features=100),
+                                nn.BatchNorm1d(num_features=100),
+                                nn.SELU(),
+                                nn.Linear(in_features=100, out_features=10),
+                                nn.BatchNorm1d(num_features=10),
+                                nn.SELU(),
+                                nn.Linear(in_features=10, out_features=self.out_size))
+
+        # self.softmax = nn.Softmax(dim=1)
 
         self.hidden = None
 
+        # todo: I have found that initialization destroys the learning process. Think why and fixit.
+        # self.initialize()
 
+    def initialize(self):
+        for w in self.lstm.parameters():
+            init.normal_(w)  # inplace
+
+        for w in self.fc.parameters():
+            init.normal_(w)  # inplace
 
     def init_hidden(self, batch_size=None):
         """
-
         Returns:
             (Variable,Variable): (h_0, c_0)
-
         """
         if batch_size is None:
             batch_size = self.batch_size
-        (h0,c0) = (Variable(torch.zeros(self.num_layers,batch_size, 10)),  # h_0
-                Variable(torch.zeros(self.num_layers,batch_size, 10)))  # c_0
+        (h0, c0) = (Variable(torch.zeros(self.num_layers, batch_size, self.hidden_size)),  # h_0
+                    Variable(torch.zeros(self.num_layers, batch_size, self.hidden_size)))  # c_0
 
-        if self.use_cuda:
-            return h0.cuda(), c0.cuda()
+        return h0.to(self.device), c0.to(self.device)
 
-        return h0, c0
-
-    # def init_hidden_2(self, bsz):
-    #     weight = next(self.parameters()).data
-    #     a = weight.new(self.num_layers, bsz, 1).normal_(-1, 1)
-    #     b = weight.new(self.num_layers, bsz, 10 - 1).zero_()
-    #     return Variable(torch.cat([a, b], 2))
+    def detach(self):
+        # detach to not backpropagate whole lstm network
+        # todo: actually below lines should be like self.model.hidden[0].detach_() aka inplace version. but not it working okey..
+        self.hidden[0].detach()
+        self.hidden[1].detach()
 
     def forward(self, x):
 
@@ -126,182 +182,67 @@ class LSTM(nn.Module):
         # x shape: (seq_len, batch, input_size)
         # hidden shape:(num_layers * num_directions,batch_size, hidden_size)
 
-        if self.hidden is None:
-            self.hidden = self.init_hidden()
+        # reset the LSTM hidden state. Must be applied before you run a new batch. Otherwise the LSTM will treat
+        # a new batch as a continuation of a sequence
+
+        # send batch size to auto update hiddens
+        batch_size = x.shape[0]
+        self.hidden = self.init_hidden(batch_size=batch_size)
 
         x = x.view(self.seq_length, -1, self.input_size)
         lstm_out, self.hidden = self.lstm(x, self.hidden)
 
-        # return all sequence, all batches, only last hidden
-        return lstm_out[:, :, -1].view(-1, self.seq_length)
+        # return last sequence
+        # output of shape (seq_len, batch, num_directions * hidden_size)
+        out = lstm_out[-1]
+        fc_out = self.fc(out)
 
-# ## A Dual-Stage Attention-Based Recurrent Neural Network for Time Series Prediction
-# source: https://arxiv.org/pdf/1704.02971.pdf
-# pytorch example: http://pytorch.org/tutorials/intermediate/seq2seq_translation_tutorial.html
+        # soft_out = self.softmax(fc_out)
+        return fc_out
 
-class encoder(nn.Module):
-    def __init__(self, input_size, hidden_size, T, logger):
-        # input size: number of underlying factors (81)
-        # T: number of time steps (10)
-        # hidden_size: dimension of the hidden state
-        super(encoder, self).__init__()
-        self.input_size = input_size
-        self.hidden_size = hidden_size
-        self.T = T
-
-        self.logger = logger
-
-        self.lstm_layer = nn.LSTM(input_size = input_size, hidden_size = hidden_size, num_layers = 1)
-        self.attn_linear = nn.Linear(in_features = 2 * hidden_size + T - 1, out_features = 1)
-
-    def forward(self, input_data):
-        # input_data: batch_size * T - 1 * input_size
-        input_weighted = Variable(input_data.data.new(input_data.size(0), self.T - 1, self.input_size).zero_())
-        input_encoded = Variable(input_data.data.new(input_data.size(0), self.T - 1, self.hidden_size).zero_())
-        # hidden, cell: initial states with dimention hidden_size
-        hidden = self.init_hidden(input_data) # 1 * batch_size * hidden_size
-        cell = self.init_hidden(input_data)
-        # hidden.requires_grad = False
-        # cell.requires_grad = False
-        for t in range(self.T - 1):
-            # Eqn. 8: concatenate the hidden states with each predictor
-            x = torch.cat((hidden.repeat(self.input_size, 1, 1).permute(1, 0, 2),
-                           cell.repeat(self.input_size, 1, 1).permute(1, 0, 2),
-                           input_data.permute(0, 2, 1)), dim = 2) # batch_size * input_size * (2*hidden_size + T - 1)
-            # Eqn. 9: Get attention weights
-            x = self.attn_linear(x.view(-1, self.hidden_size * 2 + self.T - 1)) # (batch_size * input_size) * 1
-            attn_weights = F.softmax(x.view(-1, self.input_size)) # batch_size * input_size, attn weights with values sum up to 1.
-            # Eqn. 10: LSTM
-            weighted_input = torch.mul(attn_weights, input_data[:, t, :]) # batch_size * input_size
-            # Fix the warning about non-contiguous memory
-            # see https://discuss.pytorch.org/t/dataparallel-issue-with-flatten-parameter/8282
-            self.lstm_layer.flatten_parameters()
-            _, lstm_states = self.lstm_layer(weighted_input.unsqueeze(0), (hidden, cell))
-            hidden = lstm_states[0]
-            cell = lstm_states[1]
-            # Save output
-            input_weighted[:, t, :] = weighted_input
-            input_encoded[:, t, :] = hidden
-        return input_weighted, input_encoded
-
-    def init_hidden(self, x):
-        # No matter whether CUDA is used, the returned variable will have the same type as x.
-        return Variable(x.data.new(1, x.size(0), self.hidden_size).zero_()) # dimension 0 is the batch dimension
-
-class decoder(nn.Module):
-    def __init__(self, encoder_hidden_size, decoder_hidden_size, T, logger):
-        super(decoder, self).__init__()
-
-        self.T = T
-        self.encoder_hidden_size = encoder_hidden_size
-        self.decoder_hidden_size = decoder_hidden_size
-
-        self.logger = logger
-
-        self.attn_layer = nn.Sequential(nn.Linear(2 * decoder_hidden_size + encoder_hidden_size, encoder_hidden_size),
-                                         nn.Tanh(), nn.Linear(encoder_hidden_size, 1))
-        self.lstm_layer = nn.LSTM(input_size = 1, hidden_size = decoder_hidden_size)
-        self.fc = nn.Linear(encoder_hidden_size + 1, 1)
-        self.fc_final = nn.Linear(decoder_hidden_size + encoder_hidden_size, 1)
-
-        self.fc.weight.data.normal_()
-
-    def forward(self, input_encoded, y_history):
-        # input_encoded: batch_size * T - 1 * encoder_hidden_size
-        # y_history: batch_size * (T-1)
-        # Initialize hidden and cell, 1 * batch_size * decoder_hidden_size
-        hidden = self.init_hidden(input_encoded)
-        cell = self.init_hidden(input_encoded)
-        # hidden.requires_grad = False
-        # cell.requires_grad = False
-        for t in range(self.T - 1):
-            # Eqn. 12-13: compute attention weights
-            ## batch_size * T * (2*decoder_hidden_size + encoder_hidden_size)
-            x = torch.cat((hidden.repeat(self.T - 1, 1, 1).permute(1, 0, 2),
-                           cell.repeat(self.T - 1, 1, 1).permute(1, 0, 2), input_encoded), dim = 2)
-            x = F.softmax(self.attn_layer(x.view(-1, 2 * self.decoder_hidden_size + self.encoder_hidden_size
-                                                )).view(-1, self.T - 1)) # batch_size * T - 1, row sum up to 1
-            # Eqn. 14: compute context vector
-            context = torch.bmm(x.unsqueeze(1), input_encoded)[:, 0, :] # batch_size * encoder_hidden_size
-            if t < self.T - 1:
-                # Eqn. 15
-                y_tilde = self.fc(torch.cat((context, y_history[:, t].unsqueeze(1)), dim = 1)) # batch_size * 1
-                # Eqn. 16: LSTM
-                self.lstm_layer.flatten_parameters()
-                _, lstm_output = self.lstm_layer(y_tilde.unsqueeze(0), (hidden, cell))
-                hidden = lstm_output[0] # 1 * batch_size * decoder_hidden_size
-                cell = lstm_output[1] # 1 * batch_size * decoder_hidden_size
-        # Eqn. 22: final output
-        y_pred = self.fc_final(torch.cat((hidden[0], context), dim = 1))
-        # self.logger.info("hidden %s context %s y_pred: %s", hidden[0][0][:10], context[0][:10], y_pred[:10])
-        return y_pred
-
-    def init_hidden(self, x):
-        return Variable(x.data.new(1, x.size(0), self.decoder_hidden_size).zero_())
+    def dummy_input(self):
+        return Variable(torch.rand(self.batch_size, 1, self.input_size, self.seq_length)).type(torch.FloatTensor).to(self.device)
 
 
-# class LoadLSTM(nn.Module):
-#     """
-#         Long-short term memory implementation for LoadDataset
-#
-#         Args:
-#             input_size:
-#             seq_length:
-#             num_layers:
-#
-#         Attributes:
-#             input_size:
-#             seq_length:
-#             num_layers:
-#             lstm:
-#             hidden:
-#     """
-#
-#     def __init__(self, input_size, seq_length, num_layers, batch_size):
-#         super(LoadLSTM, self).__init__()
-#         self.input_size = input_size
-#         self.seq_length = seq_length
-#         self.num_layers = num_layers
-#         self.batch_size = batch_size
-#
-#         # Inputs: input, (h_0,c_0)
-#         #   input(seq_len, batch, input_size)
-#         #   h_0(num_layers * num_directions, batch, hidden_size)
-#         #   c_0(num_layers * num_directions, batch, hidden_size)
-#         #   Note:If (h_0, c_0) is not provided, both h_0 and c_0 default to zero.
-#         # Outputs: output, (h_n, c_n)
-#         #   output (seq_len, batch, hidden_size * num_directions)
-#         #   h_n (num_layers * num_directions, batch, hidden_size)
-#         #   c_n (num_layers * num_directions, batch, hidden_size)
-#         self.lstm = nn.LSTM(input_size=self.input_size,
-#                             hidden_size=self.seq_length,
-#                             num_layers=self.num_layers)
-#
-#         self.hidden = self.init_hidden()
-#
-#     def init_hidden(self):
-#         """
-#
-#         Returns:
-#             (Variable,Variable): (h_0, c_0)
-#
-#         """
-#         # (num_layers, batch, hidden_dim)
-#         return (Variable(torch.zeros(self.num_layers, 1, self.seq_length)),  # h_0
-#                 Variable(torch.zeros(self.num_layers, 1, self.seq_length)))  # c_0
-#
-#     def forward(self, x):
-#         """
-#
-#         Args:
-#             x:
-#
-#         Returns:
-#             (?,?)
-#         """
-#         # Reshape input
-#         # x shape: (seq_len, batch, input_size)
-#         # hidden shape:(num_layers * num_directions,batch_size, hidden_size)
-#         x = x.view(self.seq_length, -1, self.input_size)
-#         lstm_out, self.hidden = self.lstm(x, self.hidden)
-#         return lstm_out
+from torch.nn.modules.module import _addindent
+import torch
+import numpy as np
+
+
+def torch_summarize(model, show_weights=True, show_parameters=True):
+    """Summarizes torch model by showing trainable parameters and weights."""
+    tmpstr = model.__class__.__name__ + ' (\n'
+    for key, module in model._modules.items():
+        # if it contains layers let call it recursively to get params and weights
+        if type(module) in [
+            torch.nn.modules.container.Container,
+            torch.nn.modules.container.Sequential
+        ]:
+            modstr = torch_summarize(module)
+        else:
+            modstr = module.__repr__()
+        modstr = _addindent(modstr, 2)
+
+        params = sum([np.prod(p.size()) for p in module.parameters()])
+        weights = tuple([tuple(p.size()) for p in module.parameters()])
+
+        tmpstr += '  (' + key + '): ' + modstr
+        if show_weights:
+            tmpstr += ', weights={}'.format(weights)
+        if show_parameters:
+            tmpstr += ', parameters={}'.format(params)
+        tmpstr += '\n'
+
+    tmpstr = tmpstr + ')'
+    return tmpstr
+
+
+if __name__ == "__main__":
+    model = LSTM(input_size=4,
+                 seq_length=256,
+                 num_layers=1,
+                 out_size=1,
+                 batch_size=2,
+                 use_cuda=True).cpu()
+    # Test
+    print(torch_summarize(model))

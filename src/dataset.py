@@ -11,16 +11,15 @@ import pandas as pd
 import numpy as np
 from talib import RSI, SMA, MACD, WILLR, ULTOSC, MFI, STOCH
 
-import utils
+import plots
 
 import os
 import warnings
 from sklearn import preprocessing
 from collections import defaultdict
-from config import Config
+from scipy import spatial
 
 import matplotlib.pyplot as plt
-
 
 class InnerIndicatorDataset(torch.utils.data.Dataset):
     """
@@ -29,28 +28,40 @@ class InnerIndicatorDataset(torch.utils.data.Dataset):
         dataset(pd.DataFrame):
     """
 
-    def __init__(self, dataset):
+    def __init__(self, dataset, seq_len, problem_type):
         self.dataset = dataset
 
-        self.X = self.dataset.drop(['date', 'open', 'high', 'low', 'close', 'name',
-                                    'label_sell', 'label_buy', 'label_hold', 'raw_adjusted_close'], axis=1)
+        self.X = self.dataset.drop(['date', 'name', 'open', 'high', 'low', 'close',
+                                    'label', 'raw_adjusted_close'], axis=1)
 
-        self.y = self.dataset[['label_sell', 'label_buy', 'label_hold']]
+        self.y = self.dataset[['label']]
+
+        if problem_type=='classification':
+            # turn categorical to one hot encoding
+            self.y = pd.get_dummies(self.y)
+
         self.name = self.dataset[['name']]
 
-        self.image_width = self.X.shape[1]
+        self.feature_dim = self.X.shape[1]
+        self.output_dim = self.y.shape[1]
+        self.data_dim = self.X.shape[0]
+        self.seq_len = seq_len
+
+        # self._X = self.X.values.reshape(-1, self.feature_dim, self.seq_len)
+        # self._y = self.y.values.reshape(-1, self.output_dim, self.seq_len)
+
 
         self.transform = transforms.Compose([transforms.ToTensor()])
 
     def __len__(self):
-        return self.dataset.shape[0] - self.image_width - 1
+        return self.dataset.shape[0] - self.seq_len
 
     def __getitem__(self, ix):
-        X = self.X.iloc[ix: ix + self.image_width, :]
-        y = self.y.iloc[ix + self.image_width - 1, :]
+        X = self.X.iloc[ix: ix + self.seq_len, :]
+        y = self.y.iloc[ix + self.seq_len - 1, :]
 
-        name = self.dataset['name'].iloc[ix + self.image_width - 1]
-        date = self.dataset['date'].iloc[ix + self.image_width - 1]
+        name = self.dataset['name'].iloc[ix: ix + self.seq_len - 1]
+        date = self.dataset['date'].iloc[ix: ix + self.seq_len - 1]
         extra_info = {'name': name, 'date': date}
 
         # change type to numpy
@@ -60,6 +71,24 @@ class InnerIndicatorDataset(torch.utils.data.Dataset):
         X = np.expand_dims(X, axis=0)
 
         return X, y, extra_info
+
+    def get_all_data(self, transforms=None):
+        xs, ys, _ = self.__getitem__(0)
+        for ix in range(1,self.__len__()):
+            X, y, info = self.__getitem__(ix)
+            xs = np.append(xs, X, axis=0)
+            ys = np.append(ys, y, axis=0)
+
+
+        # tranform
+        # example:
+        # transforms=[FloatTensor, Variable])
+        # xs = Variable(FloatTensor(xs))
+        if transforms is not None:
+            for transform in transforms:
+                xs, ys = transform(xs), transform(ys)
+
+        return xs.unsqueeze_(-1), ys.unsqueeze_(-1)
 
     def _reshape(self, data):
         # (in_channels, width, height)
@@ -103,39 +132,25 @@ class IndicatorDataset():
 
     """
 
-    def __init__(self, dataset_name, input_path, stock_names, save_dataset, train_valid_ratio, label_window):
+    def __init__(self, dataset_name, input_path, save_dataset, train_valid_ratio, seq_len, label_type='classification'):
 
         self.dataset_name = dataset_name
         self.input_path = input_path
         self.train_valid_ratio = train_valid_ratio
-        self.stock_names = stock_names
         self.save_dataset = save_dataset
-        self.label_window = label_window
+        self.seq_len = seq_len
+        self.label_type = label_type
 
         self.standardizer = IndicatorStandardizer()
 
         raw_dataset = pd.read_csv(input_path)
-        if stock_names is not None:
-            raw_dataset = raw_dataset.loc[np.isin(raw_dataset['name'], stock_names)]
-
+        raw_dataset['name'] = 'spy'
         train_len = int(raw_dataset.shape[0] * train_valid_ratio)
-        raw_train_dataset = raw_dataset.iloc[:train_len, :]
-        raw_valid_dataset = raw_dataset.iloc[train_len:, :]
+        self.raw_train_dataset = raw_dataset.iloc[:train_len, :]
+        self.raw_valid_dataset = raw_dataset.iloc[train_len:, :]
 
-        self.preprocessed_train_dataset = self.preprocess_dataset(dataset=raw_train_dataset, kind='train', label_window=label_window)
-        self.preprocessed_valid_dataset = self.preprocess_dataset(dataset=raw_valid_dataset, kind='validation', label_window=label_window)
-
-        utils.plot_wrt_labels(self.preprocessed_valid_dataset.loc[self.preprocessed_valid_dataset['name']=='dia'].iloc[:35],
-                              timeseries_col='raw_adjusted_close', condition_func=lambda row: row['label_sell'] == 1,
-                        text='sell', arrow_len=10)
-
-        utils.plot_wrt_labels(self.preprocessed_valid_dataset.loc[self.preprocessed_valid_dataset['name']=='dia'].iloc[:35],
-                              timeseries_col='raw_adjusted_close', condition_func=lambda row: row['label_buy'] == 1,
-                        text='buy', arrow_len=10)
-
-        plt.ylim((150,200))
-        plt.legend()
-        plt.show()
+        self.preprocessed_train_dataset = self.preprocess_dataset(dataset=self.raw_train_dataset, kind='train', label_type=self.label_type)
+        self.preprocessed_valid_dataset = self.preprocess_dataset(dataset=self.raw_valid_dataset, kind='validation', label_type=self.label_type)
 
         print('Train ----\n'
               'Shape: {} \n'
@@ -159,10 +174,11 @@ class IndicatorDataset():
                 os.path.join('/'.join(input_path.split('/')[:-1]), 'valid_preprocessed_indicator_dataset.csv'),
                 index=False)
 
-        self.train_dataset = InnerIndicatorDataset(dataset=self.preprocessed_train_dataset)
-        self.valid_dataset = InnerIndicatorDataset(dataset=self.preprocessed_valid_dataset)
+        self.train_dataset = InnerIndicatorDataset(dataset=self.preprocessed_train_dataset, seq_len=self.seq_len, problem_type=self.label_type)
+        self.valid_dataset = InnerIndicatorDataset(dataset=self.preprocessed_valid_dataset, seq_len=self.seq_len, problem_type=self.label_type)
+        print()
 
-    def preprocess_dataset(self, dataset, kind='train', label_window=28):
+    def preprocess_dataset(self, dataset, kind='train', label_type='classification'):
 
         dataset['date'] = dataset['date'].astype('datetime64[ns]')
         dataset['high'] = dataset['high'].values.astype(np.float)
@@ -170,8 +186,7 @@ class IndicatorDataset():
         dataset['adjusted_close'] = dataset['adjusted_close'].values.astype(np.float)
         dataset['volume'] = dataset['volume'].values.astype(np.float)
 
-        # labelize with up,down,hold
-        dataset = self.labelize_with_windows_slide(dataset, window=label_window)
+
 
         # calculate technical analysis values from stock data
         # this creates a new dataset depends on technical analysis
@@ -184,60 +199,254 @@ class IndicatorDataset():
         dataset['weekday'] = dataset['date'].dt.weekday.values.astype(int)
         dataset['day'] = dataset['date'].dt.day.values.astype(int)
 
-        dataset = utils.save_column(dataset, col_name='adjusted_close')
+        dataset = dataset.dropna(axis=0).reset_index(drop=True)
+
+        dataset['raw_adjusted_close'] = dataset['adjusted_close'].values
 
         # make stationary, standardize
-        # self.dataset = self.normalize(self.dataset).dropna(axis=0)
+        dataset = self.differentiate(dataset, subset=['open','high','low','close',
+                                                      'adjusted_close'])
         dataset = self.standardize(dataset,
-                                    neg_subset=['date', 'name', 'label_buy', 'label_sell', 'label_hold',
+                                    neg_subset=['date', 'name',
                                                 'raw_adjusted_close'], kind=kind)
+
+        if label_type == 'classification':
+            # labelize with up,down,hold
+            dataset = self.label_top_bot_mid(dataset, window=15)
+            dataset = self.dilate(dataset, window=3)
+        if label_type == 'regression':
+            # labelize with respect to distance
+            # dataset = self.label_wrt_distance(dataset, window=15)
+
+            dataset = dataset.reset_index(drop=True)
+            dataset = plots.zigzag(stock=dataset, on='adjusted_close', window=15)
+            dataset['label'] = dataset['zigzag']
+            dataset = dataset.drop('zigzag', axis=1)
+
+            dataset = dataset.drop(['volume', 'year', 'month', 'week', 'weekday', 'day'], axis=1)
+
+            print('Features: {}'.format(list(dataset.columns)))
 
         # sort dataset
         dataset = dataset.sort_values(by=['date', 'name']).reset_index(drop=True)
 
 
         # # equalize up,down and hold labels
-        if kind == 'train':
-            dataset = self.updown_scaling(dataset)
+        # if kind == 'train':
+        #     dataset = self.updown_scaling(dataset)
 
         return dataset
+
+    @staticmethod
+    def is_center_max(window_data):
+        return np.max(window_data) == window_data[len(window_data)//2]
+    @staticmethod
+    def is_center_min(window_data):
+        return np.min(window_data) == window_data[len(window_data)//2]
+
+    @staticmethod
+    def plot_top_bot_turning_point(stock_data):
+        close = stock_data['adjusted_close'].values
+        labels = stock_data['label'].values
+        x = range(len(close))
+
+        # (r,g,b,a)
+        colormap = {'mid':(0.2, 0.4, 0.6, 0), 'top':(1, 0, 0, 0.7), 'bot':(0, 0, 1, 0.7)}
+        colors = [colormap[label] for label in labels]
+
+        plt.scatter(x=x, y=close, c=colors)
+        plt.plot(x, close, lw=1, label='close')
+        plt.legend()
+
+
+    def label_top_bot_mid(self, stocks, window=7):
+
+        def inner_func(stock_data):
+            stock_data['maxs'] = stock_data['adjusted_close'].rolling(window, center=True, min_periods=window).apply(IndicatorDataset.is_center_max)
+            stock_data['mins'] = stock_data['adjusted_close'].rolling(window, center=True, min_periods=window).apply(IndicatorDataset.is_center_min)
+
+            stock_data['label'] = 'mid'
+            stock_data.loc[stock_data['maxs'] == 1, 'label'] = 'top'
+            stock_data.loc[stock_data['mins'] == 1, 'label'] = 'bot'
+
+
+
+            stock_data = stock_data.drop(['maxs','mins'], axis=1)
+
+            return stock_data
+
+        return stocks.groupby('name').apply(inner_func).dropna()
+
+    def label_wrt_distance(self, stocks, window=7):
+
+        # point turning points then process for distance
+        # after this line, stocks has 'label' column which has top-mid-bot values.
+        stocks = self.label_top_bot_mid(stocks=stocks, window=window)
+        stocks = self.filter_consequtive_same_label(stocks=stocks)
+        stocks = self.crop_firstnonbot_and_lastnontop(stocks=stocks)
+
+        def distance(idxs, turning_points):
+            """
+            Assumes turning_points start with increasing segment.
+            :param idxs:
+            :param turning_points:
+            :return:
+            """
+            segments = np.array(list(zip(turning_points[:-1], turning_points[1:])))
+
+            def calc_dist(x, lower, upper):
+                return (x-lower)/(upper-lower)
+
+            state = True
+            dist = np.zeros_like(idxs, dtype=np.float)
+            for (lower,upper) in segments:
+                for i in range(lower,upper):
+                    if state:
+                        dist[i] = calc_dist(i, lower, upper)
+                    else:
+                        dist[i] = 1 - calc_dist(i, lower, upper)
+
+                state = not state
+
+            return dist
+
+        def inner_func(stock_data):
+            mid_idxs = stock_data.loc[stock_data['label'] == 'mid'].index.values
+            top_idxs = stock_data.loc[stock_data['label'] == 'top'].index.values
+            bot_idxs = stock_data.loc[stock_data['label'] == 'bot'].index.values
+
+            turning_points = np.sort(np.concatenate((bot_idxs, top_idxs)))
+            stock_data['label'] = distance(stock_data.index.values, turning_points)
+
+            # at this point "label" values are between 0-1 range.
+            # let me add -0.5 bias
+            stock_data['label'] = stock_data['label'] - 0.5
+
+            return stock_data
+
+        return stocks.groupby('name').apply(inner_func).dropna()
+
+    def filter_consequtive_same_label(self, stocks):
+
+        def inner_func(stock_data):
+            state = None
+            for i,row in stock_data.iterrows():
+                if row['label'] == 'mid':
+                    continue
+                if state is None:
+                    state = row['label']
+                    continue
+                if state == row['label']:
+                    stock_data.loc[i,'label'] = 'mid'
+                else:
+                    state = row['label']
+            return stock_data
+
+        return stocks.groupby('name').apply(inner_func).dropna()
+
+    def crop_firstnonbot_and_lastnontop(self, stocks):
+
+        def inner_func(stock_data):
+            first_bot_idx = stock_data.loc[stock_data['label'] == 'bot'].index.values[0]
+            last_top_idx = stock_data.loc[stock_data['label'] == 'top'].index.values[-1]
+
+            return stock_data.loc[first_bot_idx:last_top_idx, :]
+
+        return stocks.groupby('name').apply(inner_func).dropna().reset_index(drop=True)
+
+    @staticmethod
+    def nearest_neighbour(arr, search_space):
+        """
+        requires sorted search_space
+        :return (np.ndarray) nearest neighbours of arr in search_space
+        """
+        ret = []
+        for a in arr:
+            min_idx = np.argmin(np.abs(search_space - a))
+            ret.append(min_idx)
+        return np.array(ret)
+
+
+
+
+    def get_data(self, name, date):
+        return self.raw_train_dataset.loc[
+            (self.raw_train_dataset['name'] == name)&
+            (self.raw_train_dataset['date'] == date)]
+
+    def get_data_seq(self, name, first_date, last_date):
+        return self.raw_train_dataset.loc[
+            (self.raw_train_dataset['name'] == name) &
+            (self.raw_train_dataset['date'] >= first_date)&
+            (self.raw_train_dataset['date'] <= last_date)]
+
+    def differentiate(self, stocks, subset):
+        # todo: this function should be grouped by 'name'
+        def inner_func(stock_data):
+            stock_data_subset = stock_data[subset]
+            stock_data_neg_subset = stock_data.drop(subset, axis=1)
+            stock_data_subset = stock_data_subset.pct_change()
+
+            return pd.concat((stock_data_subset, stock_data_neg_subset), axis=1)
+
+        return inner_func(stocks).dropna()
 
     def updown_scaling(self, stocks):
 
         def inner_func(stock_data):
-            buy_count = stock_data['label_buy'].sum()
-            sell_count = stock_data['label_sell'].sum()
-            hold_count = stock_data['label_hold'].sum()
+            top_count = stock_data.loc[stock_data['label'] == 'top'].sum()
+            mid_count = stock_data.loc[stock_data['label'] == 'mid'].sum()
+            bot_count = stock_data.loc[stock_data['label'] == 'bot'].sum()
 
-            new_downs = utils.pick_random_samples(df=stock_data, on='label_buy', condition=1,
-                                                  n=int(hold_count - buy_count))
-            new_ups = utils.pick_random_samples(df=stock_data, on='label_sell', condition=1,
-                                                n=int(hold_count - sell_count))
+            def pick_random_samples(df, on, condition, n):
+                return df.loc[df[on] == condition].sample(n=n, replace=True)
 
-            return pd.concat((stock_data, new_ups, new_downs))
+            new_tops = pick_random_samples(df=stock_data, on='label', condition='top',
+                                                  n=int(mid_count - top_count))
+            new_bots = pick_random_samples(df=stock_data, on='label', condition='bot',
+                                                n=int(mid_count - bot_count))
+
+            return pd.concat((stock_data, new_tops, new_bots))
 
         return stocks.groupby('name').apply(inner_func).sort_values(by=['date', 'name']).reset_index(drop=True)
 
-    def labelize_with_windows_slide(self, stocks, window=28):
+    # def labelize_with_windows_slide(self, stocks, window=28):
+    #
+    #     def inner_func(stock_data):
+    #         """look future windowth price values to label each row
+    #         if window[0] is max in given window then label it with sell,
+    #         if window[0] is min in given window then label it with buy,
+    #         otherwise hold.
+    #         """
+    #         stock_data['max_28'] = stock_data['adjusted_close'].rolling(window).apply(utils.roll_is_max).shift(
+    #             periods=-window + 1)
+    #         stock_data['min_28'] = stock_data['adjusted_close'].rolling(window).apply(utils.roll_is_min).shift(
+    #             periods=-window + 1)
+    #
+    #         stock_data['label_buy'] = stock_data['min_28'].values
+    #         stock_data['label_sell'] = stock_data['max_28'].values
+    #         stock_data['label_hold'] = 0.0
+    #         stock_data.loc[(stock_data['label_buy'] != 1.0) & (stock_data['label_sell'] != 1.0), 'label_hold'] = 1.0
+    #         return stock_data.drop(['max_28', 'min_28'], axis=1)
+    #
+    #     return stocks.groupby('name').apply(inner_func).dropna()
+
+
+
+    def dilate(self, stocks, window=3):
 
         def inner_func(stock_data):
-            """look future windowth price values to label each row
-            if window[0] is max in given window then label it with sell,
-            if window[0] is min in given window then label it with buy,
-            otherwise hold.
-            """
-            stock_data['max_28'] = stock_data['adjusted_close'].rolling(window).apply(utils.roll_is_max).shift(
-                periods=-window + 1)
-            stock_data['min_28'] = stock_data['adjusted_close'].rolling(window).apply(utils.roll_is_min).shift(
-                periods=-window + 1)
+            stock_data['label2'] = stock_data['label']
+            stock_data['label2'] = np.convolve((stock_data['label'] == 'top').values, np.ones(window),'same')
+            stock_data['label'].loc[stock_data['label2'] == 1] = 'top'
 
-            stock_data['label_buy'] = stock_data['min_28'].values
-            stock_data['label_sell'] = stock_data['max_28'].values
-            stock_data['label_hold'] = 0.0
-            stock_data.loc[(stock_data['label_buy'] != 1.0) & (stock_data['label_sell'] != 1.0), 'label_hold'] = 1.0
-            return stock_data.drop(['max_28', 'min_28'], axis=1)
+            stock_data['label2'] = stock_data['label']
+            stock_data['label2'] = np.convolve((stock_data['label'] == 'bot').values, np.ones(window), 'same')
+            stock_data['label'].loc[stock_data['label2'] == 1] = 'bot'
 
-        return stocks.groupby('name').apply(inner_func).dropna()
+            return stock_data.drop('label2', axis=1)
+
+        return stocks.groupby('name').apply(inner_func)
 
     def _read_dir(self, stocks_dir, stock_names):
         """
@@ -258,20 +467,6 @@ class IndicatorDataset():
         return stocks
 
     def standardize(self, stocks, neg_subset, kind):
-
-        # for (stock_name, stock_data) in stocks.groupby('name'):
-        #     stock_neg_subset = stock_data[neg_subset]
-        #     stock_subset = stock_data.drop(neg_subset, axis=1)
-        #
-        #     stock_subset = stock_subset.apply(, args=(mu, sigma), axis=0)
-        #
-        #     stock_data = pd.concat((stock_neg_subset, stock_subset), axis=1)
-        #
-        #     # line below is ugly. can we fix this ?
-        #     stocks.loc[stocks['name'] == stock_name] = stock_data
-        #
-        #     mus_out[stock_name] = stock_data.mean()
-        #     sigmas_out[stock_name] = stock_data.std()
 
         def inner_func(data, kind):
             stock_name = data['name'].iloc[0]
@@ -347,33 +542,16 @@ class IndicatorDataset():
         volume = dataframe['volume'].values
 
         dataframe['rsi_15'] = RSI(close, timeperiod=15) / 50 - 1
-        dataframe['rsi_20'] = RSI(close, timeperiod=20) / 50 - 1
-        # dataframe['rsi_25'] = RSI(close, timeperiod=25)/50 - 1
-        dataframe['rsi_30'] = RSI(close, timeperiod=30) / 50 - 1
-
-        # dataframe['sma_15'] = SMA(close, timeperiod=15)
         dataframe['sma_20'] = SMA(close, timeperiod=20)
-        # dataframe['sma_25'] = SMA(close, timeperiod=25)
-        dataframe['sma_30'] = SMA(close, timeperiod=30)
 
         dataframe['macd_12'], macdsignal, dataframe['macdhist_12'] = MACD(close, fastperiod=12, slowperiod=26,
                                                                           signalperiod=9)
-        dataframe['macd_14'], macdsignal, dataframe['macdhist_14'] = MACD(close, fastperiod=14, slowperiod=28,
-                                                                          signalperiod=10)
-        dataframe['macd_16'], macdsignal, dataframe['macdhist_16'] = MACD(close, fastperiod=16, slowperiod=30,
-                                                                          signalperiod=11)
 
         dataframe['willR_14'] = WILLR(high, low, close, timeperiod=14) / 50 + 1
-        # dataframe['willR_18'] = WILLR(high, low, close, timeperiod=18)/50 + 1
-        dataframe['willR_22'] = WILLR(high, low, close, timeperiod=22) / 50 + 1
 
         dataframe['ultimate_osc_7'] = ULTOSC(high, low, close, timeperiod1=7, timeperiod2=14, timeperiod3=28) / 50 - 1
-        # dataframe['ultimate_osc_8'] = ULTOSC(high, low, close, timeperiod1=8, timeperiod2=16, timeperiod3=32)/50 - 1
-        dataframe['ultimate_osc_9'] = ULTOSC(high, low, close, timeperiod1=9, timeperiod2=18, timeperiod3=36) / 50 - 1
 
         dataframe['mfi_14'] = MFI(high, low, close, volume, timeperiod=14) / 50 - 1
-        dataframe['mfi_18'] = MFI(high, low, close, volume, timeperiod=18) / 50 - 1
-        dataframe['mfi_22'] = MFI(high, low, close, volume, timeperiod=22) / 50 - 1
 
         slowk, slowd = STOCH(high, low, close, fastk_period=14, slowk_period=3, slowk_matype=0, slowd_period=3,
                              slowd_matype=0)

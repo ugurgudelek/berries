@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from enum import Enum
-
+from plots import zigzag
 
 class BuySell:
 
@@ -12,12 +12,9 @@ class BuySell:
 
     def buyandhold(self, dataframe):
         """
-
         Args:
             dataframe: (pd.DataFrame) should contains price and directive, date columns
-
         Returns: (float) profit
-
         """
         first_price = dataframe.iloc[0].loc['price']
         last_price = dataframe.iloc[-1].loc['price']
@@ -58,12 +55,9 @@ class BuySell:
 
     def process(self, dataframe, only_valid_transactions=True):
         """
-
         Args:
             dataframe: (pd.DataFrame) should contains price and directive, date columns
-
         Returns: (float) profit
-
         """
         dataframe['capital_before'] = np.nan
         dataframe['share_before'] = np.nan
@@ -413,4 +407,38 @@ def table_experiment():
 
     final_result_df.applymap(lambda x:'{0:.2f}'.format(x) if type(x) != str else x).to_csv('transactions.csv', index=False)
     print()
-table_experiment()
+
+
+stock = pd.read_csv('../input/spy.csv')
+stock['pct_change'] = stock['adjusted_close'].pct_change()
+stock = stock.dropna(axis=0).reset_index(drop=True)
+
+stock = zigzag(stock, on='pct_change', window=15)
+
+dataframe = pd.DataFrame({'price': stock['adjusted_close'].values,
+                          'date': stock['date'].values})
+
+# Buy and Hold strategy
+"""
+dataframe['date'] = dataframe['date'].astype('datetime64[D]')
+dataframe['directive'] = dataframe.apply(label_to_directives, axis=1)
+dataframe['directive'].iloc[-1] = 'sell'  # to sell them all at the end
+dataframe['price'] = dataframe['raw_adjusted_close'].values
+"""
+initial_capital = 100000
+bah_profit = BuySell(capital=initial_capital).buyandhold(dataframe)
+
+# price(t+1) = price(t) * (pct_change(t+1) + 1)
+
+# Our simple strategy
+# Needs 'directive', 'date', 'price'
+dataframe['date'] = dataframe['date'].astype('datetime64[D]')
+dataframe['directive'] = 0
+
+
+dataframe['directive'][stock['label'] == 'bot'] = 'buy'
+dataframe['directive'][stock['label'] == 'top'] = 'sell'
+dataframe['directive'][stock['label'] == 'mid'] = 'hold'
+dataframe['name'] = 'spy'
+buysell_df, transactions = BuySell(capital=initial_capital).process(dataframe)
+print()
