@@ -35,8 +35,8 @@ class Estimator:
 
 
         # ============== FIT - PREDICT - VALIDATE METHODS ====================
-        self._train_on_batch = partial(self._on_batch, train=True)
-        self._validate_on_batch = partial(self._on_batch, train=False)
+        self.train_on_batch = partial(self._on_batch, train=True)
+        self.validate = partial(self._on_batch, train=False)
 
 
         # Predict given xs at once
@@ -47,7 +47,7 @@ class Estimator:
 
         # Validate given xs and ys at once - same as _validate_on_batch
         # todo: make validation work on dataloader.
-        self.validate = self._validate_on_batch
+
 
     def _on_dataloader(self, dataloader, train):
         """Never call this function directly!"""
