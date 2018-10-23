@@ -4,8 +4,90 @@ from torch.autograd import Variable
 import torch.nn.init as init
 import os
 import matplotlib.pyplot as plt
+import numpy as np
+import torch.nn.functional as F
+from functools import partial
+from torch import optim
+from tensorboardX import SummaryWriter
 
-class GenericModel():
+import config
+
+class GenericModel(nn.Module):
+
+    def __init__(self):
+        nn.Module.__init__(self)
+
+
+
+        # ============== FIT - PREDICT - VALIDATE METHODS ====================
+        self.train_on_batch = partial(self._on_batch, train=True)
+        self.validate_on_batch = partial(self._on_batch, train=False)
+
+
+        # Predict given xs at once
+        self.predict = partial(self._on_batch, ys=None, train=False)
+
+        # Fit model for given dataloader xs and ys
+        self.fit = partial(self._on_dataloader, train=True)
+        self.validate = partial(self._on_dataloader, train=False)
+
+    def _on_dataloader(self, dataloader, train):
+        """Never call this function directly!"""
+
+        losses = np.array([])
+        for step, (xs, ys) in enumerate(dataloader):
+            xs = Variable(xs.float(), requires_grad=False)
+            ys = Variable(ys.float(), requires_grad=False)
+
+            if train:
+                output,loss = self.train_on_batch(xs, ys)
+            else:
+                output,loss = self.validate_on_batch(xs, ys)
+
+            losses = np.append(losses, loss.item())
+
+        return losses.mean()
+
+    def _on_batch(self, xs, ys, train):
+        """Never call this function directly!"""
+        # if this call for validation or test, change model mode to evaluation
+        # this is necessary because dropout and batch normalization should behave differently on evaluation mode
+        if not train:
+            self.eval()
+
+        self.optimizer.zero_grad()  # pytorch accumulates gradients.
+
+        xs = xs.to(self.device)
+        # forward
+        output = self.forward(xs)
+        loss = None
+
+        if ys is not None:
+            ys = ys.to(self.device)
+
+            # loss
+            if isinstance(self.criterion, nn.NLLLoss):
+                ys = ys.long()
+            loss = self.criterion(output, ys)
+
+            if train:
+
+                # backward
+                loss.backward(retain_graph=True)
+                #optimize
+                self.optimizer.step()
+
+        # detach first hiddens of previous iteration
+        if isinstance(self, LSTM):
+            self.detach()
+
+        # if this call for validation or test, model mode has changed to eval before,
+        # now we need to revert this behaviour
+        if not train:
+            self.train()
+
+        return output, loss
+
 
     def to_onnx(self, directory):
         # todo: below line not working right now. so check:
@@ -33,7 +115,6 @@ class GenericModel():
         _recursive_get_layers(network=self)  # start with whole network
 
         return layers
-
 
     def weight_bias_name(self):
         "Generator for weight, bias, name"
@@ -64,7 +145,6 @@ class GenericModel():
 
                 yield weight, bias, name
 
-
     def visualize_weights(self):
         # todo: delete 3,4 and make this method generic
 
@@ -94,12 +174,56 @@ class GenericModel():
 
         return f
 
-class LSTM(nn.Module, GenericModel):
+class CNN(GenericModel):
+    def __init__(self, config):
+
+        # todo: add params to CNN
+        GenericModel.__init__(self)
+        self.device = config.DEVICE
+
+
+        self.conv1 = nn.Conv2d(in_channels=config.INPUT_SIZE, out_channels=10,
+                               kernel_size=5, stride=1,
+                               padding=0, dilation=1, groups=1, bias=True)
+        self.conv2 = nn.Conv2d(in_channels=10, out_channels=20,
+                               kernel_size=5, stride=1,
+                               padding=0, dilation=1, groups=1, bias=True)
+
+        self.conv2_drop = nn.Dropout2d()
+        self.fc1 = nn.Linear(320, 50)
+        self.fc2 = nn.Linear(50, config.OUTPUT_SIZE)
+
+        self.criterion = nn.NLLLoss()
+        self.optimizer = optim.Adam(self.parameters(), 0.005)
+
+    def forward(self, x):
+        x = F.relu(F.max_pool2d(self.conv1(x), kernel_size=2))
+        x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), kernel_size=2))
+        x = x.view(-1, 320)
+        x = F.relu(self.fc1(x))
+        x = F.dropout(x, training=self.training)
+        x = self.fc2(x)
+        return F.log_softmax(x, dim=1)
+
+    def dummy_input(self):
+        return Variable(torch.rand(100, 1, 28, 28)).to('cuda')
+
+
+def class_by_name(name):
+    if name == "CNN":
+        return CNN
+
+    if name == "LSTM":
+        return LSTM
+
+
+
+class LSTM(GenericModel):
     """
     """
 
     def __init__(self, input_size, seq_length, num_layers, out_size, hidden_size, batch_size, device):
-        nn.Module.__init__(self)
+        GenericModel.__init__(self)
 
         self.input_size = input_size
         self.seq_length = seq_length
@@ -206,11 +330,5 @@ class LSTM(nn.Module, GenericModel):
 
 
 if __name__ == "__main__":
-    model = LSTM(input_size=4,
-                 seq_length=256,
-                 num_layers=1,
-                 out_size=1,
-                 batch_size=2,
-                 use_cuda=True).cpu()
-    # Test
-    print(torch_summarize(model))
+    pass
+

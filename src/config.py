@@ -1,85 +1,65 @@
-"""
-Ugur Gudelek
-config
-ugurgudelek
-08-Mar-18
-finance-cnn
-"""
-
-# todo: make config an external txt file
+import os
 import torch
+import time
 
+class ConfigLSTM:
+    pass
 
-class Config:
+class ConfigCNN:
     """
-
     """
 
     def __init__(self):
         """
-
         """
+        # Aux params
         self.RANDOM_SEED = 42
+
+        # Model params
         self.MODEL_NAME = 'CNN'
-        self.EPOCH_SIZE = 20
-        self.INPUT_SIZE = 28
-        self.OUTPUT_SIZE = 3  # down, steady, up
+        self.INPUT_SIZE = 1
+        self.OUTPUT_SIZE = 10
 
-        self.STOCK_NAMES = ['dia']
-        self.SAVE_DATASET = True
-        self.LABEL_WINDOW = 7
-
-        self.TRAIN_VALID_RATIO = 0.90
-        self.TRAIN_BATCH_SIZE = 64
-        self.VALID_BATCH_SIZE = 1
+        # Dataloader params
         self.TRAIN_SHUFFLE = True
         self.VALID_SHUFFLE = False
+        self.TRAIN_BATCH_SIZE = 100
+        self.VALID_BATCH_SIZE = 100
 
-        self.DATASET_NAME = 'IndicatorDataset'
-        self.INPUT_PATH = '../dataset/finance/stocks/stocks.csv'
+        # Dataset params
+        self.TRAIN_VALID_RATIO = 0.90
+        self.DATASET_NAME = 'MNISTDataset'
 
-        self.EXPERIMENT_DIR = '../experiment/finance_cnn_exp1_dia_only'
+        # Experiment params
+        self.EPOCH_SIZE = 100
+        self.EXPERIMENT_DIR = '../experiment/{}/{}'.format(self.DATASET_NAME ,str(int(time.time())))
 
-        self.DATASET_ARGS = {'dataset_name': self.DATASET_NAME,
-                             'train_valid_ratio': self.TRAIN_VALID_RATIO,
-                             'input_path': self.INPUT_PATH,
-                             'stock_names': self.STOCK_NAMES,
-                             'save_dataset':self.SAVE_DATASET,
-                             'label_window': self.LABEL_WINDOW}
-
-        self.MODEL_ARGS = {'model_name':self.MODEL_NAME,
-                           'input_size': self.INPUT_SIZE,
-                           'out_size': self.OUTPUT_SIZE,
-                           'batch_size': self.TRAIN_BATCH_SIZE
-                           }
-
-        self.CRITERION_ARGS = {'criterion_name': 'MSE'}
-        self.OPTIMIZER_ARGS = {'optimizer_name': 'Adam',
-                               'lr': 0.0005}
-
-        self.DATALOADER_ARGS = {'train_batch_size': self.TRAIN_BATCH_SIZE,
-                                'train_shuffle': self.TRAIN_SHUFFLE,
-                                'valid_batch_size': self.VALID_BATCH_SIZE,
-                                'valid_shuffle': self.VALID_SHUFFLE
-                                }
-
-
-        self.STORAGE_NAMES = ['y_hat', 'loss', 'y']
-
-        self.RESUME = False
-
+        # Device params
         self.USE_CUDA = torch.cuda.is_available()
         if self.USE_CUDA:
             if torch.cuda.get_device_name(0) == 'GeForce GT 650M':
                 self.USE_CUDA = False
                 print('USE_CUDA is set to False because this GPU is too old.')
-        # self.USE_CUDA = False
+
+        if self.USE_CUDA:
+            self.DEVICE = 'cuda'
+        else:
+            self.DEVICE = 'cpu'
+
         print('CUDA AVAILABLE:{}'.format(self.USE_CUDA))
 
-    def set_dataset_args(self):
-        self.DATASET_ARGS = {'dataset_name': self.DATASET_NAME,
-                         'train_valid_ratio': self.TRAIN_VALID_RATIO,
-                         'input_path': self.INPUT_PATH,
-                         'stock_names': self.STOCK_NAMES,
-                         'save_dataset': self.SAVE_DATASET,
-                             'label_window': self.LABEL_WINDOW}
+    def __str__(self):
+        string = ''
+        for attr_key, attr_val in self.__dict__.items():
+            string += attr_key
+            string += '='
+            string += str(attr_val)
+            string += '\n'
+        return string
+
+    def save(self):
+        os.makedirs(self.EXPERIMENT_DIR, exist_ok=True)
+        path = os.path.join(self.EXPERIMENT_DIR, 'config.ini')
+
+        with open(path, 'w') as file:
+            file.write(self.__str__())

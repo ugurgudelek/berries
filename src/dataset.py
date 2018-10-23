@@ -21,6 +21,37 @@ from scipy import spatial
 
 import matplotlib.pyplot as plt
 
+from torchvision import datasets, transforms
+
+def dataset_by_name(name):
+    if name == "MNISTDataset":
+        return MNISTDataset
+
+class MNISTDataset():
+    def __init__(self, config):
+
+        self.train_dataset = datasets.MNIST('../dataset', train=True, download=True,
+                                            transform=transforms.Compose([
+                                                transforms.ToTensor(),
+                                                transforms.Normalize((0.1307,), (0.3081,))
+                                            ])
+                                            )
+        self.valid_dataset = datasets.MNIST('../dataset', train=False, download=True,
+                                            transform=transforms.Compose([
+                                                transforms.ToTensor(),
+                                                transforms.Normalize((0.1307,), (0.3081,))
+                                            ])
+                                            )
+        # todo: check for transformation later
+
+
+    def random_sample(self, n):
+        perm = np.random.randint(0, self.train_dataset.__len__(), size=n)
+        data = self.train_dataset.train_data.numpy()[perm]
+        labels = self.train_dataset.train_labels.numpy()[perm]
+
+        return torch.Tensor(data).unsqueeze(dim=1), labels
+
 class InnerIndicatorDataset(torch.utils.data.Dataset):
     """
 
