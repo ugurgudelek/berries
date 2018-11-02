@@ -12,7 +12,7 @@ import numpy as np
 from talib import RSI, SMA, MACD, WILLR, ULTOSC, MFI, STOCH
 
 import plots
-
+import utils
 import os
 import warnings
 from sklearn import preprocessing
@@ -23,9 +23,171 @@ import matplotlib.pyplot as plt
 
 from torchvision import datasets, transforms
 
-def dataset_by_name(name):
-    if name == "MNISTDataset":
-        return MNISTDataset
+from sklearn.preprocessing import OneHotEncoder
+
+from functools import partial
+from itertools import cycle
+
+class GenericDataset():
+
+
+
+    def random_train_sample(self, n):
+        return GenericDataset._random_sample(self.train_dataset, n)
+
+    def random_valid_sample(self, n):
+        return GenericDataset._random_sample(self.valid_dataset, n)
+
+    @staticmethod
+    def _random_sample(dataset, n):
+        perm = np.random.randint(0, dataset.__len__(), size=n)
+        data = dataset.data.numpy()[perm]
+        labels = dataset.labels.numpy()[perm]
+
+        return torch.Tensor(data).unsqueeze(dim=1), torch.Tensor(labels).long()
+
+"""
+1. Sequence Learning Problem
+2. Value Memorization
+3. Echo Random Integer
+4. Echo Random Subsequences
+5. Sequence Classification
+"""
+
+
+class SequenceLearningOneToOne(GenericDataset):
+
+    def __init__(self):
+        dataset = np.array(list(np.arange(0, 10, 1))*10)
+
+        self.train_dataset = self.Inner(dataset=dataset)
+        self.valid_dataset = self.Inner(dataset=dataset)
+
+    class Inner(torch.utils.data.Dataset):
+        def __init__(self, dataset):
+            X = dataset[:-1].reshape(-1,1)
+            y = dataset[1:]
+            self.encode = OneHotEncoder(sparse=False)
+            X = self.encode.fit_transform(X)
+            # self.y = self.encode.transform(self.y)
+
+            # norm_dataset = (dataset - dataset.min())/(dataset.max() - dataset.min())
+            # self.dataset = norm_dataset
+
+
+            self.data = torch.FloatTensor(X).unsqueeze(dim=1)
+            self.labels = torch.LongTensor(y)
+
+
+
+        def __len__(self):
+            return self.data.__len__()
+
+        def __getitem__(self, ix):
+            return self.data[ix, :], self.labels[ix]
+
+
+
+
+class SequenceLearningManyToOne(GenericDataset):
+    def __init__(self, seq_len=3, dataset_len=100, onehot=False):
+        # todo : add seq_range
+
+        seq7s = list()
+        while(True):
+            seq7 = list()
+            rnd = np.random.randint(0, seq_len)
+            sequence = cycle(np.arange(0, seq_len, 1))
+            for i in range(seq_len):
+                digit = next(sequence)
+                seq7.append(digit)
+            seq7s.append(seq7)
+
+            if len(seq7s) == dataset_len:
+                break
+
+        dataset = np.array(seq7s)
+        np.random.shuffle(dataset)
+        self.encode = OneHotEncoder(sparse=False)
+        dataset = self.encode.fit_transform(dataset.T).T
+
+        self.train_dataset = self.Inner(dataset=dataset, seq_len=seq_len)
+        self.valid_dataset = self.Inner(dataset=dataset, seq_len=seq_len)
+
+    class Inner(torch.utils.data.Dataset, GenericDataset):
+        def __init__(self, dataset, seq_len):
+            # self.encode = OneHotEncoder(sparse=False)
+            # X = self.encode.fit_transform(X)
+            # self.y = self.encode.transform(self.y)
+
+            # norm_dataset = (dataset - dataset.min())/(dataset.max() - dataset.min())
+            # self.dataset = norm_dataset
+
+            X = dataset[:, :].astype(np.float32)
+            y = (dataset[:, -1] + 1).__mod__(seq_len).astype(np.float32)
+
+            self.data = torch.FloatTensor(X).unsqueeze(dim=1)
+            self.labels = torch.LongTensor(y)
+
+
+
+
+
+        def __len__(self):
+            return self.data.__len__()
+
+        def __getitem__(self, ix):
+            return self.data[ix, :], self.labels[ix]
+
+
+
+
+
+
+
+
+
+class ValueMemorizationOneToOne:
+    def __init__(self):
+        dataset = np.random.randn(100)
+        self.X = dataset[:-1]
+        self.y = dataset[1:]
+
+    def __getitem__(self, ix):
+        return self.X[ix], self.y[ix]
+
+    def __len__(self):
+        return self.X.__len__()
+
+    def random_sample(self):
+        ix = np.random.randint(self.__len__())
+        return self.__getitem__(ix)
+class ValueMemorizationManyToOne:
+    def __init__(self):
+        pass
+    def __getitem__(self, ix):
+        pass
+    def __len__(self):
+        pass
+class EchoRandomInteger:
+    def __init__(self, lag=0):
+        self.lag = lag
+    def __getitem__(self, ix):
+        sequence = np.random.randn(10)
+        return sequence, sequence[sequence.__len__()-self.lag-1]
+    def __len__(self):
+        return 100
+
+class EchoRandomSubsequences:
+    def __init__(self, lag=0):
+        self.lag = lag
+
+    def __getitem__(self, ix):
+        sequence = np.random.randn(10)
+        return sequence, sequence[sequence.__len__() - self.lag - 1]
+
+    def __len__(self):
+        return 100
 
 class MNISTDataset():
     def __init__(self, config):
@@ -50,113 +212,7 @@ class MNISTDataset():
         data = self.train_dataset.train_data.numpy()[perm]
         labels = self.train_dataset.train_labels.numpy()[perm]
 
-        return torch.Tensor(data).unsqueeze(dim=1), labels
-
-class InnerIndicatorDataset(torch.utils.data.Dataset):
-    """
-
-    Args:
-        dataset(pd.DataFrame):
-    """
-
-    def __init__(self, dataset, seq_len, problem_type):
-        self.dataset = dataset
-
-        self.X = self.dataset.drop(['date', 'name', 'open', 'high', 'low', 'close',
-                                    'label', 'raw_adjusted_close'], axis=1)
-
-        self.y = self.dataset[['label']]
-
-        if problem_type=='classification':
-            # turn categorical to one hot encoding
-            self.y = pd.get_dummies(self.y)
-
-        self.name = self.dataset[['name']]
-
-        self.feature_dim = self.X.shape[1]
-        self.output_dim = self.y.shape[1]
-        self.data_dim = self.X.shape[0]
-        self.seq_len = seq_len
-
-        # self._X = self.X.values.reshape(-1, self.feature_dim, self.seq_len)
-        # self._y = self.y.values.reshape(-1, self.output_dim, self.seq_len)
-
-
-        self.transform = transforms.Compose([transforms.ToTensor()])
-
-    def __len__(self):
-        return self.dataset.shape[0] - self.seq_len
-
-    def __getitem__(self, ix):
-        X = self.X.iloc[ix: ix + self.seq_len, :]
-        y = self.y.iloc[ix + self.seq_len - 1, :]
-
-        name = self.dataset['name'].iloc[ix: ix + self.seq_len - 1]
-        date = self.dataset['date'].iloc[ix: ix + self.seq_len - 1]
-        extra_info = {'name': name, 'date': date}
-
-        # change type to numpy
-        X = X.values.astype(float)
-        y = y.values.astype(float)
-
-        X = np.expand_dims(X, axis=0)
-
-        return X, y, extra_info
-
-    def get_all_data(self, transforms=None):
-        xs, ys, _ = self.__getitem__(0)
-        for ix in range(1,self.__len__()):
-            X, y, info = self.__getitem__(ix)
-            xs = np.append(xs, X, axis=0)
-            ys = np.append(ys, y, axis=0)
-
-
-        # tranform
-        # example:
-        # transforms=[FloatTensor, Variable])
-        # xs = Variable(FloatTensor(xs))
-        if transforms is not None:
-            for transform in transforms:
-                xs, ys = transform(xs), transform(ys)
-
-        return xs.unsqueeze_(-1), ys.unsqueeze_(-1)
-
-    def _reshape(self, data):
-        # (in_channels, width, height)
-        return data.reshape((1, data.shape[0], data.shape[1]))
-
-    def get_sample(self):
-        ix = np.random.randint(low=0, high=self.__len__())
-        return ix, self.__getitem__(ix=ix)
-
-
-class IndicatorStandardizer:
-    def __init__(self):
-        self.means = defaultdict(dict)
-        self.stds = defaultdict(dict)
-
-    def apply_standardization(self, series, stock_name, kind):
-        stock_name = stock_name
-        series_name = series.name
-
-        first_idx = series.index[0]
-        if isinstance(series[first_idx], float) or isinstance(series[first_idx], np.integer):
-            if kind == 'train':
-                mu = series.mean()
-                sigma = series.std()
-                # save
-                self.means[stock_name][series_name] = series.mean()
-                self.stds[stock_name][series_name] = series.std()
-
-            elif kind == 'validation':
-                mu = self.means[stock_name][series_name]
-                sigma = self.stds[stock_name][series_name]
-
-            else:
-                raise Exception('Invalid Type. Only train and validation allowed')
-
-        return (series - mu) / sigma
-
+        return torch.Tensor(data).unsqueeze(dim=1), torch.Tensor(labels).long()
 
 class IndicatorDataset():
     """
@@ -172,7 +228,7 @@ class IndicatorDataset():
         self.seq_len = seq_len
         self.label_type = label_type
 
-        self.standardizer = IndicatorStandardizer()
+        self.standardizer = IndicatorDataset.IndicatorStandardizer()
 
         raw_dataset = pd.read_csv(input_path)
         raw_dataset['name'] = 'spy'
@@ -205,8 +261,8 @@ class IndicatorDataset():
                 os.path.join('/'.join(input_path.split('/')[:-1]), 'valid_preprocessed_indicator_dataset.csv'),
                 index=False)
 
-        self.train_dataset = InnerIndicatorDataset(dataset=self.preprocessed_train_dataset, seq_len=self.seq_len, problem_type=self.label_type)
-        self.valid_dataset = InnerIndicatorDataset(dataset=self.preprocessed_valid_dataset, seq_len=self.seq_len, problem_type=self.label_type)
+        self.train_dataset = IndicatorDataset.InnerIndicatorDataset(dataset=self.preprocessed_train_dataset, seq_len=self.seq_len, problem_type=self.label_type)
+        self.valid_dataset = IndicatorDataset.InnerIndicatorDataset(dataset=self.preprocessed_valid_dataset, seq_len=self.seq_len, problem_type=self.label_type)
         print()
 
     def preprocess_dataset(self, dataset, kind='train', label_type='classification'):
@@ -596,6 +652,107 @@ class IndicatorDataset():
 
         return dataframe
 
+    class InnerIndicatorDataset(torch.utils.data.Dataset):
+        """
+
+        Args:
+            dataset(pd.DataFrame):
+        """
+
+        def __init__(self, dataset, seq_len, problem_type):
+            self.dataset = dataset
+
+            self.X = self.dataset.drop(['date', 'name', 'open', 'high', 'low', 'close',
+                                        'label', 'raw_adjusted_close'], axis=1)
+
+            self.y = self.dataset[['label']]
+
+            if problem_type == 'classification':
+                # turn categorical to one hot encoding
+                self.y = pd.get_dummies(self.y)
+
+            self.name = self.dataset[['name']]
+
+            self.feature_dim = self.X.shape[1]
+            self.output_dim = self.y.shape[1]
+            self.data_dim = self.X.shape[0]
+            self.seq_len = seq_len
+
+            # self._X = self.X.values.reshape(-1, self.feature_dim, self.seq_len)
+            # self._y = self.y.values.reshape(-1, self.output_dim, self.seq_len)
+
+            self.transform = transforms.Compose([transforms.ToTensor()])
+
+        def __len__(self):
+            return self.dataset.shape[0] - self.seq_len
+
+        def __getitem__(self, ix):
+            X = self.X.iloc[ix: ix + self.seq_len, :]
+            y = self.y.iloc[ix + self.seq_len - 1, :]
+
+            name = self.dataset['name'].iloc[ix: ix + self.seq_len - 1]
+            date = self.dataset['date'].iloc[ix: ix + self.seq_len - 1]
+            extra_info = {'name': name, 'date': date}
+
+            # change type to numpy
+            X = X.values.astype(float)
+            y = y.values.astype(float)
+
+            X = np.expand_dims(X, axis=0)
+
+            return X, y, extra_info
+
+        def get_all_data(self, transforms=None):
+            xs, ys, _ = self.__getitem__(0)
+            for ix in range(1, self.__len__()):
+                X, y, info = self.__getitem__(ix)
+                xs = np.append(xs, X, axis=0)
+                ys = np.append(ys, y, axis=0)
+
+            # tranform
+            # example:
+            # transforms=[FloatTensor, Variable])
+            # xs = Variable(FloatTensor(xs))
+            if transforms is not None:
+                for transform in transforms:
+                    xs, ys = transform(xs), transform(ys)
+
+            return xs.unsqueeze_(-1), ys.unsqueeze_(-1)
+
+        def _reshape(self, data):
+            # (in_channels, width, height)
+            return data.reshape((1, data.shape[0], data.shape[1]))
+
+        def get_sample(self):
+            ix = np.random.randint(low=0, high=self.__len__())
+            return ix, self.__getitem__(ix=ix)
+
+    class IndicatorStandardizer:
+        def __init__(self):
+            self.means = defaultdict(dict)
+            self.stds = defaultdict(dict)
+
+        def apply_standardization(self, series, stock_name, kind):
+            stock_name = stock_name
+            series_name = series.name
+
+            first_idx = series.index[0]
+            if isinstance(series[first_idx], float) or isinstance(series[first_idx], np.integer):
+                if kind == 'train':
+                    mu = series.mean()
+                    sigma = series.std()
+                    # save
+                    self.means[stock_name][series_name] = series.mean()
+                    self.stds[stock_name][series_name] = series.std()
+
+                elif kind == 'validation':
+                    mu = self.means[stock_name][series_name]
+                    sigma = self.stds[stock_name][series_name]
+
+                else:
+                    raise Exception('Invalid Type. Only train and validation allowed')
+
+            return (series - mu) / sigma
 
 class LoadDataset():
     def __init__(self, csv_path, train_valid_ratio=0.9, train_day=None, valid_day=None, seq_length=96) -> None:
@@ -686,8 +843,8 @@ class LoadDataset():
         raw_train_dataset = self.raw_dataset.iloc[:train_len, :]
         raw_valid_dataset = self.raw_dataset.iloc[train_len:train_len + valid_len, :]
 
-        self.train_dataset = InnerLoadDataset(train_values, seq_length=seq_length, raw_dataset=raw_train_dataset)
-        self.valid_dataset = InnerLoadDataset(valid_values, seq_length=seq_length, raw_dataset=raw_valid_dataset)
+        self.train_dataset = LoadDataset.InnerLoadDataset(train_values, seq_length=seq_length, raw_dataset=raw_train_dataset)
+        self.valid_dataset = LoadDataset.InnerLoadDataset(valid_values, seq_length=seq_length, raw_dataset=raw_valid_dataset)
 
     def get_raw_valid_dataset(self):
         return self.raw_dataset[self.train_len:self.train_len + self.valid_len]
@@ -725,78 +882,69 @@ class LoadDataset():
 
         return arr * (max_term - min_term) + min_term
 
-
-class InnerLoadDataset(torch.utils.data.Dataset):
-    """
-
-        Args:
-            seq_length:
-        Attributes:
-            dataset:
-            X:
-            y:
-    """
-
-    def __init__(self, dataset, seq_length, raw_dataset, shuffle=True):
-        # normalize data. otherwise criterion cannot calculate loss
-        self.dataset = dataset
-        self.raw_dataset = raw_dataset
-        # split data wrt period
-        # e.g. period = 96 -> (day_size, quarter_in_day)
-
-        self.seq_length = seq_length
-
-        # TODO: add shuffling later.
-        # if shuffle:
-        #     np.random.shuffle(self.dataset)
-
-        # rearrange X and targets
-        # X = (d1,d2,d3...dn-1)
-        # y = (d2,d3,d4...dn)
-
-        # self.y = self.dataset[1:, :, 0]
-        # self.X = self.dataset[:-1, :, :]
-
-        self.y = self.dataset[1:, 0]
-        self.X = self.dataset[:-1, :]
-
-    def get_sample(self):
-        ix = np.random.randint(low=0, high=self.__len__())
-        return ix, self.__getitem__(ix=ix)
-
-    def get_attributes(self, ix):
-        return self.raw_dataset.iloc[ix:ix + self.seq_length, :]
-
-    def __len__(self):
+    class InnerLoadDataset(torch.utils.data.Dataset):
         """
 
-        Returns:
-            int: data count
-
+            Args:
+                seq_length:
+            Attributes:
+                dataset:
+                X:
+                y:
         """
-        return self.X.shape[0] - self.seq_length * 2
 
-    def __getitem__(self, ix):
-        """
+        def __init__(self, dataset, seq_length, raw_dataset, shuffle=True):
+            # normalize data. otherwise criterion cannot calculate loss
+            self.dataset = dataset
+            self.raw_dataset = raw_dataset
+            # split data wrt period
+            # e.g. period = 96 -> (day_size, quarter_in_day)
 
-        Args:
-            ix:
+            self.seq_length = seq_length
 
-        Returns:
-            (np.ndarray, np.ndarray):
+            # TODO: add shuffling later.
+            # if shuffle:
+            #     np.random.shuffle(self.dataset)
 
-        """
-        # (row, seq_len, input_size)
-        # return self.X[ix, :, :], self.y[ix, :]
-        return self.X[ix:ix + self.seq_length, :], self.y[ix + self.seq_length - 1: ix + self.seq_length * 2 - 1]
+            # rearrange X and targets
+            # X = (d1,d2,d3...dn-1)
+            # y = (d2,d3,d4...dn)
 
+            # self.y = self.dataset[1:, :, 0]
+            # self.X = self.dataset[:-1, :, :]
 
-def get_dataset_cls_from_name(name):
-    if name == 'IndicatorDataset':
-        return IndicatorDataset
+            self.y = self.dataset[1:, 0]
+            self.X = self.dataset[:-1, :]
 
-    if name == 'LoadDataset':
-        return LoadDataset
+        def get_sample(self):
+            ix = np.random.randint(low=0, high=self.__len__())
+            return ix, self.__getitem__(ix=ix)
+
+        def get_attributes(self, ix):
+            return self.raw_dataset.iloc[ix:ix + self.seq_length, :]
+
+        def __len__(self):
+            """
+
+            Returns:
+                int: data count
+
+            """
+            return self.X.shape[0] - self.seq_length * 2
+
+        def __getitem__(self, ix):
+            """
+
+            Args:
+                ix:
+
+            Returns:
+                (np.ndarray, np.ndarray):
+
+            """
+            # (row, seq_len, input_size)
+            # return self.X[ix, :, :], self.y[ix, :]
+            return self.X[ix:ix + self.seq_length, :], self.y[ix + self.seq_length - 1: ix + self.seq_length * 2 - 1]
 
 
 if __name__ == "__main__":

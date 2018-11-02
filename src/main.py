@@ -77,9 +77,9 @@ class Config:
         self.VALID_SHUFFLE = False
 
         self.DATASET_NAME = 'IndicatorDataset'
-        self.INPUT_PATH = '../input/xlf.csv'
+        self.INPUT_PATH = '../dataset/finance/xlf.csv'
 
-        self.EXPERIMENT_DIR = '../experiment/xlf_' + str(int(time.time()))
+        self.EXPERIMENT_DIR = '../experiment/xlf_test_' + str(int(time.time()))
 
         self.USE_CUDA = torch.cuda.is_available()
         if self.USE_CUDA:

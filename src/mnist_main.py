@@ -1,6 +1,4 @@
 
-from model import class_by_name
-from dataset import dataset_by_name
 import config
 import torch
 from torch import nn
@@ -22,7 +20,8 @@ from sklearn.metrics import f1_score, confusion_matrix
 import os
 import torchvision
 
-
+import model
+import dataset
 
 # todo: add pr_cruve
 # todo: add confusion_matrix
@@ -32,17 +31,19 @@ import torchvision
 
 class Experiment:
 
-    def __init__(self, config):
+    def __init__(self, config, model ,dataset):
         self.config = config
+        self.model = model.to(self.config.DEVICE)
+        self.dataset = dataset
 
         self.load()
-        self.save()
+        # self.save()
 
 
 
     def load(self):
 
-        self.dataset = dataset_by_name(self.config.DATASET_NAME)(config=self.config)  # MNISTDataset, IndicatorDataset, LoadDataset
+        #self.dataset = dataset_by_name(self.config.DATASET_NAME)(config=self.config)  # MNISTDataset, IndicatorDataset, LoadDataset
 
         self.train_dataloader = DataLoader(self.dataset.train_dataset,
                                       batch_size=self.config.TRAIN_BATCH_SIZE,
@@ -53,8 +54,8 @@ class Experiment:
                                       shuffle=self.config.VALID_SHUFFLE,
                                       drop_last=True)
 
-        MODEL = class_by_name(self.config.MODEL_NAME)  # CNN, LSTM
-        self.model = MODEL(config=self.config).to(self.config.DEVICE)
+        #MODEL = class_by_name(self.config.MODEL_NAME)  # CNN, LSTM
+        #self.model = MODEL(config=self.config).to(self.config.DEVICE)
 
         self.writer = SummaryWriter(log_dir=os.path.join(self.config.EXPERIMENT_DIR, 'summary'))
 
@@ -65,25 +66,47 @@ class Experiment:
 
     def run_epoch(self, epoch):
 
-        # Fit the model
-        training_loss = self.model.fit(dataloader=self.train_dataloader).item()
+        for step, (X, y) in enumerate(self.train_dataloader):
+            # Fit the model
+            self.model.fit(X, y)
+            training_loss = self.model.training_loss
 
-        # Validate validation set
-        validation_loss = self.model.validate(dataloader=self.valid_dataloader).item()
+        score = 0.
+        for step, (X, y) in enumerate(self.valid_dataloader):
 
+            # Validate validation set
+            self.model.validate(X, y) # todo: current build call .validate when .score is used!
+
+            # Score
+            score += self.model.score(X, y)
+            validation_loss = self.model.validation_loss
+
+        score = score/self.valid_dataloader.__len__()
         # Predict
-        images, labels = self.dataset.random_sample(n=16)
-        prediction_logprob = self.model.predict(xs=images)[0].cpu().detach()
-        predicted_labels = prediction_logprob.max(1, keepdim=True)[1].numpy().flatten()
+        X_sample, y_sample = self.dataset.random_train_sample(n=100)
+        predicted_labels = self.model.predict(X_sample).cpu().detach()
+        # predicted_labels = prediction_logprob
+
+
+
+        # Log
+        print("========================================")
+        print("Training Loss: {}".format(training_loss))
+        print("Validation Loss: {}".format(validation_loss))
+        print("Score: {}".format(score))
+
+        print('Actual label:', y_sample[:5])
+        print('Predicted label:', predicted_labels[:5])
+        print("========================================")
 
         # Write losses to the tensorboard
         self.writer.add_scalar('training_loss', training_loss, epoch)
         self.writer.add_scalar('validation_loss', validation_loss, epoch)
 
         # Write random image to the summary writer.
-        image_grid = torchvision.utils.make_grid(images, normalize=True, scale_each=True)
+        image_grid = torchvision.utils.make_grid(X_sample, normalize=True, scale_each=True)
         self.writer.add_image(tag="RandomSample y-{} yhat{}".format(
-            '.'.join(map(str, labels)), '.'.join(map(str, predicted_labels))),
+            '.'.join(map(str, y_sample)), '.'.join(map(str, predicted_labels))),
                               img_tensor=image_grid, global_step=epoch)
 
 
@@ -100,14 +123,19 @@ class Experiment:
         # plt.show()
         # needs tensorboard 0.4RC or later
 
+        return training_loss, validation_loss
+
 
     def run(self):
         epoch = 0
-        with trange(epoch, self.config.EPOCH_SIZE) as t:
-            for epoch in t:
-                self.run_epoch(epoch=epoch)
+        with tqdm(total=self.config.EPOCH_SIZE) as pbar:
 
-        self.writer.export_scalars_to_json(self.config.EXPERIMENT_DIR)
+            for epoch in range(self.config.EPOCH_SIZE):
+                tloss,vloss = self.run_epoch(epoch=epoch)
+                pbar.set_description("{}||||{}".format(tloss, vloss))
+                pbar.update(1)
+
+        self.writer.export_scalars_to_json(self.config.EXPERIMENT_DIR+'.json')
 
 
 
@@ -122,6 +150,22 @@ if __name__ == "__main__":
     4. Pass config to experiment
     5. Run
     """
-    experiment = Experiment(config=config.ConfigCNN())
+    config = config.ConfigLSTM()
+    # config.save()
+    # dataset = dataset.MNISTDataset(config)
+
+    # dataset = dataset.SequenceLearningOneToOne()
+    # model = model.LSTM(input_size=10, seq_length=1, num_layers=1,
+    #                    out_size=10, hidden_size=10, batch_size=1, device=config.DEVICE)
+
+
+    dataset = dataset.SequenceLearningManyToOne(seq_len=5, onehot=True)
+    model = model.LSTM(input_size=1, seq_length=5, num_layers=1,
+                       out_size=5, hidden_size=10, batch_size=config.TRAIN_BATCH_SIZE,
+                       device=config.DEVICE)
+
+    # model = model.CNN(config)
+
+    experiment = Experiment(config=config, model=model, dataset=dataset)
     experiment.run()
 

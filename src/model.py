@@ -17,25 +17,29 @@ class GenericModel(nn.Module):
     def __init__(self):
         nn.Module.__init__(self)
 
+        self.training_loss = 0
+        self.validation_loss = 0
 
 
         # ============== FIT - PREDICT - VALIDATE METHODS ====================
-        self.train_on_batch = partial(self._on_batch, train=True)
-        self.validate_on_batch = partial(self._on_batch, train=False)
+        # self.train_on_batch = partial(self._on_batch, train=True)
+        # self.validate_on_batch = partial(self._on_batch, train=False)
 
 
         # Predict given xs at once
-        self.predict = partial(self._on_batch, ys=None, train=False)
+        # self.predict = partial(self._on_batch, ys=None, train=False)
 
         # Fit model for given dataloader xs and ys
-        self.fit = partial(self._on_dataloader, train=True)
-        self.validate = partial(self._on_dataloader, train=False)
+        # self.fit = partial(self._on_dataloader, train=True)
+        # self.validate = partial(self._on_dataloader, train=False)
 
     def _on_dataloader(self, dataloader, train):
         """Never call this function directly!"""
 
         losses = np.array([])
         for step, (xs, ys) in enumerate(dataloader):
+            xs = xs.unsqueeze(dim=1)
+            ys = ys.unsqueeze(dim=1)
             xs = Variable(xs.float(), requires_grad=False)
             ys = Variable(ys.float(), requires_grad=False)
 
@@ -46,7 +50,10 @@ class GenericModel(nn.Module):
 
             losses = np.append(losses, loss.item())
 
-        return losses.mean()
+        if train:
+            self.train_loss = losses.mean()
+        if not train:
+            self.valid_loss = losses.mean()
 
     def _on_batch(self, xs, ys, train):
         """Never call this function directly!"""
@@ -68,7 +75,7 @@ class GenericModel(nn.Module):
             # loss
             if isinstance(self.criterion, nn.NLLLoss):
                 ys = ys.long()
-            loss = self.criterion(output, ys)
+            loss = self.criterion(output, ys.squeeze(dim=1).long())
 
             if train:
 
@@ -174,6 +181,84 @@ class GenericModel(nn.Module):
 
         return f
 
+
+    #  Sklearn type model methods.
+    def fit(self, X, y):
+        # fit(X, y)	Fit the model to data matrix X and target(s) y.
+
+            # xs = xs.unsqueeze(dim=1)
+            # ys = ys.unsqueeze(dim=1)
+            # xs = Variable(xs.float(), requires_grad=False)
+            # ys = Variable(ys.float(), requires_grad=False)
+
+            # if this call for validation or test, change model mode to evaluation
+            # this is necessary because dropout and batch normalization should behave differently on evaluation mode
+            self.optimizer.zero_grad()  # pytorch accumulates gradients.
+
+            # xs = xs.to(self.device) # todo: do it in dataset class
+
+            # forward
+            outputs = self.forward(X)
+            # loss
+            loss = self.criterion(outputs, y)
+
+            self.current_loss = loss
+
+            # backward
+            if loss._grad_fn is not None:  # means we are in training mode
+                loss.backward(retain_graph=True)
+                # optimize
+                self.optimizer.step()
+                self.training_loss = self.current_loss
+
+
+
+            # detach first hiddens of previous iteration
+            if isinstance(self, LSTM):
+                self.detach()
+
+    def validate(self, X, y):
+        with torch.no_grad():
+            self.fit(X, y)
+            self.validation_loss = self.current_loss
+
+    def predict(self, X):
+        # predict(X)	Predict using the multi-layer perceptron classifier
+        with torch.no_grad():
+            outputs = self.forward(X)
+            _, predicted = torch.max(outputs.data, 1)
+            return predicted
+
+
+
+    def score(self, X, y):
+        # score(X, y[, sample_weight])	Returns the mean accuracy on the given test data and labels.
+
+        predicted = self.predict(X)
+        correct = (predicted == y).sum().item()
+        return correct/y.size()[0]
+
+
+    def predict_log_proba(self, X):
+        # predict_log_proba(X)	Return the log of probability estimates.
+        pass
+    def predict_proba(self, X):
+        # predict_proba(X)	Probability estimates.
+        pass
+
+    def set_params(self, **params):
+        # set_params(**params)	Set the parameters of this estimator.
+        pass
+
+    def get_params(self, deep=None):
+        # get_params([deep])	Get parameters for this estimator.
+        pass
+
+
+
+
+
+
 class CNN(GenericModel):
     def __init__(self, config):
 
@@ -209,14 +294,6 @@ class CNN(GenericModel):
         return Variable(torch.rand(100, 1, 28, 28)).to('cuda')
 
 
-def class_by_name(name):
-    if name == "CNN":
-        return CNN
-
-    if name == "LSTM":
-        return LSTM
-
-
 
 class LSTM(GenericModel):
     """
@@ -250,26 +327,27 @@ class LSTM(GenericModel):
                             num_layers=self.num_layers,
                             bias=True,
                             batch_first=False,
-                            dropout=0.5,
+                            dropout=0,  # 0 means no probability
                             bidirectional=False)
 
         self.fc = nn.Sequential(nn.Linear(in_features=self.hidden_size, out_features=100),
-                                nn.BatchNorm1d(num_features=100),  # todo: test batchnorm
-                                nn.SELU(),  # todo: test RELU vs SELU
+                                # nn.BatchNorm1d(num_features=100),  # todo: test batchnorm
+                                nn.ReLU(),  # todo: test ReLU vs SELU
                                 nn.Linear(in_features=100, out_features=100),
-                                nn.BatchNorm1d(num_features=100),
-                                nn.SELU(),
+                                # nn.BatchNorm1d(num_features=100),
+                                nn.ReLU(),
                                 nn.Linear(in_features=100, out_features=10),
-                                nn.BatchNorm1d(num_features=10),
-                                nn.SELU(),
+                                # nn.BatchNorm1d(num_features=10),
+                                nn.ReLU(),
                                 nn.Linear(in_features=10, out_features=self.out_size))
-
-        # self.softmax = nn.Softmax(dim=1)
 
         self.hidden = None
 
         # todo: I have found that initialization destroys the learning process. Think why and fixit.
         # self.initialize()
+
+        self.criterion = nn.NLLLoss()
+        self.optimizer = optim.Adam(self.parameters(), 0.005)
 
     def initialize(self):
         for w in self.lstm.parameters():
@@ -318,10 +396,38 @@ class LSTM(GenericModel):
         fc_out = self.fc(out)
 
         # soft_out = self.softmax(fc_out)
-        return fc_out
+        # log_softmax = F.log_softmax(fc_out, dim=1)
+        return F.log_softmax(fc_out, dim=1)
 
     def dummy_input(self):
         return Variable(torch.rand(self.batch_size, 1, self.input_size, self.seq_length)).type(torch.FloatTensor).to(self.device)
+
+
+class MLP(GenericModel):
+
+
+    def __init__(self, config):
+        GenericModel.__init__(self)
+
+        self.device = config.DEVICE
+
+        self.fc1 = nn.Linear(in_features=28*28, out_features=100)
+        self.fc2 = nn.Linear(in_features=100, out_features=10)
+
+        self.optimizer = optim.Adam(self.parameters(), lr=0.001)
+        self.criterion = nn.CrossEntropyLoss()
+
+    def forward(self, x):
+
+        x = x.view(x.size()[0], -1)
+        out = self.fc1(x)
+        out = self.fc2(out)
+
+        return F.log_softmax(out, dim=1)
+
+    def dummy_input(self):
+        pass
+
 
 
 
