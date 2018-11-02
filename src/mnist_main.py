@@ -103,11 +103,11 @@ class Experiment:
         self.writer.add_scalar('training_loss', training_loss, epoch)
         self.writer.add_scalar('validation_loss', validation_loss, epoch)
 
-        # Write random image to the summary writer.
-        image_grid = torchvision.utils.make_grid(X_sample, normalize=True, scale_each=True)
-        self.writer.add_image(tag="RandomSample y-{} yhat{}".format(
-            '.'.join(map(str, y_sample)), '.'.join(map(str, predicted_labels))),
-                              img_tensor=image_grid, global_step=epoch)
+        # # Write random image to the summary writer.
+        # image_grid = torchvision.utils.make_grid(X_sample, normalize=True, scale_each=True)
+        # self.writer.add_image(tag="RandomSample y-{} yhat{}".format(
+        #     '.'.join(map(str, y_sample)), '.'.join(map(str, predicted_labels))),
+        #                       img_tensor=image_grid, global_step=epoch)
 
 
         # Write PR Curve to the summary writer.
@@ -160,8 +160,8 @@ if __name__ == "__main__":
 
 
     dataset = dataset.SequenceLearningManyToOne(seq_len=5, onehot=True)
-    model = model.LSTM(input_size=1, seq_length=5, num_layers=1,
-                       out_size=5, hidden_size=10, batch_size=config.TRAIN_BATCH_SIZE,
+    model = model.LSTM(input_size=11, seq_length=5, num_layers=1,
+                       out_size=11, hidden_size=10, batch_size=config.TRAIN_BATCH_SIZE,
                        device=config.DEVICE)
 
     # model = model.CNN(config)

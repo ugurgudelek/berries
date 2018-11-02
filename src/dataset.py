@@ -92,12 +92,12 @@ class SequenceLearningOneToOne(GenericDataset):
 class SequenceLearningManyToOne(GenericDataset):
     def __init__(self, seq_len=3, dataset_len=100, onehot=False):
         # todo : add seq_range
-
+        sequence = cycle(np.arange(0, 11, 1))
         seq7s = list()
         while(True):
             seq7 = list()
             rnd = np.random.randint(0, seq_len)
-            sequence = cycle(np.arange(0, seq_len, 1))
+
             for i in range(seq_len):
                 digit = next(sequence)
                 seq7.append(digit)
@@ -108,11 +108,14 @@ class SequenceLearningManyToOne(GenericDataset):
 
         dataset = np.array(seq7s)
         np.random.shuffle(dataset)
-        self.encode = OneHotEncoder(sparse=False)
-        dataset = self.encode.fit_transform(dataset.T).T
 
-        self.train_dataset = self.Inner(dataset=dataset, seq_len=seq_len)
-        self.valid_dataset = self.Inner(dataset=dataset, seq_len=seq_len)
+
+        # data_size, seq_len, input_size
+
+
+
+        self.train_dataset = self.Inner(dataset=dataset,seq_len=seq_len)
+        self.valid_dataset = self.Inner(dataset=dataset,seq_len=seq_len)
 
     class Inner(torch.utils.data.Dataset, GenericDataset):
         def __init__(self, dataset, seq_len):
@@ -122,9 +125,13 @@ class SequenceLearningManyToOne(GenericDataset):
 
             # norm_dataset = (dataset - dataset.min())/(dataset.max() - dataset.min())
             # self.dataset = norm_dataset
-
+            self.encode = OneHotEncoder(sparse=False)
+            self.encode.fit(dataset)
             X = dataset[:, :].astype(np.float32)
-            y = (dataset[:, -1] + 1).__mod__(seq_len).astype(np.float32)
+            y = (dataset[:, -1] + 1).__mod__(11).astype(np.float32)
+
+            X = self.encode.transform(X).reshape(dataset.shape[0], seq_len, 11)
+
 
             self.data = torch.FloatTensor(X).unsqueeze(dim=1)
             self.labels = torch.LongTensor(y)
@@ -137,7 +144,7 @@ class SequenceLearningManyToOne(GenericDataset):
             return self.data.__len__()
 
         def __getitem__(self, ix):
-            return self.data[ix, :], self.labels[ix]
+            return self.data[ix, :, :, :], self.labels[ix]
 
 
 
