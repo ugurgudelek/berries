@@ -66,16 +66,18 @@ class Experiment:
 
     def run_epoch(self, epoch):
 
+        self.model.init_hidden()
         for step, (X, y) in enumerate(self.train_dataloader):
             # Fit the model
             self.model.fit(X, y)
             training_loss = self.model.training_loss
 
         score = 0.
+        self.model.init_hidden()
         for step, (X, y) in enumerate(self.valid_dataloader):
 
             # Validate validation set
-            self.model.validate(X, y) # todo: current build call .validate when .score is used!
+            self.model.validate(X, y)  # todo: current build call .validate when .score is used!
 
             # Score
             score += self.model.score(X, y)
@@ -95,8 +97,8 @@ class Experiment:
         print("Validation Loss: {}".format(validation_loss))
         print("Score: {}".format(score))
 
-        print('Actual label:', y_sample[:5])
-        print('Predicted label:', predicted_labels[:5])
+        print('Actual label:', y_sample[:10])
+        print('Predicted label:', predicted_labels[:10])
         print("========================================")
 
         # Write losses to the tensorboard
@@ -150,18 +152,20 @@ if __name__ == "__main__":
     4. Pass config to experiment
     5. Run
     """
-    config = config.ConfigLSTM()
-    # config.save()
+    # config = config.ConfigCNN()
+    #
     # dataset = dataset.MNISTDataset(config)
 
+    config = config.ConfigLSTM()
     # dataset = dataset.SequenceLearningOneToOne()
     # model = model.LSTM(input_size=10, seq_length=1, num_layers=1,
     #                    out_size=10, hidden_size=10, batch_size=1, device=config.DEVICE)
 
+    config.save()
 
-    dataset = dataset.SequenceLearningManyToOne(seq_len=5, onehot=True)
-    model = model.LSTM(input_size=11, seq_length=5, num_layers=1,
-                       out_size=11, hidden_size=10, batch_size=config.TRAIN_BATCH_SIZE,
+    dataset = dataset.SequenceLearningManyToOne(seq_len=config.SEQ_LEN, seq_limit=config.INPUT_SIZE, onehot=True, dataset_len=1000)
+    model = model.LSTM(input_size=config.INPUT_SIZE, seq_length=config.SEQ_LEN, num_layers=2,
+                       out_size=config.OUTPUT_SIZE, hidden_size=20, batch_size=config.TRAIN_BATCH_SIZE,
                        device=config.DEVICE)
 
     # model = model.CNN(config)

@@ -28,6 +28,36 @@ from sklearn.preprocessing import OneHotEncoder
 from functools import partial
 from itertools import cycle
 
+def to_categorical(y, num_classes=None, dtype='float32'):
+    """Converts a class vector (integers) to binary class matrix.
+
+    E.g. for use with categorical_crossentropy.
+
+    # Arguments
+        y: class vector to be converted into a matrix
+            (integers from 0 to num_classes).
+        num_classes: total number of classes.
+        dtype: The data type expected by the input, as a string
+            (`float32`, `float64`, `int32`...)
+
+    # Returns
+        A binary matrix representation of the input. The classes axis
+        is placed last.
+    """
+    y = np.array(y, dtype='int')
+    input_shape = y.shape
+    if input_shape and input_shape[-1] == 1 and len(input_shape) > 1:
+        input_shape = tuple(input_shape[:-1])
+    y = y.ravel()
+    if not num_classes:
+        num_classes = np.max(y) + 1
+    n = y.shape[0]
+    categorical = np.zeros((n, num_classes), dtype=dtype)
+    categorical[np.arange(n), y] = 1
+    output_shape = input_shape + (num_classes,)
+    categorical = np.reshape(categorical, output_shape)
+    return categorical
+
 class GenericDataset():
 
 
@@ -41,10 +71,10 @@ class GenericDataset():
     @staticmethod
     def _random_sample(dataset, n):
         perm = np.random.randint(0, dataset.__len__(), size=n)
-        data = dataset.data.numpy()[perm]
+        data = dataset.data.numpy()[:,perm,:]
         labels = dataset.labels.numpy()[perm]
 
-        return torch.Tensor(data).unsqueeze(dim=1), torch.Tensor(labels).long()
+        return torch.Tensor(data).t(), torch.Tensor(labels).long()
 
 """
 1. Sequence Learning Problem
@@ -90,13 +120,12 @@ class SequenceLearningOneToOne(GenericDataset):
 
 
 class SequenceLearningManyToOne(GenericDataset):
-    def __init__(self, seq_len=3, dataset_len=100, onehot=False):
+    def __init__(self, seq_len=3, seq_limit=11, dataset_len=100, onehot=False):
         # todo : add seq_range
-        sequence = cycle(np.arange(0, 11, 1))
+        sequence = cycle(np.arange(0, seq_limit, 1))
         seq7s = list()
         while(True):
             seq7 = list()
-            rnd = np.random.randint(0, seq_len)
 
             for i in range(seq_len):
                 digit = next(sequence)
@@ -109,31 +138,31 @@ class SequenceLearningManyToOne(GenericDataset):
         dataset = np.array(seq7s)
         np.random.shuffle(dataset)
 
-
         # data_size, seq_len, input_size
 
 
 
-        self.train_dataset = self.Inner(dataset=dataset,seq_len=seq_len)
-        self.valid_dataset = self.Inner(dataset=dataset,seq_len=seq_len)
+        self.train_dataset = self.Inner(dataset=dataset,seq_len=seq_len, seq_limit=seq_limit)
+        self.valid_dataset = self.Inner(dataset=dataset,seq_len=seq_len, seq_limit=seq_limit)
+
 
     class Inner(torch.utils.data.Dataset, GenericDataset):
-        def __init__(self, dataset, seq_len):
+        def __init__(self, dataset, seq_len, seq_limit):
             # self.encode = OneHotEncoder(sparse=False)
             # X = self.encode.fit_transform(X)
             # self.y = self.encode.transform(self.y)
 
             # norm_dataset = (dataset - dataset.min())/(dataset.max() - dataset.min())
             # self.dataset = norm_dataset
-            self.encode = OneHotEncoder(sparse=False)
-            self.encode.fit(dataset)
+
             X = dataset[:, :].astype(np.float32)
-            y = (dataset[:, -1] + 1).__mod__(11).astype(np.float32)
+            y = (dataset[:, -1] + 1).__mod__(seq_limit).astype(np.float32)
 
-            X = self.encode.transform(X).reshape(dataset.shape[0], seq_len, 11)
+            # seq_len, dataset_len, input_size
+            X = to_categorical(X, seq_limit).transpose([1,0,2])
 
-
-            self.data = torch.FloatTensor(X).unsqueeze(dim=1)
+            y = y.T
+            self.data = torch.FloatTensor(X)
             self.labels = torch.LongTensor(y)
 
 
@@ -141,10 +170,10 @@ class SequenceLearningManyToOne(GenericDataset):
 
 
         def __len__(self):
-            return self.data.__len__()
+            return self.data.shape[1]
 
         def __getitem__(self, ix):
-            return self.data[ix, :, :, :], self.labels[ix]
+            return self.data[:, ix, :], self.labels[ix]
 
 
 
@@ -184,7 +213,6 @@ class EchoRandomInteger:
         return sequence, sequence[sequence.__len__()-self.lag-1]
     def __len__(self):
         return 100
-
 class EchoRandomSubsequences:
     def __init__(self, lag=0):
         self.lag = lag
@@ -196,7 +224,7 @@ class EchoRandomSubsequences:
     def __len__(self):
         return 100
 
-class MNISTDataset():
+class MNISTDataset(GenericDataset):
     def __init__(self, config):
 
         self.train_dataset = datasets.MNIST('../dataset', train=True, download=True,

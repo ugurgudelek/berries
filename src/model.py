@@ -214,8 +214,8 @@ class GenericModel(nn.Module):
 
 
             # detach first hiddens of previous iteration
-            if isinstance(self, LSTM):
-                self.detach()
+            # if isinstance(self, LSTM):
+            #     self.detach()
 
     def validate(self, X, y):
         with torch.no_grad():
@@ -236,7 +236,7 @@ class GenericModel(nn.Module):
 
         predicted = self.predict(X)
         correct = (predicted == y).sum().item()
-        return correct/y.size()[0]
+        return correct/(y.size()[0])
 
 
     def predict_log_proba(self, X):
@@ -347,7 +347,7 @@ class LSTM(GenericModel):
         # self.initialize()
 
         self.criterion = nn.NLLLoss()
-        self.optimizer = optim.Adam(self.parameters(), 0.005)
+        self.optimizer = optim.Adam(self.parameters(), 0.001)
 
     def initialize(self):
         for w in self.lstm.parameters():
@@ -387,7 +387,8 @@ class LSTM(GenericModel):
         batch_size = x.shape[0]
         self.hidden = self.init_hidden(batch_size=batch_size)
 
-        x = x.view(self.seq_length, -1, self.input_size)
+        # x = x.view(self.seq_length, -1, self.input_size)
+        x = x.t()
         lstm_out, self.hidden = self.lstm(x, self.hidden)
 
         # return last sequence

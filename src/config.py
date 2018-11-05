@@ -6,7 +6,8 @@ class GenericConfig:
     def __init__(self):
         self.EXPERIMENT_DIR = None
         # Device params
-        self.USE_CUDA = torch.cuda.is_available()
+        # self.USE_CUDA = torch.cuda.is_available()
+        self.USE_CUDA = False
         if self.USE_CUDA:
             if torch.cuda.get_device_name(0) == 'GeForce GT 650M':
                 self.USE_CUDA = False
@@ -50,8 +51,13 @@ class ConfigLSTM(GenericConfig):
         # Dataloader params
         self.TRAIN_SHUFFLE = True
         self.VALID_SHUFFLE = False
-        self.TRAIN_BATCH_SIZE = 2
-        self.VALID_BATCH_SIZE = 2
+        self.TRAIN_BATCH_SIZE = 10
+        self.VALID_BATCH_SIZE = 10
+
+        # Model params
+        self.INPUT_SIZE = 50
+        self.OUTPUT_SIZE = 50
+        self.SEQ_LEN = 5
 
 class ConfigCNN(GenericConfig):
     """
@@ -73,8 +79,8 @@ class ConfigCNN(GenericConfig):
         # Dataloader params
         self.TRAIN_SHUFFLE = True
         self.VALID_SHUFFLE = False
-        self.TRAIN_BATCH_SIZE = 200
-        self.VALID_BATCH_SIZE = 200
+        self.TRAIN_BATCH_SIZE = 10
+        self.VALID_BATCH_SIZE = 10
 
         # Dataset params
         self.TRAIN_VALID_RATIO = 0.90
