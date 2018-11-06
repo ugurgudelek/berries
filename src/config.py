@@ -6,8 +6,7 @@ class GenericConfig:
     def __init__(self):
         self.EXPERIMENT_DIR = None
         # Device params
-        # self.USE_CUDA = torch.cuda.is_available()
-        self.USE_CUDA = False
+        self.USE_CUDA = torch.cuda.is_available()
         if self.USE_CUDA:
             if torch.cuda.get_device_name(0) == 'GeForce GT 650M':
                 self.USE_CUDA = False
@@ -55,9 +54,9 @@ class ConfigLSTM(GenericConfig):
         self.VALID_BATCH_SIZE = 10
 
         # Model params
-        self.INPUT_SIZE = 50
-        self.OUTPUT_SIZE = 50
-        self.SEQ_LEN = 5
+        self.INPUT_SIZE = 200
+        self.OUTPUT_SIZE = 200
+        self.SEQ_LEN = 15
 
 class ConfigCNN(GenericConfig):
     """

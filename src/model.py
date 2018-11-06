@@ -330,16 +330,16 @@ class LSTM(GenericModel):
                             dropout=0,  # 0 means no probability
                             bidirectional=False)
 
-        self.fc = nn.Sequential(nn.Linear(in_features=self.hidden_size, out_features=100),
+        self.fc = nn.Sequential(nn.Linear(in_features=self.hidden_size, out_features=300),
                                 # nn.BatchNorm1d(num_features=100),  # todo: test batchnorm
                                 nn.ReLU(),  # todo: test ReLU vs SELU
-                                nn.Linear(in_features=100, out_features=100),
+                                nn.Linear(in_features=300, out_features=300),
                                 # nn.BatchNorm1d(num_features=100),
                                 nn.ReLU(),
-                                nn.Linear(in_features=100, out_features=10),
+                                nn.Linear(in_features=300, out_features=200),
                                 # nn.BatchNorm1d(num_features=10),
                                 nn.ReLU(),
-                                nn.Linear(in_features=10, out_features=self.out_size))
+                                nn.Linear(in_features=200, out_features=self.out_size))
 
         self.hidden = None
 
@@ -388,7 +388,7 @@ class LSTM(GenericModel):
         self.hidden = self.init_hidden(batch_size=batch_size)
 
         # x = x.view(self.seq_length, -1, self.input_size)
-        x = x.t()
+        x = torch.transpose(x, 0, 1)
         lstm_out, self.hidden = self.lstm(x, self.hidden)
 
         # return last sequence

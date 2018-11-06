@@ -69,7 +69,7 @@ class Experiment:
         self.model.init_hidden()
         for step, (X, y) in enumerate(self.train_dataloader):
             # Fit the model
-            self.model.fit(X, y)
+            self.model.fit(X.to(self.config.DEVICE), y.to(self.config.DEVICE))
             training_loss = self.model.training_loss
 
         score = 0.
@@ -77,16 +77,16 @@ class Experiment:
         for step, (X, y) in enumerate(self.valid_dataloader):
 
             # Validate validation set
-            self.model.validate(X, y)  # todo: current build call .validate when .score is used!
+            self.model.validate(X.to(self.config.DEVICE), y.to(self.config.DEVICE))  # todo: current build call .validate when .score is used!
 
             # Score
-            score += self.model.score(X, y)
+            score += self.model.score(X.to(self.config.DEVICE), y.to(self.config.DEVICE))
             validation_loss = self.model.validation_loss
 
         score = score/self.valid_dataloader.__len__()
         # Predict
         X_sample, y_sample = self.dataset.random_train_sample(n=100)
-        predicted_labels = self.model.predict(X_sample).cpu().detach()
+        predicted_labels = self.model.predict(X_sample.to(self.config.DEVICE)).cpu().detach()
         # predicted_labels = prediction_logprob
 
 
@@ -166,7 +166,7 @@ if __name__ == "__main__":
     dataset = dataset.SequenceLearningManyToOne(seq_len=config.SEQ_LEN, seq_limit=config.INPUT_SIZE, onehot=True, dataset_len=1000)
     model = model.LSTM(input_size=config.INPUT_SIZE, seq_length=config.SEQ_LEN, num_layers=2,
                        out_size=config.OUTPUT_SIZE, hidden_size=20, batch_size=config.TRAIN_BATCH_SIZE,
-                       device=config.DEVICE)
+                       device=config.DEVICE).to(config.DEVICE)
 
     # model = model.CNN(config)
 
