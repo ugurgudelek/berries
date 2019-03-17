@@ -11,6 +11,10 @@ from torch import optim
 from tensorboardX import SummaryWriter
 
 import config
+import dataset
+
+# Estimate Size
+from pytorch_modelsize import SizeEstimator
 
 class GenericModel(nn.Module):
 
@@ -181,6 +185,9 @@ class GenericModel(nn.Module):
 
         return f
 
+    def is_LSTM(self):
+        return isinstance(self, LSTM)
+
 
     #  Sklearn type model methods.
     def fit(self, X, y):
@@ -188,8 +195,8 @@ class GenericModel(nn.Module):
 
             # xs = xs.unsqueeze(dim=1)
             # ys = ys.unsqueeze(dim=1)
-            # xs = Variable(xs.float(), requires_grad=False)
-            # ys = Variable(ys.float(), requires_grad=False)
+            # X = Variable(X, requires_grad=False)
+            # y = Variable(y, requires_grad=False)
 
             # if this call for validation or test, change model mode to evaluation
             # this is necessary because dropout and batch normalization should behave differently on evaluation mode
@@ -207,14 +214,15 @@ class GenericModel(nn.Module):
             # backward
             if loss._grad_fn is not None:  # means we are in training mode
                 loss.backward(retain_graph=True)
+
                 # optimize
                 self.optimizer.step()
                 self.training_loss = self.current_loss
 
 
 
-            # detach first hiddens of previous iteration
-            # if isinstance(self, LSTM):
+            # # detach first hiddens of previous iteration
+            # if self.is_LSTM():
             #     self.detach()
 
     def validate(self, X, y):
@@ -229,7 +237,49 @@ class GenericModel(nn.Module):
             _, predicted = torch.max(outputs.data, 1)
             return predicted
 
+    def generate(self, init_char, char2int ,top_k=5, seq_len=128):
+        ''' Given a character, predict the next character.
 
+            Returns the predicted character and the hidden state.
+        '''
+
+        # set the evaluation mode
+        with torch.no_grad():
+
+            # placeholder for the generated text
+            seq = np.empty(seq_len + 1)
+            seq[0] = char2int[init_char]
+
+            # now we need to encode the character - (1, vocab_size)
+            init_char = dataset.GenericDataset.to_categorical(char2int[init_char], num_classes=self.out_size)
+
+            # add the batch dimension
+            init_char = torch.from_numpy(init_char).unsqueeze(0).to(self.device)
+
+            # for the sequence length
+            for t in range(seq_len):
+                init_char = init_char.unsqueeze(0)
+                outputs = self.forward(init_char)
+
+                # h_2 now holds the vector of predictions (1, vocab_size)
+                # we want to sample 5 top characters
+                p, top_char = outputs.topk(top_k)
+
+                # get the top k characters by their probabilities
+                top_char = top_char.squeeze().cpu().numpy()
+
+                # sample a character using its probability
+                p = p.detach().squeeze().cpu().numpy()
+                init_char = np.random.choice(top_char, p=p / p.sum())
+
+                # append the character to the output sequence
+                seq[t + 1] = init_char
+
+                # prepare the character to be fed to the next LSTM cell
+                init_char = dataset.GenericDataset.to_categorical(init_char, num_classes=self.out_size)
+                init_char = torch.from_numpy(init_char).unsqueeze(0).to(self.device)
+
+        return seq
 
     def score(self, X, y):
         # score(X, y[, sample_weight])	Returns the mean accuracy on the given test data and labels.
@@ -254,6 +304,9 @@ class GenericModel(nn.Module):
         # get_params([deep])	Get parameters for this estimator.
         pass
 
+    @staticmethod
+    def count_parameters(model):
+        return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
 
@@ -327,21 +380,18 @@ class LSTM(GenericModel):
                             num_layers=self.num_layers,
                             bias=True,
                             batch_first=False,
-                            dropout=0,  # 0 means no probability
+                            dropout=0.5,  # 0 means no probability
                             bidirectional=False)
 
-        self.fc = nn.Sequential(nn.Linear(in_features=self.hidden_size, out_features=300),
+        self.fc = nn.Sequential(nn.Linear(in_features=self.hidden_size, out_features=100),
                                 # nn.BatchNorm1d(num_features=100),  # todo: test batchnorm
                                 nn.ReLU(),  # todo: test ReLU vs SELU
-                                nn.Linear(in_features=300, out_features=300),
-                                # nn.BatchNorm1d(num_features=100),
+                                nn.Linear(in_features=100, out_features=150),
+                                # nn.BatchNorm1d(num_features=150),
                                 nn.ReLU(),
-                                nn.Linear(in_features=300, out_features=200),
-                                # nn.BatchNorm1d(num_features=10),
-                                nn.ReLU(),
-                                nn.Linear(in_features=200, out_features=self.out_size))
+                                nn.Linear(in_features=150, out_features=self.out_size))
 
-        self.hidden = None
+        self.hidden = self.init_hidden()
 
         # todo: I have found that initialization destroys the learning process. Think why and fixit.
         # self.initialize()
@@ -363,6 +413,10 @@ class LSTM(GenericModel):
         """
         if batch_size is None:
             batch_size = self.batch_size
+
+        # if hasattr(self, 'hidden') and type(self.hidden[0]) == Variable:
+        #     (h0, c0) = Variable(self.hidden[0].data, self.hidden[1].data)
+        # else:
         (h0, c0) = (Variable(torch.zeros(self.num_layers, batch_size, self.hidden_size)),  # h_0
                     Variable(torch.zeros(self.num_layers, batch_size, self.hidden_size)))  # c_0
 
@@ -371,10 +425,10 @@ class LSTM(GenericModel):
     def detach(self):
         # detach to not backpropagate whole lstm network
         # todo: actually below lines should be like self.model.hidden[0].detach_() aka inplace version. but not it working okey..
-        self.hidden[0].detach()
-        self.hidden[1].detach()
+        self.hidden[0].detach_()
+        self.hidden[1].detach_()
 
-    def forward(self, x):
+    def forward(self, x, init=True):
 
         # Reshape input
         # x shape: (seq_len, batch, input_size)
@@ -385,11 +439,13 @@ class LSTM(GenericModel):
 
         # send batch size to auto update hiddens
         batch_size = x.shape[0]
-        self.hidden = self.init_hidden(batch_size=batch_size)
+        # if init:
+        #     self.hidden = self.init_hidden(batch_size=batch_size)
 
         # x = x.view(self.seq_length, -1, self.input_size)
         x = torch.transpose(x, 0, 1)
-        lstm_out, self.hidden = self.lstm(x, self.hidden)
+        lstm_out, self.hidden = self\
+            .lstm(x, self.hidden)
 
         # return last sequence
         # output of shape (seq_len, batch, num_directions * hidden_size)
@@ -401,7 +457,7 @@ class LSTM(GenericModel):
         return F.log_softmax(fc_out, dim=1)
 
     def dummy_input(self):
-        return Variable(torch.rand(self.batch_size, 1, self.input_size, self.seq_length)).type(torch.FloatTensor).to(self.device)
+        return Variable(torch.rand(self.batch_size, self.seq_length, self.input_size)).type(torch.FloatTensor)
 
 
 class MLP(GenericModel):

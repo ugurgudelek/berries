@@ -50,13 +50,13 @@ class ConfigLSTM(GenericConfig):
         # Dataloader params
         self.TRAIN_SHUFFLE = True
         self.VALID_SHUFFLE = False
-        self.TRAIN_BATCH_SIZE = 10
-        self.VALID_BATCH_SIZE = 10
+        self.TRAIN_BATCH_SIZE = 1000
+        self.VALID_BATCH_SIZE = 1000
 
         # Model params
-        self.INPUT_SIZE = 200
-        self.OUTPUT_SIZE = 200
-        self.SEQ_LEN = 15
+        self.INPUT_SIZE = 83
+        self.OUTPUT_SIZE = 83
+        self.SEQ_LEN = 32
 
 class ConfigCNN(GenericConfig):
     """

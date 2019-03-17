@@ -25,40 +25,70 @@ from torchvision import datasets, transforms
 
 from sklearn.preprocessing import OneHotEncoder
 
-from functools import partial
 from itertools import cycle
 
-def to_categorical(y, num_classes=None, dtype='float32'):
-    """Converts a class vector (integers) to binary class matrix.
 
-    E.g. for use with categorical_crossentropy.
+class ForceRequiredAttributeDefinitionMeta(type): # make it metaclass
+    def __call__(cls, *args, **kwargs):
+        class_object = type.__call__(cls, *args, **kwargs)
+        class_object.check_required_attributes()
+        return class_object
 
-    # Arguments
-        y: class vector to be converted into a matrix
-            (integers from 0 to num_classes).
-        num_classes: total number of classes.
-        dtype: The data type expected by the input, as a string
-            (`float32`, `float64`, `int32`...)
 
-    # Returns
-        A binary matrix representation of the input. The classes axis
-        is placed last.
-    """
-    y = np.array(y, dtype='int')
-    input_shape = y.shape
-    if input_shape and input_shape[-1] == 1 and len(input_shape) > 1:
-        input_shape = tuple(input_shape[:-1])
-    y = y.ravel()
-    if not num_classes:
-        num_classes = np.max(y) + 1
-    n = y.shape[0]
-    categorical = np.zeros((n, num_classes), dtype=dtype)
-    categorical[np.arange(n), y] = 1
-    output_shape = input_shape + (num_classes,)
-    categorical = np.reshape(categorical, output_shape)
-    return categorical
 
-class GenericDataset():
+
+class GenericDataset(metaclass=ForceRequiredAttributeDefinitionMeta):
+
+    def check_required_attributes(self):
+        if not hasattr(self, 'train_dataset'):
+            raise NotImplementedError("Subclass must define self.train_dataset attribute")
+        if not hasattr(self, 'valid_dataset'):
+            raise NotImplementedError("Subclass must define self.valid_dataset attribute")
+        if not hasattr(self.train_dataset, 'data'):
+            raise NotImplementedError("Subclass must define self.train_dataset.data attribute")
+        if not hasattr(self.train_dataset, 'labels'):
+            raise NotImplementedError("Subclass must define self.train_dataset.labels attribute")
+        if not hasattr(self.valid_dataset, 'data'):
+            raise NotImplementedError("Subclass must define self.valid_dataset.data attribute")
+        if not hasattr(self.valid_dataset, 'labels'):
+            raise NotImplementedError("Subclass must define self.valid_dataset.labels attribute")
+
+    @staticmethod
+    def to_categorical(y, num_classes=None, dtype='float32'):
+        """Converts a class vector (integers) to binary class matrix.
+
+        E.g. for use with categorical_crossentropy.
+
+        # Arguments
+            y: class vector to be converted into a matrix
+                (integers from 0 to num_classes).
+            num_classes: total number of classes.
+            dtype: The data type expected by the input, as a string
+                (`float32`, `float64`, `int32`...)
+
+        # Returns
+            A binary matrix representation of the input. The classes axis
+            is placed last.
+        """
+        y = np.array(y, dtype='int')
+        input_shape = y.shape
+        if input_shape and input_shape[-1] == 1 and len(input_shape) > 1:
+            input_shape = tuple(input_shape[:-1])
+        y = y.ravel()
+        if not num_classes:
+            num_classes = np.max(y) + 1
+        n = y.shape[0]
+        categorical = np.zeros((n, num_classes), dtype=dtype)
+        categorical[np.arange(n), y] = 1
+        output_shape = input_shape + (num_classes,)
+        categorical = np.reshape(categorical, output_shape)
+        return categorical
+
+
+    @staticmethod
+    def arr2splittedsequences(arr, seq_len, stride):
+        return np.array([arr[start_idx:start_idx + seq_len]
+                         for start_idx in range(0, arr.shape[0] - seq_len + 1, stride)])
 
 
 
@@ -74,7 +104,10 @@ class GenericDataset():
         data = dataset.data.numpy()[:,perm,:]
         labels = dataset.labels.numpy()[perm]
 
-        return torch.Tensor(data).t(), torch.Tensor(labels).long()
+        return torch.transpose(torch.Tensor(data), 0, 1), torch.Tensor(labels).long()
+
+
+
 
 """
 1. Sequence Learning Problem
@@ -83,8 +116,6 @@ class GenericDataset():
 4. Echo Random Subsequences
 5. Sequence Classification
 """
-
-
 class SequenceLearningOneToOne(GenericDataset):
 
     def __init__(self):
@@ -115,13 +146,9 @@ class SequenceLearningOneToOne(GenericDataset):
 
         def __getitem__(self, ix):
             return self.data[ix, :], self.labels[ix]
-
-
-
-
 class SequenceLearningManyToOne(GenericDataset):
-    def __init__(self, seq_len=3, seq_limit=11, dataset_len=100, onehot=False):
-        # todo : add seq_range
+    def __init__(self, seq_len=3, seq_limit=11, dataset_len=100):
+
         sequence = cycle(np.arange(0, seq_limit, 1))
         seq7s = list()
         while(True):
@@ -140,48 +167,29 @@ class SequenceLearningManyToOne(GenericDataset):
 
         # data_size, seq_len, input_size
 
+        self.train_dataset = self.Inner(dataset=dataset, seq_limit=seq_limit)
+        self.valid_dataset = self.Inner(dataset=dataset, seq_limit=seq_limit)
 
 
-        self.train_dataset = self.Inner(dataset=dataset,seq_len=seq_len, seq_limit=seq_limit)
-        self.valid_dataset = self.Inner(dataset=dataset,seq_len=seq_len, seq_limit=seq_limit)
-
-
-    class Inner(torch.utils.data.Dataset, GenericDataset):
-        def __init__(self, dataset, seq_len, seq_limit):
-            # self.encode = OneHotEncoder(sparse=False)
-            # X = self.encode.fit_transform(X)
-            # self.y = self.encode.transform(self.y)
-
-            # norm_dataset = (dataset - dataset.min())/(dataset.max() - dataset.min())
-            # self.dataset = norm_dataset
+    class Inner(torch.utils.data.Dataset):
+        def __init__(self, dataset, seq_limit):
 
             X = dataset[:, :].astype(np.float32)
             y = (dataset[:, -1] + 1).__mod__(seq_limit).astype(np.float32)
 
             # seq_len, dataset_len, input_size
-            X = to_categorical(X, seq_limit).transpose([1,0,2])
+            X = GenericDataset.to_categorical(X, seq_limit).transpose([1, 0, 2])
 
             y = y.T
             self.data = torch.FloatTensor(X)
             self.labels = torch.LongTensor(y)
 
-
-
-
-
         def __len__(self):
             return self.data.shape[1]
 
         def __getitem__(self, ix):
+            # seq_len, dataset_len, input_size
             return self.data[:, ix, :], self.labels[ix]
-
-
-
-
-
-
-
-
 
 class ValueMemorizationOneToOne:
     def __init__(self):
@@ -223,6 +231,50 @@ class EchoRandomSubsequences:
 
     def __len__(self):
         return 100
+
+class BookWriter(GenericDataset):
+    def __init__(self, seq_len):
+        # read and prepare the data
+        with open('../anna.txt', 'r') as f:
+            text = f.read()
+
+        # get the set of all characters
+        characters = tuple(set(text))
+        # use enumeration to give the characters integer values
+        self.int2char = int2char = dict(enumerate(characters))
+        # create the look up dictionary from characters to the assigned integers
+        self.char2int = char2int = {char: index for index, char in int2char.items()}
+        # encode the text, using the character to integer dictionary
+        dataset = np.array([char2int[char] for char in text])
+
+        print('dataset:', dataset[:10])
+        print('text:', list(text)[:10])
+        # get the validation and the training data
+        val_idx = int(len(dataset) * (1 - 0.1))
+
+        self.train_dataset = self.Inner(dataset=dataset[:val_idx], seq_len=seq_len, nchar=len(characters))
+        self.valid_dataset = self.Inner(dataset=dataset[val_idx:], seq_len=seq_len, nchar=len(characters))
+
+    class Inner(torch.utils.data.Dataset):
+        def __init__(self, dataset, seq_len, nchar):
+            sequences = GenericDataset.arr2splittedsequences(dataset, seq_len=seq_len+1, stride=seq_len)
+            # sequences = dataset.reshape((seq_len, -1))
+            X = sequences[:, :-1]
+            y = sequences[:, -1]
+
+            # seq_len, dataset_len, input_size
+            X = GenericDataset.to_categorical(X, nchar).transpose([1,0,2])
+
+            y = y.T
+            self.data = torch.FloatTensor(X)
+            self.labels = torch.LongTensor(y)
+
+
+        def __len__(self):
+            return self.data.shape[1]
+
+        def __getitem__(self, ix):
+            return self.data[:,ix,:], self.labels[ix]
 
 class MNISTDataset(GenericDataset):
     def __init__(self, config):

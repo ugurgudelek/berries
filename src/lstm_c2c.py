@@ -23,7 +23,8 @@ char2int = {char: index for index, char in int2char.items()}
 
 # encode the text, using the character to integer dictionary
 encoded = np.array([char2int[char] for char in text])
-
+print('encoded: ', encoded[:10])
+print('test:', list(text)[:10])
 #Second: we need to write the batching algorithm. As I mentioned before, we want to set the targets to be the training characters but shifted by 1 in time to define the sequential order. I used the batching function from one of the classes I took before at Udacity. In my opinion, writing the batching algorithm is the hardest part for this type of task.
 
 # batching function
@@ -192,13 +193,17 @@ class CharLSTM(nn.ModuleList):
 
         return seq
 
+SEQ_LEN = 128
+BATCH_SIZE = 128
+
+
 # Forth: now we want to define our model object along with the optimizer and the loss function. We are going to use Adam optimizer since it is the most common choice for such tasks. Also, we are going to use the cross-entropy loss as we are going to measure entropy between our output and the targets (which are distributions).
 # compile the network - sequence_len, vocab_size, hidden_dim, batch_size
 cuda = torch.cuda.is_available()
 device = 'cpu'
 if cuda:
     device = 'cuda'
-net = CharLSTM(sequence_len=128, vocab_size=len(char2int), hidden_dim=512, batch_size=128).to(device)
+net = CharLSTM(sequence_len=SEQ_LEN, vocab_size=len(char2int), hidden_dim=512, batch_size=BATCH_SIZE).to(device)
 
 # define the loss and the optimizer
 optimizer = optim.Adam(net.parameters(), lr=0.001)
@@ -215,12 +220,15 @@ val_losses = list()
 # empty list for the samples
 samples = list()
 
+
+
+print("data size:", data.shape)
 for epoch in range(10):
 
     # reinit the hidden and cell steates
     hc = net.init_hidden()
 
-    for i, (x, y) in enumerate(get_batches(data, 128, 128)):
+    for i, (x, y) in enumerate(get_batches(data, SEQ_LEN, BATCH_SIZE)):
 
         # get the torch tensors from the one-hot of training data
         # also transpose the axis for the training set and the targets
@@ -236,7 +244,7 @@ for epoch in range(10):
 
         # calculate the loss
         # we need to calculate the loss across all batches, so we have to flat the targets tensor
-        loss = criterion(output, targets.contiguous().view(128 * 128))
+        loss = criterion(output, targets.contiguous().view(SEQ_LEN * BATCH_SIZE))
 
         # calculate the gradients
         loss.backward()
@@ -250,10 +258,10 @@ for epoch in range(10):
             # initialize the validation hidden state and cell state
             val_h, val_c = net.init_hidden()
 
-            for val_x, val_y in get_batches(val_data, 128, 128):
+            for val_x, val_y in get_batches(val_data, SEQ_LEN, BATCH_SIZE):
                 # prepare the validation inputs and targets
                 val_x = torch.from_numpy(to_categorical(val_x).transpose([1, 0, 2])).to(device)
-                val_y = torch.from_numpy(val_y.T).type(torch.LongTensor).contiguous().view(128 * 128).to(device)
+                val_y = torch.from_numpy(val_y.T).type(torch.LongTensor).contiguous().view(SEQ_LEN * BATCH_SIZE).to(device)
 
                 # get the validation output
                 val_output = net(val_x, (val_h, val_c)).to(device)
@@ -272,6 +280,6 @@ for epoch in range(10):
             print(samples[-1])
 
 
-#
+
 
 
