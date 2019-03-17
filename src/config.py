@@ -73,20 +73,20 @@ class ConfigCNN(GenericConfig):
         # Model params
         self.MODEL_NAME = 'CNN'
         self.INPUT_SIZE = 1
-        self.OUTPUT_SIZE = 10
+        self.OUTPUT_SIZE = 3
 
         # Dataloader params
-        self.TRAIN_SHUFFLE = True
+        self.TRAIN_SHUFFLE = False
         self.VALID_SHUFFLE = False
-        self.TRAIN_BATCH_SIZE = 10
-        self.VALID_BATCH_SIZE = 10
+        self.TRAIN_BATCH_SIZE = 100
+        self.VALID_BATCH_SIZE = 100
 
         # Dataset params
         self.TRAIN_VALID_RATIO = 0.90
-        self.DATASET_NAME = 'MNISTDataset'
+        self.DATASET_NAME = 'IndicatorDataset'
 
         # Experiment params
-        self.EPOCH_SIZE = 100
+        self.EPOCH_SIZE = 1000
         self.EXPERIMENT_DIR = '../experiment/{}/{}'.format(self.DATASET_NAME ,str(int(time.time())))
 
 

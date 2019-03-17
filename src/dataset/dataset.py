@@ -11,6 +11,7 @@ import pandas as pd
 import numpy as np
 from talib import RSI, SMA, MACD, WILLR, ULTOSC, MFI, STOCH
 
+
 import plots
 import utils
 import os
@@ -27,6 +28,9 @@ from sklearn.preprocessing import OneHotEncoder
 
 from itertools import cycle
 
+import torch
+import torch.utils.data
+import torchvision
 
 class ForceRequiredAttributeDefinitionMeta(type): # make it metaclass
     def __call__(cls, *args, **kwargs):
@@ -35,7 +39,66 @@ class ForceRequiredAttributeDefinitionMeta(type): # make it metaclass
         return class_object
 
 
+class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
+    """Samples elements randomly from a given list of indices for imbalanced dataset
+    Arguments:
+        indices (list, optional): a list of indices
+        num_samples (int, optional): number of samples to draw
 
+    Examples:
+        train_loader = torch.utils.data.DataLoader(
+        train_dataset,
+        sampler=ImbalancedDatasetSampler(train_dataset),
+        batch_size=args.batch_size,
+        **kwargs
+    )
+    """
+
+    def __init__(self, dataset, indices=None, num_samples=None):
+        super(ImbalancedDatasetSampler, self).__init__(dataset)
+        # if indices is not provided,
+        # all elements in the dataset will be considered
+        self.indices = list(range(len(dataset))) \
+            if indices is None else indices
+
+        # if num_samples is not provided,
+        # draw `len(indices)` samples in each iteration
+        self.num_samples = len(self.indices) \
+            if num_samples is None else num_samples
+
+        # distribution of classes in the dataset
+        label_to_count = {}
+        for idx in self.indices:
+            label = self._get_label(dataset, idx)
+            if label in label_to_count:
+                label_to_count[label] += 1
+            else:
+                label_to_count[label] = 1
+
+        # weight for each sample
+        weights = [1.0 / label_to_count[self._get_label(dataset, idx)]
+                   for idx in self.indices]
+        self.weights = torch.Tensor(weights).double()
+
+    def _get_label(self, dataset, idx):
+        dataset_type = type(dataset)
+        if dataset_type is torchvision.datasets.MNIST:
+            return dataset.train_labels[idx].item()
+        elif dataset_type is torchvision.datasets.ImageFolder:
+            return dataset.imgs[idx][1]
+        # elif dataset_type is FinanceDataset.InnerIndicatorDataset:
+        #     return dataset[idx][1]
+        elif dataset_type is IndicatorDataset.InnerIndicatorDataset:
+            return dataset[idx][1]
+        else:
+            raise NotImplementedError
+
+    def __iter__(self):
+        return (self.indices[i] for i in torch.multinomial(
+            self.weights, self.num_samples, replacement=True))
+
+    def __len__(self):
+        return self.num_samples
 
 class GenericDataset(metaclass=ForceRequiredAttributeDefinitionMeta):
 
@@ -301,7 +364,7 @@ class MNISTDataset(GenericDataset):
 
         return torch.Tensor(data).unsqueeze(dim=1), torch.Tensor(labels).long()
 
-class IndicatorDataset():
+class IndicatorDataset(GenericDataset):
     """
 
     """
@@ -317,8 +380,18 @@ class IndicatorDataset():
 
         self.standardizer = IndicatorDataset.IndicatorStandardizer()
 
-        raw_dataset = pd.read_csv(input_path)
-        raw_dataset['name'] = 'spy'
+        raw_dataset = None
+        for file_path in os.listdir(input_path):
+            path = os.path.join(input_path, file_path)
+            curr_dataset = pd.read_csv(path)
+            curr_dataset['name'] = file_path.split('.')[0]
+            if raw_dataset is None:
+                raw_dataset = curr_dataset.copy(deep=True)
+            else:
+                raw_dataset = raw_dataset.append(curr_dataset)
+
+        raw_dataset = raw_dataset.sort_values(by=['date','name']).reset_index(drop=True)
+
         train_len = int(raw_dataset.shape[0] * train_valid_ratio)
         self.raw_train_dataset = raw_dataset.iloc[:train_len, :]
         self.raw_valid_dataset = raw_dataset.iloc[train_len:, :]
@@ -716,12 +789,16 @@ class IndicatorDataset():
         volume = dataframe['volume'].values
 
         dataframe['rsi_15'] = RSI(close, timeperiod=15) / 50 - 1
+        dataframe['rsi_20'] = RSI(close, timeperiod=20) / 50 - 1
+
+        dataframe['sma_10'] = SMA(close, timeperiod=10)
         dataframe['sma_20'] = SMA(close, timeperiod=20)
 
         dataframe['macd_12'], macdsignal, dataframe['macdhist_12'] = MACD(close, fastperiod=12, slowperiod=26,
                                                                           signalperiod=9)
 
         dataframe['willR_14'] = WILLR(high, low, close, timeperiod=14) / 50 + 1
+        dataframe['willR_20'] = WILLR(high, low, close, timeperiod=20) / 50 + 1
 
         dataframe['ultimate_osc_7'] = ULTOSC(high, low, close, timeperiod1=7, timeperiod2=14, timeperiod3=28) / 50 - 1
 
@@ -749,20 +826,19 @@ class IndicatorDataset():
         def __init__(self, dataset, seq_len, problem_type):
             self.dataset = dataset
 
-            self.X = self.dataset.drop(['date', 'name', 'open', 'high', 'low', 'close',
+            self.data = self.dataset.drop(['date', 'name', 'open', 'high', 'low', 'close',
                                         'label', 'raw_adjusted_close'], axis=1)
 
-            self.y = self.dataset[['label']]
+            self.labels = self.dataset['label'].map({'top':2, 'mid':1, 'bot':0}).values
 
-            if problem_type == 'classification':
-                # turn categorical to one hot encoding
-                self.y = pd.get_dummies(self.y)
+            # if problem_type == 'classification':
+            #     # turn categorical to one hot encoding
+            #     self.y = pd.get_dummies(self.y)
 
             self.name = self.dataset[['name']]
 
-            self.feature_dim = self.X.shape[1]
-            self.output_dim = self.y.shape[1]
-            self.data_dim = self.X.shape[0]
+            self.feature_dim = self.data.shape[1]
+            self.data_dim = self.data.shape[0]
             self.seq_len = seq_len
 
             # self._X = self.X.values.reshape(-1, self.feature_dim, self.seq_len)
@@ -774,20 +850,16 @@ class IndicatorDataset():
             return self.dataset.shape[0] - self.seq_len
 
         def __getitem__(self, ix):
-            X = self.X.iloc[ix: ix + self.seq_len, :]
-            y = self.y.iloc[ix + self.seq_len - 1, :]
+            X = self.data.iloc[ix: ix + self.seq_len, :].values.astype(float)
+            y = self.labels[ix + self.seq_len - 1].astype(float)
 
             name = self.dataset['name'].iloc[ix: ix + self.seq_len - 1]
             date = self.dataset['date'].iloc[ix: ix + self.seq_len - 1]
             extra_info = {'name': name, 'date': date}
 
-            # change type to numpy
-            X = X.values.astype(float)
-            y = y.values.astype(float)
-
             X = np.expand_dims(X, axis=0)
 
-            return X, y, extra_info
+            return X, y
 
         def get_all_data(self, transforms=None):
             xs, ys, _ = self.__getitem__(0)

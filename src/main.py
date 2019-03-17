@@ -1,5 +1,5 @@
 from estimator import Estimator
-from model import LSTM, GenericModel
+from model import LSTM, GenericModel, CNN
 from dataset import IndicatorDataset
 import torch
 from torch import nn
@@ -58,22 +58,19 @@ class Config:
         """
         """
         self.RANDOM_SEED = 42
-        self.MODEL_NAME = 'LSTM'
+        self.MODEL_NAME = 'CNN'
         self.EPOCH_SIZE = 100
 
-        self.SEQ_LEN = 128
-        self.INPUT_SIZE = 9
+        self.SEQ_LEN = 28
+        self.INPUT_SIZE = 28
         self.OUTPUT_SIZE = 1
-        self.NUM_LAYERS = 4
-        self.HIDDEN_SIZE = 40
 
-        # self.LABEL_WINDOW = 7
-        self.LABEL_TYPE = 'regression'
+        self.LABEL_TYPE = 'classification'
 
         self.TRAIN_VALID_RATIO = 0.90
         self.TRAIN_BATCH_SIZE = 100
         self.VALID_BATCH_SIZE = 100
-        self.TRAIN_SHUFFLE = True
+        self.TRAIN_SHUFFLE = False
         self.VALID_SHUFFLE = False
 
         self.DATASET_NAME = 'IndicatorDataset'
@@ -132,13 +129,7 @@ if __name__ == "__main__":
                                   shuffle=False,
                                   drop_last=True, collate_fn=custom_collate_fn)
 
-    model = LSTM(input_size=config.INPUT_SIZE,
-                 seq_length=config.SEQ_LEN,
-                 num_layers=config.NUM_LAYERS,
-                 out_size=config.OUTPUT_SIZE,
-                 hidden_size=config.HIDDEN_SIZE,
-                 batch_size=config.TRAIN_BATCH_SIZE,
-                 device=config.DEVICE).to(config.DEVICE)
+    model = CNN(config=config).to(config.DEVICE)
     model.to_onnx(directory=config.EXPERIMENT_DIR)
     model.to_txt(directory=config.EXPERIMENT_DIR)
 

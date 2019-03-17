@@ -320,28 +320,29 @@ class CNN(GenericModel):
         self.device = config.DEVICE
 
 
-        self.conv1 = nn.Conv2d(in_channels=config.INPUT_SIZE, out_channels=10,
+        self.conv1 = nn.Conv2d(in_channels=config.INPUT_SIZE, out_channels=100,
                                kernel_size=5, stride=1,
                                padding=0, dilation=1, groups=1, bias=True)
-        self.conv2 = nn.Conv2d(in_channels=10, out_channels=20,
+        self.conv2 = nn.Conv2d(in_channels=100, out_channels=20,
                                kernel_size=5, stride=1,
                                padding=0, dilation=1, groups=1, bias=True)
 
         self.conv2_drop = nn.Dropout2d()
-        self.fc1 = nn.Linear(320, 50)
+        self.fc1 = nn.Linear(80, 50)
         self.fc2 = nn.Linear(50, config.OUTPUT_SIZE)
 
-        self.criterion = nn.NLLLoss()
-        self.optimizer = optim.Adam(self.parameters(), 0.005)
+        self.criterion = nn.CrossEntropyLoss()
+        self.optimizer = optim.SGD(self.parameters(), 0.001, momentum=0.9)
 
     def forward(self, x):
+        batch_size = x.shape[0]
         x = F.relu(F.max_pool2d(self.conv1(x), kernel_size=2))
         x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), kernel_size=2))
-        x = x.view(-1, 320)
+        x = x.view(batch_size, -1)
         x = F.relu(self.fc1(x))
         x = F.dropout(x, training=self.training)
         x = self.fc2(x)
-        return F.log_softmax(x, dim=1)
+        return x
 
     def dummy_input(self):
         return Variable(torch.rand(100, 1, 28, 28)).to('cuda')

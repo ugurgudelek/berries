@@ -22,8 +22,10 @@ from sklearn.metrics import f1_score, confusion_matrix
 import os
 import torchvision
 
-import model as modelfile
-import dataset as datasetfile
+from model import model as modelfile
+from dataset import dataset as datasetfile
+
+import collections
 
 # todo: add pr_cruve
 # todo: add confusion_matrix
@@ -39,6 +41,19 @@ import dataset as datasetfile
 # hyper_params = {"learning_rate": 0.5, "steps": 100000, "batch_size": 50}
 # experiment.log_multiple_params(hyper_params)
 
+def custom_collate_fn(batch):
+    if isinstance(batch[0], np.ndarray):
+        return torch.stack([torch.from_numpy(b) for b in batch], 0)
+
+    elif isinstance(batch[0], collections.Sequence):
+        transposed = zip(*batch)
+        return [custom_collate_fn(samples) for samples in transposed]
+
+    elif isinstance(batch[0], dict):
+        return pd.DataFrame(list(batch)).to_dict('list')
+    else:
+        print(type(batch[0]))
+        raise Exception('Update custom_collate_fn!!')
 
 class Experiment:
 
@@ -59,7 +74,8 @@ class Experiment:
         self.train_dataloader = DataLoader(self.dataset.train_dataset,
                                       batch_size=self.config.TRAIN_BATCH_SIZE,
                                       shuffle=self.config.TRAIN_SHUFFLE,
-                                      drop_last=True)
+                                      drop_last=True,
+                                           sampler=datasetfile.ImbalancedDatasetSampler(self.dataset.train_dataset))
         self.valid_dataloader = DataLoader(self.dataset.valid_dataset,
                                       batch_size=self.config.VALID_BATCH_SIZE,
                                       shuffle=self.config.VALID_SHUFFLE,
@@ -77,86 +93,40 @@ class Experiment:
 
     def run_epoch(self, epoch):
 
-        if self.model.is_LSTM():
-        #     self.model.detach()
-            self.model.hidden = self.model.init_hidden()
+        training_loss, validation_loss = [], []
+        scores = []
         for step, (X, y) in enumerate(self.train_dataloader):
             # Fit the model
-            self.model.fit(X.to(self.config.DEVICE), y.to(self.config.DEVICE))
-            training_loss = self.model.training_loss
+            self.model.fit(X.to(self.config.DEVICE).float(), y.to(self.config.DEVICE).long())
+            training_loss += [self.model.training_loss.item()]
 
-        score = 0.
-        if self.model.is_LSTM():
-        #     self.model.detach()
-            self.model.hidden = self.model.init_hidden()
+
         for step, (X, y) in enumerate(self.valid_dataloader):
 
             # Validate validation set
-            self.model.validate(X.to(self.config.DEVICE), y.to(self.config.DEVICE))  # todo: current build call .validate when .score is used!
+            self.model.validate(X.to(self.config.DEVICE).float(), y.to(self.config.DEVICE).long())  # todo: current build call .validate when .score is used!
 
             # Score
-            score += self.model.score(X.to(self.config.DEVICE), y.to(self.config.DEVICE))
-            validation_loss = self.model.validation_loss
+            scores += [self.model.score(X.to(self.config.DEVICE).float(), y.to(self.config.DEVICE).long())]
+            validation_loss += [self.model.validation_loss.item()]
 
-        score = score/self.valid_dataloader.__len__()
+
         # Predict
-        if self.model.is_LSTM():
-            # self.model.detach()
-            self.model.hidden = self.model.init_hidden(batch_size=100)
-        X_sample, y_sample = self.dataset.random_train_sample(n=100)
-        predicted_labels = self.model.predict(X_sample.to(self.config.DEVICE)).cpu().detach()
+
+        # X_sample, y_sample = self.dataset.random_train_sample(n=100)
+        # predicted_labels = self.model.predict(X_sample.to(self.config.DEVICE)).cpu().detach()
         # predicted_labels = prediction_logprob
 
 
 
         # Log
         print("========================================\n")
-        print("Training Loss: {}".format(training_loss))
-        print("Validation Loss: {}".format(validation_loss))
-        print("Score: {}".format(score))
-
-        print('Actual label:', y_sample[:10])
-        print('Predicted label:', predicted_labels[:10])
-
-        if self.model.is_LSTM():
-            # self.model.detach()
-            self.model.hidden = self.model.init_hidden(batch_size=1)
-        _seq = self.model.generate('A', dataset.char2int, seq_len=1024)
-        print("========================================\n")
-        generated_text = ''.join([dataset.int2char[n] for n in _seq])
-        print(generated_text)
-        with open('{}.txt'.format(epoch), 'w') as f:
-            f.write(generated_text)
-
-        print("========================================\n")
+        print("Training Loss: {}".format(np.array(training_loss).mean()))
+        print("Validation Loss: {}".format(np.array(validation_loss).mean()))
+        print("Score: {}".format(np.array(scores).mean()))
 
 
-
-        # Write losses to the tensorboard
-        self.writer.add_scalar('training_loss', training_loss, epoch)
-        self.writer.add_scalar('validation_loss', validation_loss, epoch)
-
-        # # Write random image to the summary writer.
-        # image_grid = torchvision.utils.make_grid(X_sample, normalize=True, scale_each=True)
-        # self.writer.add_image(tag="RandomSample y-{} yhat{}".format(
-        #     '.'.join(map(str, y_sample)), '.'.join(map(str, predicted_labels))),
-        #                       img_tensor=image_grid, global_step=epoch)
-
-
-        # Write PR Curve to the summary writer.
-        self.writer.add_pr_curve('xoxo', np.random.randint(2, size=100), np.random.rand(100), epoch)
-
-        # for name, param in model.named_parameters():
-        #     print(name)
-        #     print(param)
-        #     model.writer.add_histogram(name, param.clone().cpu().data.numpy(), epoch, bins=100)
-        # x = dict(model.named_parameters())['conv1.weight'].clone().cpu().data.numpy()
-        # kernel1= x[0,0]
-        # plt.imshow(kernel1)
-        # plt.show()
-        # needs tensorboard 0.4RC or later
-
-        return training_loss, validation_loss
+        return np.array(training_loss).mean(), np.array(validation_loss).mean()
 
 
     def run(self):
@@ -187,14 +157,16 @@ if __name__ == "__main__":
     """
 
     # region EXPERIMENT: BookWriter
-    config = config.ConfigLSTM()
+    config = config.ConfigCNN()
     # config.save()
-    dataset = datasetfile.BookWriter(seq_len=config.SEQ_LEN)
-    model = modelfile.LSTM(input_size=config.INPUT_SIZE, seq_length=config.SEQ_LEN, num_layers=1,
-                       out_size=config.OUTPUT_SIZE, hidden_size=20, batch_size=config.TRAIN_BATCH_SIZE,
-                       device=config.DEVICE).to(config.DEVICE)
-    print(modelfile.GenericModel.count_parameters(model))
-    print("data size:", dataset.train_dataset.__len__())
+    dataset = datasetfile.IndicatorDataset(dataset_name='IndicatorDataset',
+                                           input_path='../dataset/finance/stocks/raw_stocks/',
+                                           save_dataset=False,
+                                           train_valid_ratio=0.9,
+                                           seq_len=20,
+                                           label_type='classification')
+    model = modelfile.CNN(config=config).to(config.DEVICE)
+
     # endregion
 
     # region  EXPERIMENT: SequenceLearningManyToOne
