@@ -332,7 +332,7 @@ class CNN(GenericModel):
         self.fc2 = nn.Linear(50, config.OUTPUT_SIZE)
 
         self.criterion = nn.CrossEntropyLoss()
-        self.optimizer = optim.SGD(self.parameters(), 0.001, momentum=0.9)
+        self.optimizer = optim.Adam(self.parameters(), 0.001)
 
     def forward(self, x):
         batch_size = x.shape[0]

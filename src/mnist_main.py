@@ -160,7 +160,7 @@ if __name__ == "__main__":
     config = config.ConfigCNN()
     # config.save()
     dataset = datasetfile.IndicatorDataset(dataset_name='IndicatorDataset',
-                                           input_path='../dataset/finance/stocks/raw_stocks/',
+                                           input_path='../dataset/finance/stocks/raw_stocks/inner',
                                            save_dataset=False,
                                            train_valid_ratio=0.9,
                                            seq_len=20,

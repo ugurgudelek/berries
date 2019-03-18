@@ -11,6 +11,11 @@ import pandas as pd
 import numpy as np
 from talib import RSI, SMA, MACD, WILLR, ULTOSC, MFI, STOCH
 
+import scipy
+
+import plotly.graph_objs as go
+from plotly.offline import download_plotlyjs, plot
+
 
 import plots
 import utils
@@ -425,6 +430,48 @@ class IndicatorDataset(GenericDataset):
         self.valid_dataset = IndicatorDataset.InnerIndicatorDataset(dataset=self.preprocessed_valid_dataset, seq_len=self.seq_len, problem_type=self.label_type)
         print()
 
+
+    def interpolate(self, stocks):
+        def inner_func(stock_data):
+            def cubic_spline(y):
+                x = np.arange(y.shape[0])
+                return scipy.interpolate.CubicSpline(x=x, y=y)(y)
+            stock_data['high'] = cubic_spline(y=stock_data['high'].values)
+            stock_data['low'] = cubic_spline(y=stock_data['low'].values)
+            stock_data['open'] = cubic_spline(y=stock_data['open'].values)
+            stock_data['close'] = cubic_spline(y=stock_data['close'].values)
+            stock_data['adjusted_close'] = cubic_spline(y=stock_data['adjusted_close'].values)
+
+
+
+            return stock_data
+
+        return stocks.groupby('name').apply(inner_func).dropna()
+
+    def low_pass(self, stocks):
+        def inner_func(stock_data, window=50):
+
+
+
+            old_stock_data = stock_data.copy(deep=True)
+
+            stock_data['high'] = stock_data['high'].rolling(window=window, min_periods=window, center=True).mean()
+            stock_data['low'] = stock_data['open'].rolling(window=window, min_periods=window, center=True).mean()
+            stock_data['open'] = stock_data['close'].rolling(window=window, min_periods=window, center=True).mean()
+            stock_data['close'] = stock_data['close'].rolling(window=window, min_periods=window, center=True).mean()
+            stock_data['adjusted_close'] = stock_data['adjusted_close'].rolling(window=window, min_periods=window, center=True).mean()
+
+
+            df = pd.DataFrame()
+            df['old'] = old_stock_data['adjusted_close'].values
+            df['new'] = stock_data['adjusted_close'].values
+
+            # df.plot()
+            return stock_data
+
+
+        return stocks.groupby('name').apply(inner_func).dropna()
+
     def preprocess_dataset(self, dataset, kind='train', label_type='classification'):
 
         dataset['date'] = dataset['date'].astype('datetime64[ns]')
@@ -433,7 +480,10 @@ class IndicatorDataset(GenericDataset):
         dataset['adjusted_close'] = dataset['adjusted_close'].values.astype(np.float)
         dataset['volume'] = dataset['volume'].values.astype(np.float)
 
+        dataset['raw_adjusted_close'] = dataset['adjusted_close'].values
 
+        dataset = self.low_pass(dataset)
+        dataset = self.interpolate(dataset)
 
         # calculate technical analysis values from stock data
         # this creates a new dataset depends on technical analysis
@@ -448,19 +498,18 @@ class IndicatorDataset(GenericDataset):
 
         dataset = dataset.dropna(axis=0).reset_index(drop=True)
 
-        dataset['raw_adjusted_close'] = dataset['adjusted_close'].values
-
         # make stationary, standardize
         dataset = self.differentiate(dataset, subset=['open','high','low','close',
-                                                      'adjusted_close'])
+                                                      'adjusted_close','raw_adjusted_close'])
         dataset = self.standardize(dataset,
                                     neg_subset=['date', 'name',
-                                                'raw_adjusted_close'], kind=kind)
+                                                ], kind=kind)
 
         if label_type == 'classification':
             # labelize with up,down,hold
-            dataset = self.label_top_bot_mid(dataset, window=15)
-            dataset = self.dilate(dataset, window=3)
+            # dataset = self.label_top_bot_mid(dataset, window=15)
+            # dataset = self.dilate(dataset, window=3)
+            dataset = self.label_n_ahead(dataset)
         if label_type == 'regression':
             # labelize with respect to distance
             # dataset = self.label_wrt_distance(dataset, window=15)
@@ -477,12 +526,37 @@ class IndicatorDataset(GenericDataset):
         # sort dataset
         dataset = dataset.sort_values(by=['date', 'name']).reset_index(drop=True)
 
+        plot_data = []
+        for colnum in range(2, dataset.shape[1]):
+            plot_data.append(go.Scatter(x=dataset['date'],
+                                        y=dataset.iloc[:, colnum],
+                                        name=dataset.columns[colnum]))
 
+        plot(plot_data, filename='pandas-time-series')
+        print()
         # # equalize up,down and hold labels
         # if kind == 'train':
         #     dataset = self.updown_scaling(dataset)
 
         return dataset
+
+    def label_n_ahead(self, stocks, n=5):
+        def inner_func(stock_data):
+
+            threshold = 0.05
+            # stock_data['act'] = stock_data['adjusted_close']
+            stock_data['label_num'] = stock_data['adjusted_close'].diff(periods=n).shift(periods=-n).values
+            stock_data['label'] = 'mid'
+            stock_data.loc[stock_data['label_num'] < -threshold, 'label'] = 'bot'
+            # stock_data['mid'] = ((-threshold <= stock_data['label_num']) & (stock_data['label_num']<= threshold))
+            stock_data.loc[stock_data['label_num'] > threshold, 'label'] = 'top'
+
+            stock_data = stock_data.drop(['label_num'], axis=1)
+
+            return stock_data
+
+        return stocks.groupby('name').apply(inner_func).dropna()
+
 
     @staticmethod
     def is_center_max(window_data):
