@@ -213,7 +213,7 @@ class GenericModel(nn.Module):
 
             # backward
             if loss._grad_fn is not None:  # means we are in training mode
-                loss.backward(retain_graph=True)
+                loss.backward(retain_graph=False)
 
                 # optimize
                 self.optimizer.step()
@@ -226,16 +226,21 @@ class GenericModel(nn.Module):
             #     self.detach()
 
     def validate(self, X, y):
+        self.train(False)
         with torch.no_grad():
             self.fit(X, y)
             self.validation_loss = self.current_loss
+        self.train(True)
 
     def predict(self, X):
         # predict(X)	Predict using the multi-layer perceptron classifier
+        self.train(False)
         with torch.no_grad():
             outputs = self.forward(X)
             _, predicted = torch.max(outputs.data, 1)
-            return predicted
+        self.train(True)
+        return predicted
+
 
     def generate(self, init_char, char2int ,top_k=5, seq_len=128):
         ''' Given a character, predict the next character.
@@ -286,7 +291,7 @@ class GenericModel(nn.Module):
 
         predicted = self.predict(X)
         correct = (predicted == y).sum().item()
-        return correct/(y.size()[0])
+        return correct/(y.size()[0]), predicted.cpu().numpy()
 
 
     def predict_log_proba(self, X):
@@ -328,7 +333,7 @@ class CNN(GenericModel):
                                padding=0, dilation=1, groups=1, bias=True)
 
         self.conv2_drop = nn.Dropout2d()
-        self.fc1 = nn.Linear(80, 50)
+        self.fc1 = nn.Linear(40, 50)
         self.fc2 = nn.Linear(50, config.OUTPUT_SIZE)
 
         self.criterion = nn.CrossEntropyLoss()

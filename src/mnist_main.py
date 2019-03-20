@@ -62,8 +62,12 @@ class Experiment:
         self.model = model.to(self.config.DEVICE)
         self.dataset = dataset
 
+
+
         self.load()
         # self.save()
+
+
 
 
 
@@ -94,12 +98,17 @@ class Experiment:
     def run_epoch(self, epoch):
 
         training_loss, validation_loss = [], []
-        scores = []
+        training_scores, validation_scores = [], []
         for step, (X, y) in enumerate(self.train_dataloader):
             # Fit the model
             self.model.fit(X.to(self.config.DEVICE).float(), y.to(self.config.DEVICE).long())
+
+            training_scores += [self.model.score(X.to(self.config.DEVICE).float(),
+                                                   y.to(self.config.DEVICE).long())[0]]
+
             training_loss += [self.model.training_loss.item()]
 
+        X_train, y_train = X,y
 
         for step, (X, y) in enumerate(self.valid_dataloader):
 
@@ -107,27 +116,75 @@ class Experiment:
             self.model.validate(X.to(self.config.DEVICE).float(), y.to(self.config.DEVICE).long())  # todo: current build call .validate when .score is used!
 
             # Score
-            scores += [self.model.score(X.to(self.config.DEVICE).float(), y.to(self.config.DEVICE).long())]
+            validation_scores += [self.model.score(X.to(self.config.DEVICE).float(),
+                                                   y.to(self.config.DEVICE).long())[0]]
             validation_loss += [self.model.validation_loss.item()]
 
-
-        # Predict
-
-        # X_sample, y_sample = self.dataset.random_train_sample(n=100)
-        # predicted_labels = self.model.predict(X_sample.to(self.config.DEVICE)).cpu().detach()
-        # predicted_labels = prediction_logprob
-
+        X_valid, y_valid = X, y
 
 
         # Log
         print("========================================\n")
         print("Training Loss: {}".format(np.array(training_loss).mean()))
         print("Validation Loss: {}".format(np.array(validation_loss).mean()))
-        print("Score: {}".format(np.array(scores).mean()))
+        print("Training Score: {}".format(np.array(training_scores).mean()))
+        print("Validation Score: {}".format(np.array(validation_scores).mean()))
+        print("========================================")
+
+        _,_,train_acc = self.predict_and_verbose(sample=self.dataset.random_train_sample(n=100), title='Train Random')
+        _,_,valid_acc = self.predict_and_verbose(sample=self.dataset.random_valid_sample(n=100), title='Valid Random')
+        _, _, last_valid_acc = self.predict_and_verbose(sample=(X_valid.to(self.config.DEVICE).float(),
+                                                           y_valid.to(self.config.DEVICE).long()), title='Last Valid Sampler')
+        _, _, last_train_acc = self.predict_and_verbose(sample=(X_train.to(self.config.DEVICE).float(),
+                                                                y_train.to(self.config.DEVICE).long()),
+                                                        title='Last Train Sampler')
+
+
+
+
+        self.writer.add_scalar('training_loss', np.array(training_loss).mean(), epoch)
+        self.writer.add_scalar('validation_loss', np.array(validation_loss).mean(), epoch)
+
+        self.writer.add_scalar('training_score', np.array(training_scores).mean(), epoch)
+        self.writer.add_scalar('validation_score', np.array(validation_scores).mean(), epoch)
+
+        self.writer.add_scalar('train_acc', train_acc, epoch)
+        self.writer.add_scalar('valid_acc', valid_acc, epoch)
+
+        self.writer.add_scalar('last_train_acc', last_train_acc, epoch)
+        self.writer.add_scalar('last_valid_acc', last_valid_acc, epoch)
+
+
+
 
 
         return np.array(training_loss).mean(), np.array(validation_loss).mean()
 
+    # Predict
+    def predict_and_verbose(self, sample, title):
+        X_sample, y_sample = sample
+        prediction_acc, predicted_labels = self.model.score(X_sample.to(self.config.DEVICE).float(),
+                                                            y_sample.to(self.config.DEVICE).long())
+
+        y_sample = y_sample.cpu().numpy()
+        cm = confusion_matrix(y_true=y_sample,
+                              y_pred=predicted_labels, labels=[0, 1, 2])
+        cm_norm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+
+        print(f"\n==================={title}=======================\n"
+              f"y:\n{y_sample}\n"
+              f"prediction:\n{predicted_labels}\n"
+              f"accuracy:\n{prediction_acc}\n"
+              f"cm:\n{cm}\n"
+              f"cm_norm:\n{cm_norm}\n"
+              f"per_class_acc:\n"
+              f"0: {((predicted_labels == 0) & (y_sample == 0)).sum()}/{(y_sample == 0).sum()}:{(predicted_labels == 0).sum()}\n"
+              f"1: {((predicted_labels == 1) & (y_sample == 1)).sum()}/{(y_sample == 1).sum()}:{(predicted_labels == 1).sum()}\n"
+              f"2: {((predicted_labels == 2) & (y_sample == 2)).sum()}/{(y_sample == 2).sum()}:{(predicted_labels == 2).sum()}\n"
+              f"per_class_acc: {cm_norm[0,0],cm_norm[1,1],cm_norm[2,2]}\n"              
+              f"\n=================================================\n")
+
+        return y_sample, predicted_labels, prediction_acc
 
     def run(self):
         epoch = 0
@@ -158,13 +215,14 @@ if __name__ == "__main__":
 
     # region EXPERIMENT: BookWriter
     config = config.ConfigCNN()
-    # config.save()
+    config.save()
     dataset = datasetfile.IndicatorDataset(dataset_name='IndicatorDataset',
-                                           input_path='../dataset/finance/stocks/raw_stocks/inner',
+                                           input_path='../dataset/finance/stocks/raw_stocks/spy',
                                            save_dataset=False,
-                                           train_valid_ratio=0.9,
+                                           train_valid_ratio=0.8,
                                            seq_len=20,
-                                           label_type='classification')
+                                           label_type='classification',
+                                           output_path=f"{config.EXPERIMENT_DIR}")
     model = modelfile.CNN(config=config).to(config.DEVICE)
 
     # endregion

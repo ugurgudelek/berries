@@ -83,7 +83,7 @@ class ConfigCNN(GenericConfig):
 
         # Dataset params
         self.TRAIN_VALID_RATIO = 0.90
-        self.DATASET_NAME = 'IndicatorDataset'
+        self.DATASET_NAME = 'IndicatorDataset_SPY'
 
         # Experiment params
         self.EPOCH_SIZE = 1000

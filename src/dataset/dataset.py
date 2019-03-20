@@ -91,8 +91,6 @@ class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
             return dataset.train_labels[idx].item()
         elif dataset_type is torchvision.datasets.ImageFolder:
             return dataset.imgs[idx][1]
-        # elif dataset_type is FinanceDataset.InnerIndicatorDataset:
-        #     return dataset[idx][1]
         elif dataset_type is IndicatorDataset.InnerIndicatorDataset:
             return dataset[idx][1]
         else:
@@ -169,10 +167,15 @@ class GenericDataset(metaclass=ForceRequiredAttributeDefinitionMeta):
     @staticmethod
     def _random_sample(dataset, n):
         perm = np.random.randint(0, dataset.__len__(), size=n)
-        data = dataset.data.numpy()[:,perm,:]
-        labels = dataset.labels.numpy()[perm]
 
-        return torch.transpose(torch.Tensor(data), 0, 1), torch.Tensor(labels).long()
+
+        data, labels = [], []
+        for i, ix in enumerate(perm):
+            _data, _label = dataset[ix]
+            data.append(_data)
+            labels.append(_label)
+
+        return torch.Tensor(data).float(), torch.Tensor(labels).long()
 
 
 
@@ -374,10 +377,12 @@ class IndicatorDataset(GenericDataset):
 
     """
 
-    def __init__(self, dataset_name, input_path, save_dataset, train_valid_ratio, seq_len, label_type='classification'):
+    def __init__(self, dataset_name, input_path, save_dataset, train_valid_ratio, seq_len,
+                 label_type='classification', output_path=None):
 
         self.dataset_name = dataset_name
         self.input_path = input_path
+        self.output_path = output_path
         self.train_valid_ratio = train_valid_ratio
         self.save_dataset = save_dataset
         self.seq_len = seq_len
@@ -398,6 +403,7 @@ class IndicatorDataset(GenericDataset):
         raw_dataset = raw_dataset.sort_values(by=['date','name']).reset_index(drop=True)
 
         train_len = int(raw_dataset.shape[0] * train_valid_ratio)
+        train_len = train_len - train_len % seq_len
         self.raw_train_dataset = raw_dataset.iloc[:train_len, :]
         self.raw_valid_dataset = raw_dataset.iloc[train_len:, :]
 
@@ -449,7 +455,7 @@ class IndicatorDataset(GenericDataset):
         return stocks.groupby('name').apply(inner_func).dropna()
 
     def low_pass(self, stocks):
-        def inner_func(stock_data, window=50):
+        def inner_func(stock_data, window=10):
 
 
 
@@ -461,6 +467,7 @@ class IndicatorDataset(GenericDataset):
             stock_data['close'] = stock_data['close'].rolling(window=window, min_periods=window, center=True).mean()
             stock_data['adjusted_close'] = stock_data['adjusted_close'].rolling(window=window, min_periods=window, center=True).mean()
 
+            stock_data['smooth_close'] = stock_data['smooth_close'].rolling(window=window, min_periods=window, center=True).mean()
 
             df = pd.DataFrame()
             df['old'] = old_stock_data['adjusted_close'].values
@@ -482,8 +489,11 @@ class IndicatorDataset(GenericDataset):
 
         dataset['raw_adjusted_close'] = dataset['adjusted_close'].values
 
-        dataset = self.low_pass(dataset)
-        dataset = self.interpolate(dataset)
+        dataset['non_smooth_close'] = dataset['adjusted_close'].values
+        dataset['smooth_close'] = dataset['adjusted_close'].values
+
+        # dataset = self.low_pass(dataset)  # does not include 'raw_adjusted_close' & 'non_smooth_close'
+        # dataset = self.interpolate(dataset)
 
         # calculate technical analysis values from stock data
         # this creates a new dataset depends on technical analysis
@@ -498,18 +508,13 @@ class IndicatorDataset(GenericDataset):
 
         dataset = dataset.dropna(axis=0).reset_index(drop=True)
 
-        # make stationary, standardize
-        dataset = self.differentiate(dataset, subset=['open','high','low','close',
-                                                      'adjusted_close','raw_adjusted_close'])
-        dataset = self.standardize(dataset,
-                                    neg_subset=['date', 'name',
-                                                ], kind=kind)
+
 
         if label_type == 'classification':
             # labelize with up,down,hold
-            # dataset = self.label_top_bot_mid(dataset, window=15)
-            # dataset = self.dilate(dataset, window=3)
-            dataset = self.label_n_ahead(dataset)
+            dataset = self.label_top_bot_mid(dataset, window=20)
+            dataset = self.dilate(dataset, window=3)
+            # dataset = self.label_n_ahead(dataset, n=1)
         if label_type == 'regression':
             # labelize with respect to distance
             # dataset = self.label_wrt_distance(dataset, window=15)
@@ -519,20 +524,42 @@ class IndicatorDataset(GenericDataset):
             dataset['label'] = dataset['zigzag']
             dataset = dataset.drop('zigzag', axis=1)
 
-            dataset = dataset.drop(['volume', 'year', 'month', 'week', 'weekday', 'day'], axis=1)
 
-            print('Features: {}'.format(list(dataset.columns)))
+
+
+
+        # make stationary, standardize
+        # dataset = self.differentiate(dataset, subset=['open','high','low','close',
+        #                                               'adjusted_close', 'non_smooth_close'])
+        dataset = self.standardize(dataset,
+                                    neg_subset=['date', 'name','raw_adjusted_close', 'smooth_close'], kind=kind)
+
+
 
         # sort dataset
         dataset = dataset.sort_values(by=['date', 'name']).reset_index(drop=True)
 
-        plot_data = []
-        for colnum in range(2, dataset.shape[1]):
-            plot_data.append(go.Scatter(x=dataset['date'],
-                                        y=dataset.iloc[:, colnum],
-                                        name=dataset.columns[colnum]))
 
-        plot(plot_data, filename='pandas-time-series')
+        if self.output_path is not None:
+            plot_dataset = dataset.sort_values(by=['name', 'date']).reset_index(drop=True)
+            plot_these = ['adjusted_close', 'non_smooth_close', 'raw_adjusted_close', 'smooth_close']
+            traces = []
+            for colname in plot_these:
+                trace = go.Scatter(x=np.arange(plot_dataset.shape[0]),
+                                   y=plot_dataset.loc[:, colname],
+                                   name=colname,
+                                   mode='markers+lines',
+                                   marker = dict(color=plot_dataset.loc[:, 'label'].map({'bot':'yellow',
+                                                                                'mid':'blue',
+                                                                                'top':'red'})))
+
+                traces.append(trace)
+
+
+
+            fig = go.Figure(traces,
+                 layout=go.Layout(title=plot_dataset['name'].values[0]))
+            plot(fig, filename=f"{self.output_path}/dataset_plot.html")
         print()
         # # equalize up,down and hold labels
         # if kind == 'train':
@@ -543,12 +570,12 @@ class IndicatorDataset(GenericDataset):
     def label_n_ahead(self, stocks, n=5):
         def inner_func(stock_data):
 
-            threshold = 0.05
-            # stock_data['act'] = stock_data['adjusted_close']
+
             stock_data['label_num'] = stock_data['adjusted_close'].diff(periods=n).shift(periods=-n).values
+            threshold = stock_data['label_num'].quantile(0.66)
+
             stock_data['label'] = 'mid'
             stock_data.loc[stock_data['label_num'] < -threshold, 'label'] = 'bot'
-            # stock_data['mid'] = ((-threshold <= stock_data['label_num']) & (stock_data['label_num']<= threshold))
             stock_data.loc[stock_data['label_num'] > threshold, 'label'] = 'top'
 
             stock_data = stock_data.drop(['label_num'], axis=1)
@@ -901,10 +928,13 @@ class IndicatorDataset(GenericDataset):
             self.dataset = dataset
 
             self.data = self.dataset.drop(['date', 'name', 'open', 'high', 'low', 'close',
-                                        'label', 'raw_adjusted_close'], axis=1)
+                                        'label', 'raw_adjusted_close',
+                                           'smooth_close','non_smooth_close'], axis=1)
 
+            self.data = self.data.drop(['weekday','day','week','month','year'], axis=1)
             self.labels = self.dataset['label'].map({'top':2, 'mid':1, 'bot':0}).values
 
+            print('Features: {}'.format(list(self.data.columns)))
             # if problem_type == 'classification':
             #     # turn categorical to one hot encoding
             #     self.y = pd.get_dummies(self.y)
@@ -926,10 +956,6 @@ class IndicatorDataset(GenericDataset):
         def __getitem__(self, ix):
             X = self.data.iloc[ix: ix + self.seq_len, :].values.astype(float)
             y = self.labels[ix + self.seq_len - 1].astype(float)
-
-            name = self.dataset['name'].iloc[ix: ix + self.seq_len - 1]
-            date = self.dataset['date'].iloc[ix: ix + self.seq_len - 1]
-            extra_info = {'name': name, 'date': date}
 
             X = np.expand_dims(X, axis=0)
 
@@ -985,7 +1011,8 @@ class IndicatorDataset(GenericDataset):
                 else:
                     raise Exception('Invalid Type. Only train and validation allowed')
 
-            return (series - mu) / sigma
+                return (series - mu) / sigma
+            return series
 
 class LoadDataset():
     def __init__(self, csv_path, train_valid_ratio=0.9, train_day=None, valid_day=None, seq_length=96) -> None:
