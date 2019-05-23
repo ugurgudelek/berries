@@ -1,198 +1,132 @@
+import plotly
 
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
+from plotly import tools
+import plotly.graph_objs as go
+import os
+from collections import defaultdict
 
+OFFLINE = True
 
-
-def is_center_max(window_data):
-    return np.max(window_data) == window_data[len(window_data) // 2]
-
-
-
-def is_center_min(window_data):
-    return np.min(window_data) == window_data[len(window_data) // 2]
-
-def point2label(data, on, window=15):
-    """
-    Finds turning points while iterating over data[on]
-
-    Args:
-        data: (pd.DataFrame) applied dataset
-        on: applied column name
-        window: rolling window size
-
-    Returns: (pd.Series) labels
-
-    """
-    data = data.copy()
-    data['maxs'] = data[on].rolling(window, center=True, min_periods=window).apply(
-        is_center_max, raw=True)
-    data['mins'] = data[on].rolling(window, center=True, min_periods=window).apply(
-        is_center_min, raw=True)
-
-    data['label'] = 'mid'
-    data.loc[data['maxs'] == 1, 'label'] = 'top'
-    data.loc[data['mins'] == 1, 'label'] = 'bot'
-
-    data = data.drop(['maxs', 'mins'], axis=1)
-
-    return data['label']
-
-
-def filter_consequtive_same_label(labels):
-    """
-
-    Args:
-        labels: (pd.Series)
-
-    Returns:
-
-    """
-    state = None
-    for i, label in enumerate(labels):
-        if label == 'mid':
-            continue
-        if state is None:
-            state = label
-            continue
-        if state == label:
-            labels[i] = 'mid'
+def isnotebook():
+    try:
+        shell = get_ipython().__class__.__name__
+        if shell == 'ZMQInteractiveShell':
+            return True  # Jupyter notebook or qtconsole
+        elif shell == 'TerminalInteractiveShell':
+            return False  # Terminal running IPython
         else:
-            state = label
-
-    return labels
-
-
-def crop_firstnonbot_and_lastnontop(labels):
-    """
-
-    Args:
-        labels: (pd.Series)
-
-    Returns:( pd.Series)
-
-    """
-
-    first_bot_idx = labels[(labels == 'bot')].index.values[0]
-    last_top_idx = labels[(labels == 'top')].index.values[-1]
-
-    return labels[first_bot_idx:last_top_idx + 1]
+            return False  # Other type (?)
+    except NameError:
+        return False  # Probably standard Python interpreter
 
 
-def plot_data_zigzag_tpoints(data, point_labels, zigzag_distances, label, colormap=None, linestyles=None):
-    """
-    Plots data & zigzag data & turning points
-
-    Args:
-        data: (pd.Series)
-        labels: (pd.Series)
-        label: (str) label of plot
-        colormap: (dict) e.g : {'mid': (0.2, 0.4, 0.6, 0), 'top': (1, 0, 0, 0.7), 'bot': (0, 1, 0, 0.7)}
-        linestyle: (str) e.g : --b
-
-    Returns: fig
-
-    """
-
-    x = range(len(point_labels))
-
-    # (r,g,b,a)
-    if colormap is None:
-        colormap = {'mid': (0.2, 0.4, 0.6, 0), 'top': (1, 0, 0, 0.7), 'bot': (0, 0, 1, 0.7)}
-    if linestyles is None:
-        linestyles = {'data': '--g', 'zigzag': '--y'}
-
-    plt.scatter(x=x, y=data, c=[colormap[label] for label in point_labels], label=None, marker='^')
-    plt.plot(x, data, linestyles['data'], alpha=0.6, label=label)
-    plt.plot(x, zigzag_distances, linestyles['zigzag'], label='zigzag', alpha=0.6)
-    plt.legend()
-
-    return plt
+if isnotebook():
+    if OFFLINE:
+        from plotly.offline import iplot as plotlyplot
+        plotly.offline.init_notebook_mode(connected=True)
+    else:
+        from plotly.plotly import iplot as plotlyplot
 
 
-def label2distance(data, labels):
-    # point turning points then process for distance
-    # after this line, stocks has 'label' column which has top-mid-bot values.
-
-    def distance(idxs, turning_points):
-        """
-        Assumes turning_points start with increasing segment.
-        Args:
-            idxs: used for creation of dist array
-            turning_points:
-
-        Returns:
-
-        """
-        segments = np.array(list(zip(turning_points[:-1], turning_points[1:])))
-
-        def calc_dist(data, current_ix, lower_ix, upper_ix):
-            delta_x = upper_ix - lower_ix
-            delta_y = data[upper_ix] - data[lower_ix]
-            slope = delta_y / delta_x
-
-            d = data[lower_ix] + slope * (current_ix - lower_ix)
-            return d, slope
-
-        dist = np.zeros_like(idxs, dtype=np.float)
-        for (lower_ix, upper_ix) in segments:
-            for current_ix in range(lower_ix, upper_ix):
-                dist[current_ix], slope = calc_dist(data, current_ix, lower_ix, upper_ix)
+else:
+    if OFFLINE:
+        from plotly.offline import plot as plotlyplot
+    else:
+        from plotly.plotly import plot as plotlyplot
 
 
-        return dist
-
-    mid_idxs = labels[labels == 'mid'].index.values
-    top_idxs = labels[labels == 'top'].index.values
-    bot_idxs = labels[labels == 'bot'].index.values
-
-    turning_points = np.sort(np.concatenate((bot_idxs, top_idxs)))
-    distances = distance(labels.index.values, turning_points)
-
-    # at this point "label" values are between 0-1 range.
-    # let me add -0.5 bias
-    # distances = distances - 0.5
-
-    return distances
+class XY():
+    def __init__(self, x, y, name, opacity=0.5, linewidth=2, dash=None):
+        self.x = x
+        self.y = y
+        self.name = name
+        self.opacity = opacity
+        self.dash = dash  # dash options include 'dash', 'dot', and 'dashdot'
+        self.linewidth = linewidth
 
 
-def zigzag(stock, on, window):
-    labels = point2label(stock, on=on, window=window)
-    labels = filter_consequtive_same_label(labels=labels)
-    labels = crop_firstnonbot_and_lastnontop(labels=labels)
-
-    stock['label'] = labels
-    stock = stock.dropna(axis=0).reset_index(drop=True)
-
-    zigzag_distances = label2distance(stock[on], stock['label'])
-
-    stock['zigzag'] = zigzag_distances
-
-    return stock
+    def __len__(self):
+        return len(self.x)
 
 
+class BaseCurve():
+    def __init__(self):
+        self.container = defaultdict(XY)
+
+    def add_vector(self, name, y, x=None, opacity=0.5, linewidth=2, dash=None):
+        if x is None:
+            x = list(range(len(y)))
+        self.container[name] = XY(x, y, name=name, opacity=opacity, linewidth=linewidth, dash=dash)
+
+    def to_traces(self):
+        return [go.Scatter(x=data.x,
+                           y=data.y,
+                           mode='lines+markers',
+                           opacity=0.5,
+                           name=name,
+                           line=dict(width=data.linewidth,
+                                     dash=data.dash)
+                           )
+                for name, data in self.container.items()]
+
+    def __len__(self):
+        return self.container.__len__()
 
 
-if __name__ == "__main__":
+class LearningCurve(BaseCurve):
+    def __init__(self):
+        BaseCurve.__init__(self)
 
 
-    stock = pd.read_csv('../input/spy.csv')
-    stock['pct_change'] = stock['adjusted_close'].pct_change()
-    stock = stock.dropna(axis=0).reset_index(drop=True)
+class PredictionCurve(BaseCurve):
+    def __init__(self):
+        BaseCurve.__init__(self)
 
-    stock = zigzag(stock, on='pct_change', window=15)
-
-    fig = plt.figure()
-
-    plot_data_zigzag_tpoints(data=stock['pct_change'],
-                             point_labels=stock['label'],
-                             zigzag_distances=stock['zigzag'],
-                             linestyles={'data':'-r', 'zigzag':'--y'},
-                             label='pct_change')
-    plt.plot(stock['close']/1500 - 0.2, label='close')
-    plt.show()
+class LSTMInnerCurve(BaseCurve):
+    def __init__(self):
+        BaseCurve.__init__(self)
 
 
-    print()
+class Plotter():
 
+    def __init__(self, title, path):
+        self.title = title
+        self.path = f"{os.path.join(path, self.title)}.html"
+        fig = tools.make_subplots(rows=3, cols=1, shared_xaxes=False, shared_yaxes=False,
+                                  subplot_titles=('Prediction Curve', 'LSTM Inner States', 'Learning Curve'))
+        fig['layout'].update(title=title,
+                             yaxis1=dict(range=[-1., 2.]),
+                             yaxis2=dict(range=None))
+        self.figure = go.FigureWidget(fig)
+        self.plot(filename=self.path, auto_open=True)
+
+        # Learning Curve
+        self.learning_curve = LearningCurve()
+
+        # Prediction Curve
+        self.predicton_curve = PredictionCurve()
+
+        # LstmInner Curve
+        self.lstminner_curve = LSTMInnerCurve()
+
+    def reset_traces(self):
+        self.figure.data = []  # reset traces
+
+    def update(self):
+        self.reset_traces()
+
+        self.figure.add_traces(self.predicton_curve.to_traces(),
+                               rows=[1]*len(self.predicton_curve),
+                               cols=[1]*len(self.predicton_curve))
+        self.figure.add_traces(self.lstminner_curve.to_traces(),
+                               rows=[2] * len(self.lstminner_curve),
+                               cols=[1] * len(self.lstminner_curve))
+        self.figure.add_traces(self.learning_curve.to_traces(),
+                               rows=[3] * len(self.learning_curve),
+                               cols=[1] * len(self.learning_curve))
+
+
+        self.plot(filename=self.path, auto_open=False)
+
+    def plot(self, **kwargs):
+        plotlyplot(self.figure, **kwargs)
