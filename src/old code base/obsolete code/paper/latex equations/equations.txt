@@ -1,7 +1,0 @@
-euclidean distance 	: ||a-b||_2 = \sqrt{\sum_a^b(a_i-b_i)^2}
-pearson 			: \rho_{x,y} =  \frac{cov(X,Y) }{\sigma_x\sigma_x} 
-tanh				: \tanh x = \frac{1-e^{-2x}}{1+e^{-2x}}
-sigmoid				: \frac{1}{1+e^{-x}}
-relu				: R(z) = max(0,z)
-linear				: y_i = \beta_01 + \beta_1x_{i1} + ... + \beta_px_{ip} = x_i^T\beta,   i=1,...,n,
-						where T denotes the transpose and x_i^T\beta is the inner product between two vector.

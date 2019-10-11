@@ -1,0 +1,503 @@
+import torch
+from torch import nn
+from torch.autograd import Variable
+import torch.nn.init as init
+import os
+import matplotlib.pyplot as plt
+import numpy as np
+import torch.nn.functional as F
+from functools import partial
+from torch import optim
+from tensorboardX import SummaryWriter
+
+import config
+import dataset
+
+# Estimate Size
+from pytorch_modelsize import SizeEstimator
+
+class GenericModel(nn.Module):
+
+    def __init__(self):
+        nn.Module.__init__(self)
+
+        self.training_loss = 0
+        self.validation_loss = 0
+
+
+        # ============== FIT - PREDICT - VALIDATE METHODS ====================
+        # self.train_on_batch = partial(self._on_batch, train=True)
+        # self.validate_on_batch = partial(self._on_batch, train=False)
+
+
+        # Predict given xs at once
+        # self.predict = partial(self._on_batch, ys=None, train=False)
+
+        # Fit model for given dataloader xs and ys
+        # self.fit = partial(self._on_dataloader, train=True)
+        # self.validate = partial(self._on_dataloader, train=False)
+
+    def _on_dataloader(self, dataloader, train):
+        """Never call this function directly!"""
+
+        losses = np.array([])
+        for step, (xs, ys) in enumerate(dataloader):
+            xs = xs.unsqueeze(dim=1)
+            ys = ys.unsqueeze(dim=1)
+            xs = Variable(xs.float(), requires_grad=False)
+            ys = Variable(ys.float(), requires_grad=False)
+
+            if train:
+                output,loss = self.train_on_batch(xs, ys)
+            else:
+                output,loss = self.validate_on_batch(xs, ys)
+
+            losses = np.append(losses, loss.item())
+
+        if train:
+            self.train_loss = losses.mean()
+        if not train:
+            self.valid_loss = losses.mean()
+
+    def _on_batch(self, xs, ys, train):
+        """Never call this function directly!"""
+        # if this call for validation or test, change model mode to evaluation
+        # this is necessary because dropout and batch normalization should behave differently on evaluation mode
+        if not train:
+            self.eval()
+
+        self.optimizer.zero_grad()  # pytorch accumulates gradients.
+
+        xs = xs.to(self.device)
+        # forward
+        output = self.forward(xs)
+        loss = None
+
+        if ys is not None:
+            ys = ys.to(self.device)
+
+            # loss
+            if isinstance(self.criterion, nn.NLLLoss):
+                ys = ys.long()
+            loss = self.criterion(output, ys.squeeze(dim=1).long())
+
+            if train:
+
+                # backward
+                loss.backward(retain_graph=True)
+                #optimize
+                self.optimizer.step()
+
+        # detach first hiddens of previous iteration
+        if isinstance(self, LSTM):
+            self.detach()
+
+        # if this call for validation or test, model mode has changed to eval before,
+        # now we need to revert this behaviour
+        if not train:
+            self.train()
+
+        return output, loss
+
+
+    def to_onnx(self, directory):
+        # todo: below line not working right now. so check:
+        # https://github.com/lanpa/tensorboardX/issues/166
+        # estimator.writer.add_graph(model, (dummy_input,))
+
+        assert 'dummy_input' in dir(self), 'dummy_input method should be implemented in model class!'
+        torch.onnx.export(self, self.dummy_input(), os.path.join(directory, 'model.onnx'), verbose=True)
+
+    def to_txt(self, directory):
+        with open(os.path.join(directory, 'model.txt'), 'w') as f:
+            f.write(self.__str__())
+
+    def get_layers(self):
+        layers = []
+
+        def _recursive_get_layers(network):
+            for layer in network.children():
+                if isinstance(layer,
+                              nn.Sequential):  # if sequential layer, apply recursively to layers in sequential layer
+                    _recursive_get_layers(layer)
+                if list(layer.children()).__len__() == 0:  # if leaf node, add it to list
+                    layers.append(layer)
+
+        _recursive_get_layers(network=self)  # start with whole network
+
+        return layers
+
+    def weight_bias_name(self):
+        "Generator for weight, bias, name"
+        layers = self.get_layers()
+        title = None
+        weights = None
+        for i, layer in enumerate(layers):
+            # LSTM Layer
+            if isinstance(layer, nn.LSTM):
+                num_lstm_layer = layer.state_dict().keys().__len__()//4  # input,hidden,weight,bias for each
+
+                for i_h in ['i', 'h']:
+                    for layer_num in range(num_lstm_layer):
+                        name = '{i_or_h}h_l{layer_num}'.format(i_or_h=i_h, layer_num=layer_num)
+                        weight_key = 'weight_'+name
+                        bias_key = 'bias_'+name
+
+                        weight = layer.state_dict()[weight_key].data.numpy()
+                        bias = layer.state_dict()[bias_key].data.numpy()
+
+                        yield weight, bias, 'lstm_'+name
+
+            # FC Layer
+            if isinstance(layer, nn.Linear):
+                name = layer._get_name()
+                weight = layer.state_dict()['weight'].data.numpy()
+                bias = layer.state_dict()['bias'].data.numpy()
+
+                yield weight, bias, name
+
+    def visualize_weights(self):
+        # todo: delete 3,4 and make this method generic
+
+        wbn = self.weight_bias_name()
+        weights, biases, names = list(zip(*[(weight, bias, name) for weight, bias, name in wbn]))
+
+        f, axarr = plt.subplots(3, 4)  # (nrows, ncols)
+
+        def _process_weight(ax, name, weight):
+            ax.set_title(name)
+            ax.imshow(weight, )
+            # ax.colorbar()
+
+        def _maybe_reshape(arr):
+            if np.ndim(arr) == 1:
+                return np.expand_dims(arr, axis=1)
+            if arr.shape[0] == 1:
+                return np.transpose(arr)
+            return arr
+
+        idx = 0
+        for (name, weight, bias) in zip(names, weights, biases):
+            _process_weight(axarr[idx // 4][idx % 4], name + '_weight', _maybe_reshape(weight))
+            idx += 1
+            _process_weight(axarr[idx // 4][idx % 4], name + '_bias', _maybe_reshape(bias))
+            idx += 1
+
+        return f
+
+    def is_LSTM(self):
+        return isinstance(self, LSTM)
+
+
+    #  Sklearn type model methods.
+    def fit(self, X, y):
+        # fit(X, y)	Fit the model to data matrix X and target(s) y.
+
+            # xs = xs.unsqueeze(dim=1)
+            # ys = ys.unsqueeze(dim=1)
+            # X = Variable(X, requires_grad=False)
+            # y = Variable(y, requires_grad=False)
+
+            # if this call for validation or test, change model mode to evaluation
+            # this is necessary because dropout and batch normalization should behave differently on evaluation mode
+            self.optimizer.zero_grad()  # pytorch accumulates gradients.
+
+            # xs = xs.to(self.device) # todo: do it in dataset class
+
+            # forward
+            outputs = self.forward(X)
+            # loss
+            loss = self.criterion(outputs, y)
+
+            self.current_loss = loss
+
+            # backward
+            if loss._grad_fn is not None:  # means we are in training mode
+                loss.backward(retain_graph=False)
+
+                # optimize
+                self.optimizer.step()
+                self.training_loss = self.current_loss
+
+
+
+            # # detach first hiddens of previous iteration
+            # if self.is_LSTM():
+            #     self.detach()
+
+    def validate(self, X, y):
+        self.train(False)
+        with torch.no_grad():
+            self.fit(X, y)
+            self.validation_loss = self.current_loss
+        self.train(True)
+
+    def predict(self, X):
+        # predict(X)	Predict using the multi-layer perceptron classifier
+        self.train(False)
+        with torch.no_grad():
+            outputs = self.forward(X)
+            _, predicted = torch.max(outputs.data, 1)
+        self.train(True)
+        return predicted
+
+
+    def generate(self, init_char, char2int ,top_k=5, seq_len=128):
+        ''' Given a character, predict the next character.
+
+            Returns the predicted character and the hidden state.
+        '''
+
+        # set the evaluation mode
+        with torch.no_grad():
+
+            # placeholder for the generated text
+            seq = np.empty(seq_len + 1)
+            seq[0] = char2int[init_char]
+
+            # now we need to encode the character - (1, vocab_size)
+            init_char = dataset.GenericDataset.to_categorical(char2int[init_char], num_classes=self.out_size)
+
+            # add the batch dimension
+            init_char = torch.from_numpy(init_char).unsqueeze(0).to(self.device)
+
+            # for the sequence length
+            for t in range(seq_len):
+                init_char = init_char.unsqueeze(0)
+                outputs = self.forward(init_char)
+
+                # h_2 now holds the vector of predictions (1, vocab_size)
+                # we want to sample 5 top characters
+                p, top_char = outputs.topk(top_k)
+
+                # get the top k characters by their probabilities
+                top_char = top_char.squeeze().cpu().numpy()
+
+                # sample a character using its probability
+                p = p.detach().squeeze().cpu().numpy()
+                init_char = np.random.choice(top_char, p=p / p.sum())
+
+                # append the character to the output sequence
+                seq[t + 1] = init_char
+
+                # prepare the character to be fed to the next LSTM cell
+                init_char = dataset.GenericDataset.to_categorical(init_char, num_classes=self.out_size)
+                init_char = torch.from_numpy(init_char).unsqueeze(0).to(self.device)
+
+        return seq
+
+    def score(self, X, y):
+        # score(X, y[, sample_weight])	Returns the mean accuracy on the given test data and labels.
+
+        predicted = self.predict(X)
+        correct = (predicted == y).sum().item()
+        return correct/(y.size()[0]), predicted.cpu().numpy()
+
+
+    def predict_log_proba(self, X):
+        # predict_log_proba(X)	Return the log of probability estimates.
+        pass
+    def predict_proba(self, X):
+        # predict_proba(X)	Probability estimates.
+        pass
+
+    def set_params(self, **params):
+        # set_params(**params)	Set the parameters of this estimator.
+        pass
+
+    def get_params(self, deep=None):
+        # get_params([deep])	Get parameters for this estimator.
+        pass
+
+    @staticmethod
+    def count_parameters(model):
+        return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+
+
+
+class CNN(GenericModel):
+    def __init__(self, config):
+
+        # todo: add params to CNN
+        GenericModel.__init__(self)
+        self.device = config.DEVICE
+
+
+        self.conv1 = nn.Conv2d(in_channels=config.INPUT_SIZE, out_channels=100,
+                               kernel_size=5, stride=1,
+                               padding=0, dilation=1, groups=1, bias=True)
+        self.conv2 = nn.Conv2d(in_channels=100, out_channels=20,
+                               kernel_size=5, stride=1,
+                               padding=0, dilation=1, groups=1, bias=True)
+
+        self.conv2_drop = nn.Dropout2d()
+        self.fc1 = nn.Linear(40, 50)
+        self.fc2 = nn.Linear(50, config.OUTPUT_SIZE)
+
+        self.criterion = nn.CrossEntropyLoss()
+        self.optimizer = optim.Adam(self.parameters(), 0.001)
+
+    def forward(self, x):
+        batch_size = x.shape[0]
+        x = F.relu(F.max_pool2d(self.conv1(x), kernel_size=2))
+        x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), kernel_size=2))
+        x = x.view(batch_size, -1)
+        x = F.relu(self.fc1(x))
+        x = F.dropout(x, training=self.training)
+        x = self.fc2(x)
+        return x
+
+    def dummy_input(self):
+        return Variable(torch.rand(100, 1, 28, 28)).to('cuda')
+
+
+
+class LSTM(GenericModel):
+    """
+    """
+
+    def __init__(self, input_size, seq_length, num_layers, out_size, hidden_size, batch_size, device):
+        GenericModel.__init__(self)
+
+        self.input_size = input_size
+        self.seq_length = seq_length
+        self.num_layers = num_layers
+        self.out_size = out_size
+        self.batch_size = batch_size
+
+        self.hidden_size = hidden_size
+
+        self.name = 'LSTM'
+        self.device = device
+
+        # Inputs: input, (h_0,c_0)
+        #   input(seq_len, batch, input_size)
+        #   h_0(num_layers * num_directions, batch, hidden_size)
+        #   c_0(num_layers * num_directions, batch, hidden_size)
+        #   Note:If (h_0, c_0) is not provided, both h_0 and c_0 default to zero.
+        # Outputs: output, (h_n, c_n)
+        #   output (seq_len, batch, hidden_size * num_directions)
+        #   h_n (num_layers * num_directions, batch, hidden_size)
+        #   c_n (num_layers * num_directions, batch, hidden_size)
+        self.lstm = nn.LSTM(input_size=self.input_size,
+                            hidden_size=self.hidden_size,
+                            num_layers=self.num_layers,
+                            bias=True,
+                            batch_first=False,
+                            dropout=0.5,  # 0 means no probability
+                            bidirectional=False)
+
+        self.fc = nn.Sequential(nn.Linear(in_features=self.hidden_size, out_features=100),
+                                # nn.BatchNorm1d(num_features=100),  # todo: test batchnorm
+                                nn.ReLU(),  # todo: test ReLU vs SELU
+                                nn.Linear(in_features=100, out_features=150),
+                                # nn.BatchNorm1d(num_features=150),
+                                nn.ReLU(),
+                                nn.Linear(in_features=150, out_features=self.out_size))
+
+        self.hidden = self.init_hidden()
+
+        # todo: I have found that initialization destroys the learning process. Think why and fixit.
+        # self.initialize()
+
+        self.criterion = nn.NLLLoss()
+        self.optimizer = optim.Adam(self.parameters(), 0.001)
+
+    def initialize(self):
+        for w in self.lstm.parameters():
+            init.normal_(w)  # inplace
+
+        for w in self.fc.parameters():
+            init.normal_(w)  # inplace
+
+    def init_hidden(self, batch_size=None):
+        """
+        Returns:
+            (Variable,Variable): (h_0, c_0)
+        """
+        if batch_size is None:
+            batch_size = self.batch_size
+
+        # if hasattr(self, 'hidden') and type(self.hidden[0]) == Variable:
+        #     (h0, c0) = Variable(self.hidden[0].data, self.hidden[1].data)
+        # else:
+        (h0, c0) = (Variable(torch.zeros(self.num_layers, batch_size, self.hidden_size)),  # h_0
+                    Variable(torch.zeros(self.num_layers, batch_size, self.hidden_size)))  # c_0
+
+        return h0.to(self.device), c0.to(self.device)
+
+    def detach(self):
+        # detach to not backpropagate whole lstm network
+        # todo: actually below lines should be like self.model.hidden[0].detach_() aka inplace version. but not it working okey..
+        self.hidden[0].detach_()
+        self.hidden[1].detach_()
+
+    def forward(self, x, init=True):
+
+        # Reshape input
+        # x shape: (seq_len, batch, input_size)
+        # hidden shape:(num_layers * num_directions,batch_size, hidden_size)
+
+        # reset the LSTM hidden state. Must be applied before you run a new batch. Otherwise the LSTM will treat
+        # a new batch as a continuation of a sequence
+
+        # send batch size to auto update hiddens
+        batch_size = x.shape[0]
+        # if init:
+        #     self.hidden = self.init_hidden(batch_size=batch_size)
+
+        # x = x.view(self.seq_length, -1, self.input_size)
+        x = torch.transpose(x, 0, 1)
+        lstm_out, self.hidden = self\
+            .lstm(x, self.hidden)
+
+        # return last sequence
+        # output of shape (seq_len, batch, num_directions * hidden_size)
+        out = lstm_out[-1]
+        fc_out = self.fc(out)
+
+        # soft_out = self.softmax(fc_out)
+        # log_softmax = F.log_softmax(fc_out, dim=1)
+        return F.log_softmax(fc_out, dim=1)
+
+    def dummy_input(self):
+        return Variable(torch.rand(self.batch_size, self.seq_length, self.input_size)).type(torch.FloatTensor)
+
+
+class MLP(GenericModel):
+
+
+    def __init__(self, config):
+        GenericModel.__init__(self)
+
+        self.device = config.DEVICE
+
+        self.fc1 = nn.Linear(in_features=28*28, out_features=100)
+        self.fc2 = nn.Linear(in_features=100, out_features=10)
+
+        self.optimizer = optim.Adam(self.parameters(), lr=0.001)
+        self.criterion = nn.CrossEntropyLoss()
+
+    def forward(self, x):
+
+        x = x.view(x.size()[0], -1)
+        out = self.fc1(x)
+        out = self.fc2(out)
+
+        return F.log_softmax(out, dim=1)
+
+    def dummy_input(self):
+        pass
+
+
+
+
+
+
+
+
+if __name__ == "__main__":
+    pass
+

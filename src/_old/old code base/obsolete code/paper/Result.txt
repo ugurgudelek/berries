@@ -1,0 +1,16 @@
+--Tablo
+Genel verinin dogruluk orani.
+Hisse senedi bazinda dogruluk orani.
+Yillara göre dogruluk orani?
+
+False positive, false negative ne kadar çikti?
+
+Confusion matrix belki ?
+
+--Grafik
+Dendogram.
+
+Trend tahmini dagilimi vs Gerçek dagilim.
+
+
+
