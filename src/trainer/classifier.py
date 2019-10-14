@@ -9,6 +9,10 @@ from torch.utils.data import DataLoader
 import numpy as np
 import pandas as pd
 
+from history.history import History
+
+from collections import defaultdict
+
 
 class ClassifierTrainer:
     def __init__(self, model, dataset, hyperparams, params, optimizer=None, criterion=None, use_cuda=True):
@@ -24,14 +28,20 @@ class ClassifierTrainer:
         self.model = self.model.to(self.device)
         self.loader_kwargs = {'num_workers': 1, 'pin_memory': True} if self.use_cuda else {}
 
-        self.train_loader = DataLoader(self.dataset.trainset, batch_size=self.hyperparams['train_batch_size'], **self.loader_kwargs)
-        self.test_loader = DataLoader(self.dataset.testset, batch_size=self.hyperparams['test_batch_size'], **self.loader_kwargs)
+        self.train_loader = DataLoader(self.dataset.trainset, batch_size=self.hyperparams['train_batch_size'],
+                                       **self.loader_kwargs)
+        self.test_loader = DataLoader(self.dataset.testset, batch_size=self.hyperparams['test_batch_size'],
+                                      **self.loader_kwargs)
 
-    def _train(self, epoch, train=True):
+        self.history = History()
+
+    def _on_epoch(self, epoch, train=True):
         self.model.train(train)
         loader = self.train_loader if train else self.test_loader
 
-        accuracies, losses, probas = list(), list(), list()
+        logs = dict()
+        logs['loss'] = list()
+        logs['accuracy'] = list()
 
         for batch_ix, (data, targets) in enumerate(loader):
             data, targets = data.to(self.device), targets.to(self.device)
@@ -43,49 +53,41 @@ class ClassifierTrainer:
                 self.optimizer.step()
 
             if batch_ix % self.params['log_interval'] == 0:
-                print(f"{'Train' if train else 'Test'} "
-                      f"Epoch: {epoch} [{batch_ix * len(data)}/{len(loader.dataset)} ({100. * batch_ix / len(loader):.0f}%)]\t"
-                      f"Loss: {loss.item():.6f}")
+                print('\t'.join((
+                    f"{'Train' if train else 'Test'}",
+                    f"Epoch: {epoch} [{batch_ix * len(data)}/{len(loader.dataset)} ({100. * batch_ix / len(loader):.0f}%)]",
+                    f"Loss: {loss.item():.6f}",
+                    f"Acc: {self.accuracy(output, targets):.6f}",
+                    # f"Proba: {self.proba(output)}",
+                )))
 
-                yield loss.item()
+                logs['loss'].append(loss.item())
+                logs['accuracy'].append(self.accuracy(output, targets))
 
-        #     accuracies.append(self.accuracy(output=output, targets=targets))
-        #     losses.append(loss.item())
-        #     probas.append(self.proba(output=output))
-        #
-        #     losses.append(np.array(losses).mean())
-        # accuracies.append(np.array(accuracies).mean())
+                yield loss
 
-        # print(
-            # f"[Train]  epoch [{epoch + 1}/{self.hyperparams['epoch']}], "
-            #   f"loss:{losses[-1]:.4f}, "
-            #   f"acc:{accuracies[-1]:.4f}, "
-              # f"predict_mean:{np.array(predictions).mean():.4f}, "
-              # f"label_mean:{np.array(labels).mean():.4f}, "
-              # )
-        # train_pred_df = pd.DataFrame({'label': labels,
-        #                               'pred': predictions,
-        #                               'proba0': proba0s,
-        #                               'proba1': proba1s,
-        #                               })
+        self.history.append(phase='train' if train else 'test',
+                            log_dict={'epoch':epoch,
+                                      'loss': np.mean(logs['loss']),
+                                      'accuracy': np.mean(logs['accuracy'])})
+
         self.model.train(not train)
 
     def fit(self):
-        # train_losses, test_losses, train_accuracies, test_accuracies = list(), list(), list(), list()
         for epoch in range(self.hyperparams['epoch']):
-            for loss in self._train(train=True, epoch=epoch):
-                print(loss)
+            for loss in self._on_epoch(train=True, epoch=epoch):
+                pass
             with torch.no_grad():
-                for loss in self._train(train=False, epoch=epoch):
+                for loss in self._on_epoch(train=False, epoch=epoch):
                     print(loss)
 
+    @staticmethod
+    def accuracy(output, targets):
+        return torch.mean((torch.argmax(output.detach(), dim=1) == targets).float()).item()
 
-    def accuracy(self, output, targets):
-        return torch.mean((torch.argmax(output, dim=1) == targets).float()).item()
-
-    def proba(self, output):
-        return torch.nn.functional.softmax(output.detach(), dim=1).numpy()
-
+    @staticmethod
+    def proba(output):
+        return torch.nn.functional.softmax(output.detach(), dim=1).cpu().numpy()
 
     def predict(self, data=None):
         if data is None:
@@ -98,9 +100,6 @@ class ClassifierTrainer:
     def predict_proba(self):
         pass
 
-
-
-
     def score(self, data=None, targets=None, kind='accuracy'):
         if data is None:
             data = self.dataset.testset.data
@@ -108,6 +107,6 @@ class ClassifierTrainer:
             targets = self.dataset.testset.targets
 
         output = self.model(data)
-
-
+        if kind == 'accuracy':
+            return self.accuracy(output, targets)
         raise RuntimeError(f"{kind} is not recognized in available kinds.")
