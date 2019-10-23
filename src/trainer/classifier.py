@@ -48,7 +48,7 @@ class ClassifierTrainer:
             output = self.model(data)
             loss = self.criterion(output, targets)
             if train:
-                self.optimizer.zero_grad()
+                self.optimizer.zero_grad()  # Pytorch accumulates gradients.
                 loss.backward()
                 self.optimizer.step()
 
@@ -74,7 +74,12 @@ class ClassifierTrainer:
         self.model.train(not train)
 
     def fit(self):
-        for epoch in range(self.hyperparams['epoch']):
+        # See what the scores are before training
+        with torch.no_grad():
+            for loss in self._on_epoch(train=False, epoch=0):
+                print(loss)
+
+        for epoch in range(1, self.hyperparams['epoch']+1):
             for loss in self._on_epoch(train=True, epoch=epoch):
                 pass
             with torch.no_grad():

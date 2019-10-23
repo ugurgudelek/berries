@@ -10,16 +10,7 @@ import numpy as np
 import errno
 from PIL import Image
 
-
-
-
-class GenericDataset:
-    training_file = Path('training.pt')
-    test_file = Path('test.pt')
-
-    def _check_exists(self):
-        return (os.path.exists(self.processed_folder / self.training_file) and
-                os.path.exists(self.processed_folder / self.test_file))
+from dataset.dataset import GenericDataset
 
 
 class MNIST(GenericDataset):
@@ -32,6 +23,9 @@ class MNIST(GenericDataset):
 
 
     """
+
+    training_file = Path('training.pt')
+    test_file = Path('test.pt')
 
     urls = [
         'http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz',
@@ -51,7 +45,8 @@ class MNIST(GenericDataset):
         if download:
             self.download()
 
-        if not self._check_exists():
+        if not self._check_exists(self.processed_folder / self.training_file,
+                                  self.processed_folder / self.training_file):
             raise RuntimeError('Dataset not found.' +
                                ' You can use download=True to download it')
 
@@ -90,7 +85,8 @@ class MNIST(GenericDataset):
         from six.moves import urllib
         import gzip
 
-        if self._check_exists():
+        if self._check_exists(self.processed_folder/self.training_file,
+                              self.processed_folder/self.test_file):
             return
 
         # download files
