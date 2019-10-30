@@ -27,6 +27,7 @@ class RegressorTrainer:
         self.device = torch.device("cuda" if self.use_cuda else "cpu")
         self.model = self.model.to(self.device)
         self.loader_kwargs = {'num_workers': 1, 'pin_memory': True} if self.use_cuda else {}
+        self.loader_kwargs['drop_last'] = True
 
         self.train_loader = DataLoader(self.dataset.trainset, batch_size=self.hyperparams['train_batch_size'],
                                        **self.loader_kwargs)
@@ -52,17 +53,19 @@ class RegressorTrainer:
                 loss.backward()
                 self.optimizer.step()
 
-            if batch_ix % self.params['log_interval'] == 0:
-                print('\t'.join((
-                    f"{'Train' if train else 'Test'}",
-                    f"Epoch: {epoch} [{batch_ix * len(data)}/{len(loader.dataset)} ({100. * batch_ix / len(loader):.0f}%)]",
-                    f"Loss: {loss.item():.6f}",
-                    # f"Proba: {self.proba(output)}",
-                )))
+            logs['loss'].append(loss.item())
 
-                logs['loss'].append(loss.item())
 
-                yield loss
+            yield loss
+
+
+        if (epoch * len(loader)) % self.params['log_interval'] == 0:
+            print('\t'.join((
+                f"{'Train' if train else 'Test'}",
+                f"Epoch: {epoch} [{batch_ix * len(data)}/{len(loader.dataset)} ({100. * batch_ix / len(loader):.0f}%)]",
+                f"Loss: {np.array(logs['loss']).mean().item():.6f}",
+                # f"Proba: {self.proba(output)}",
+            )))
 
         self.history.append(phase='train' if train else 'test',
                             log_dict={'epoch':epoch,

@@ -10,18 +10,21 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 
 # A set of coefficients that are stable (to produce replicable plots, experiments)
-fixed_ar_coefficients = {2: [ 0.46152873, -0.29890739],
-    5: [ 0.02519834, -0.24396899,  0.2785921,   0.14682383,  0.39390468],
-                        10: [-0.10958935, -0.34564819,  0.3682048,   0.3134046,  -0.21553732,  0.34613629,
-  0.41916508,  0.0165352,   0.14163503, -0.38844378],
-                         20: [ 0.1937815,   0.01201026,  0.00464018, -0.21887467, -0.20113385, -0.02322278,
-  0.34285319, -0.21069086,  0.06604683, -0.22377364,  0.11714593, -0.07122126,
- -0.16346554,  0.03174824,  0.308584,    0.06881604,  0.24840789, -0.32735569,
-  0.21939492, 0.3996207 ]}
+fixed_ar_coefficients = {2: [0.46152873, -0.29890739],
+                         5: [0.02519834, -0.24396899, 0.2785921, 0.14682383, 0.39390468],
+                         10: [-0.10958935, -0.34564819, 0.3682048, 0.3134046, -0.21553732, 0.34613629,
+                              0.41916508, 0.0165352, 0.14163503, -0.38844378],
+                         20: [0.1937815, 0.01201026, 0.00464018, -0.21887467, -0.20113385, -0.02322278,
+                              0.34285319, -0.21069086, 0.06604683, -0.22377364, 0.11714593, -0.07122126,
+                              -0.16346554, 0.03174824, 0.308584, 0.06881604, 0.24840789, -0.32735569,
+                              0.21939492, 0.3996207]}
+
 
 class ARDataset:
     def __init__(self, num_datapoints=100, num_prev=20, test_size=0.2, noise_var=0,
-                      coeffs=fixed_ar_coefficients[20]):
+                 coeffs=None):
+        if coeffs is None:
+            coeffs = fixed_ar_coefficients[num_prev]
         data = ARData(num_datapoints=num_datapoints, num_prev=num_prev, test_size=test_size, noise_var=noise_var,
                       coeffs=coeffs)
 
@@ -31,12 +34,11 @@ class ARDataset:
         y_train = torch.from_numpy(data.y_train).type(torch.Tensor).view(-1)
         y_test = torch.from_numpy(data.y_test).type(torch.Tensor).view(-1)
 
-        X_train = X_train.view([-1, 20, 1])
-        X_test = X_test.view([-1, 20, 1])
+        X_train = X_train.view([-1, num_prev, 1])
+        X_test = X_test.view([-1, num_prev, 1])
 
         self.trainset = self.InnerARDataset(X_train, y_train)
         self.testset = self.InnerARDataset(X_test, y_test)
-
 
     class InnerARDataset(Dataset):
 
@@ -45,7 +47,7 @@ class ARDataset:
             self.targets = y
 
         def __getitem__(self, ix):
-            return self.data[ix,: , :], self.targets[ix]
+            return self.data[ix, :, :], self.targets[ix]
 
         def __len__(self):
             return len(self.targets)
@@ -64,7 +66,7 @@ class TimeSeriesData:
         self.max_t = max_t
         self.data = None
         self.noise_var = noise_var
-        self.y = np.zeros(num_datapoints + num_prev*4) # TODO: check this
+        self.y = np.zeros(num_datapoints + num_prev * 4)  # TODO: check this
         self.bayes_preds = np.copy(self.y)
 
         # Generate data and reshape data
@@ -92,15 +94,17 @@ class TimeSeriesData:
         test_size = int(len(self.y) * self.test_size)
         self.data = [self.X_train, self.X_test, self.y_train,
                      self.y_test] = \
-                    self.x[:-test_size], self.x[-test_size:], \
-                    self.y[:-test_size], self.y[-test_size:]
-        self.bayes_preds = [self.bayes_train_preds, self.bayes_test_preds] = self.bayes_preds[:-test_size], self.bayes_preds[-test_size:]
+            self.x[:-test_size], self.x[-test_size:], \
+            self.y[:-test_size], self.y[-test_size:]
+        self.bayes_preds = [self.bayes_train_preds, self.bayes_test_preds] = self.bayes_preds[
+                                                                             :-test_size], self.bayes_preds[-test_size:]
 
     def return_data(self):
         return self.data
 
     def return_train_test(self):
         return self.X_train, self.y_train, self.X_test, self.y_test
+
 
 class ARData(TimeSeriesData):
     """Class to generate autoregressive data."""
@@ -118,16 +122,16 @@ class ARData(TimeSeriesData):
 
         # + 3*self.num_prev because we want to cut first (3*self.num_prev) datapoints later
         # so dist is more stationary (else initial num_prev datapoints will stand out as diff dist)
-        for i in range(self.num_datapoints+3*self.num_prev):
+        for i in range(self.num_datapoints + 3 * self.num_prev):
             # Generate y value if there was no noise
             # (equivalent to Bayes predictions: predictions from oracle that knows true parameters (coefficients))
-            self.bayes_preds[i + self.num_prev] = np.dot(self.y[i:self.num_prev+i][::-1], self.coeffs)
+            self.bayes_preds[i + self.num_prev] = np.dot(self.y[i:self.num_prev + i][::-1], self.coeffs)
             # Add noise
             self.y[i + self.num_prev] = self.bayes_preds[i + self.num_prev] + self.noise()
 
         # Cut first 20 points so dist is roughly stationary
-        self.bayes_preds = self.bayes_preds[3*self.num_prev:]
-        self.y = self.y[3*self.num_prev:]
+        self.bayes_preds = self.bayes_preds[3 * self.num_prev:]
+        self.y = self.y[3 * self.num_prev:]
 
     def generate_coefficients(self):
         if self.given_coeffs is not None:
@@ -151,7 +155,6 @@ class ARData(TimeSeriesData):
     def noise(self):
         # Noise distributed as N(0, self.noise_var)
         return self.noise_var * np.random.randn()
-
 
 
 """
