@@ -49,7 +49,7 @@ class PickleDataLoad(object):
             self.mean = data.mean(dim=0)
             self.std= data.std(dim=0)
             self.length = len(data)
-            data,label = self.augmentation(data,label)
+            # data,label = self.augmentation(data,label)
         else:
             if self.augment_test_data:
                 data, label = self.augmentation(data, label)
