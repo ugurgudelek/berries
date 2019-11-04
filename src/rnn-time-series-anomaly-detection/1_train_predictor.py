@@ -8,6 +8,7 @@ from torch import optim
 from matplotlib import pyplot as plt
 from pathlib import Path
 from anomalyDetector import fit_norm_distribution_param
+import numpy as np
 
 parser = argparse.ArgumentParser(description='PyTorch RNN Prediction Model on Time-series Dataset')
 parser.add_argument('--data', type=str, default='ecg',
@@ -32,7 +33,7 @@ parser.add_argument('--weight_decay', type=float, default=1e-4,
                     help='weight decay')
 parser.add_argument('--clip', type=float, default=10,
                     help='gradient clipping')
-parser.add_argument('--epochs', type=int, default=20,
+parser.add_argument('--epochs', type=int, default=400,
                     help='upper epoch limit')
 parser.add_argument('--batch_size', type=int, default=64, metavar='N',
                     help='batch size')
@@ -68,14 +69,19 @@ args = parser.parse_args()
 # Set the random seed manually for reproducibility.
 torch.manual_seed(args.seed)
 torch.cuda.manual_seed(args.seed)
-args.augment = False
-# args.batch_size = 1
 
 ###############################################################################
 # Load data
 ###############################################################################
 TimeseriesData = preprocess_data.PickleDataLoad(data_type=args.data, filename=args.filename,
                                                 augment_test_data=args.augment)
+
+args.batch_size=1
+args.eval_batch_size=1
+# data = list(range(13104))
+# data = np.array([data, data, data]).T
+# TimeseriesData.trainData = torch.from_numpy(data).float()
+
 train_dataset = TimeseriesData.batchify(args, TimeseriesData.trainData, args.batch_size)
 test_dataset = TimeseriesData.batchify(args, TimeseriesData.testData, args.eval_batch_size)
 gen_dataset = TimeseriesData.batchify(args, TimeseriesData.testData, 1)
@@ -107,22 +113,17 @@ def get_batch(args, source, i):
     return data, target
 
 
-def batchify(args, data, bsz):
+
+
+def batchify(data, bsz):
     nbatch = data.size(0) // bsz
     trimmed_data = data.narrow(0, 0, nbatch * bsz)
     batched_data = trimmed_data.contiguous().view(bsz, -1, trimmed_data.size(-1)).transpose(0, 1)
-    batched_data = batched_data.to(torch.device(args.device))
+    # batched_data = batched_data.to(device(args.device))
     return batched_data
 
 
-# import numpy as np
-#
-# data = np.array(list(range(13104))).reshape(-1, 1)
-# data = torch.FloatTensor(data)
-# batched_data = batchify(args, data, args.batch_size)
-# batch0 = get_batch(args, batched_data, 0)
-# batch1 = get_batch(args, batched_data, 1)
-# print()
+
 
 
 def generate_output(args, epoch, model, gen_dataset, disp_uncertainty=True, startPoint=500, endPoint=3500):
@@ -192,8 +193,8 @@ def generate_output(args, epoch, model, gen_dataset, disp_uncertainty=True, star
         save_dir = Path('result', args.data, args.filename).with_suffix('').joinpath('fig_prediction')
         save_dir.mkdir(parents=True, exist_ok=True)
         plt.savefig(save_dir.joinpath('fig_epoch' + str(epoch)).with_suffix('.png'))
-
-
+        # plt.show()
+        plt.close()
         return outSeq
 
     else:
@@ -273,7 +274,6 @@ def train(args, model, train_dataset, epoch):
                                   elapsed * 1000 / args.log_interval, cur_loss))
                 total_loss = 0
                 start_time = time.time()
-        print(total_loss)
 
 
 def evaluate(args, model, test_dataset):

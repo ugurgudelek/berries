@@ -20,8 +20,8 @@ if __name__ == "__main__":
         'dropout': 0.2,
         'tied': False,  # tie the word embedding and softmax weights (deprecated)
         # Optim params
-        'lr': 1e-3,
-        'weight_decay': 1e-5,
+        'lr': 2e-4,
+        'weight_decay': 1e-4,
         'clip': 10,  # gradient clipping
         # Dataloader params
         'train_batch_size': 64,
@@ -37,8 +37,8 @@ if __name__ == "__main__":
               'resume': False,
               'pretrained': False,
               'prediction_window_size': 10,
-              'augment': False,
-              'seed': 1111,
+              'augment': True,
+              'seed': 42,
               'device': 'cpu'
               }
 
@@ -48,7 +48,7 @@ if __name__ == "__main__":
 
     scaler = Standardizer()
 
-    train_dataset = NYCTaxiDataset.from_pickle(train=True, scaler=scaler)
+    train_dataset = NYCTaxiDataset.from_pickle(train=True, scaler=scaler, augment=params['augment'])
     test_dataset = NYCTaxiDataset.from_pickle(train=False, scaler=scaler)
 
     dataset = NYCTaxiDatasetWrapper(trainset=train_dataset,

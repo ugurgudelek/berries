@@ -7,6 +7,11 @@ import numpy as np
 from torchvision import transforms
 
 
+
+
+
+
+
 class Normalizer():
     def __init__(self):
         pass
@@ -51,44 +56,58 @@ class NYCTaxiDataset:
 
         self.preprocessing()  # augment data and labels + applies scaler
 
-
-
         # self.data = torch.FloatTensor(np.array(list(range(13104))).reshape(-1, 1))
         # self.data = self.batchify(self.data, 64)
 
+        # data = list(range(13104))
+        # data = np.array([data, data, data]).T
+        # self.data = torch.from_numpy(data).float()
+
+        self.seq_len = 50
+        self.batch_size = 64
+        self.time_skip = self.data.size(0) // self.batch_size
+        self.data = self.data.narrow(0, 0, self.time_skip * self.batch_size)
+        self.batched_data = self.data.contiguous().view(self.batch_size, -1, 3).transpose(0,1)
 
 
-    def __getitem__(self, ix):
-        return self.data[ix:ix+50], self.data[ix+1:ix+1+50]
+        # w_tensor = None
+        # for i in range(0, len(self.batched_data), self.seq_len):
+        #     w = self.batched_data[i:i+self.seq_len]
+        #     if w_tensor is None:
+        #         w_tensor = w
+        #     else:
+        #         w_tensor = torch.cat((w_tensor, w), 1)
+        #
+        # self.batched_data = w_tensor
+        #
+        #
+        # for i in range(0, self.time_skip//self.seq_len+2, 1):
+        #     for j in range(0, 13056, self.time_skip):
+        #         yield i+j
 
-    def __len__(self):
-        return len(self.data)//50
-
-    def batchify(self, data, bsz):
-        nbatch = data.size(0) // bsz
-        trimmed_data = data.narrow(0, 0, nbatch * bsz)
-        batched_data = trimmed_data.contiguous().view(bsz, -1, trimmed_data.size(-1))
-        return batched_data
+        #
+        #
+        # inputSeq0, targetSeq0 = self[:64]
+        # inputSeq1, targetSeq1 = self.__getitem__(1)
 
 
-    def preprocessing(self):
-        if self.train:
-            # Augment the data
-            if self.augment:
-                self.data, self.label = self.augmentation(self.data, self.label)
 
-            # Train the scaler
-            self.scaler.fit(self.data)
+        print()
 
-        # Apply standardization or normalization
-        self.data = self.scaler.transform(self.data)
+    # def __getitem__(self, ix):
+    #     return (self.data[ix:ix+self.seq_len],
+    #             self.data[ix+1:ix+1+self.seq_len])
+    #
+    # def __len__(self):
+    #     return len(self.data) - self.seq_len
 
-    def augmentation(self, data, label, noise_ratio=0.05, noise_interval=0.0005, max_length=100000):
+    @staticmethod
+    def augmentation(data, label, std, noise_ratio=0.05, noise_interval=0.0005, max_length=100000):
         noiseSeq = torch.randn(data.size())
         augmentedData = data.clone()
         augmentedLabel = label.clone()
         for i in np.arange(0, noise_ratio, noise_interval):
-            scaled_noiseSeq = noise_ratio * self.std.expand_as(data) * noiseSeq
+            scaled_noiseSeq = noise_ratio * std.expand_as(data) * noiseSeq
             augmentedData = torch.cat([augmentedData, data + scaled_noiseSeq], dim=0)
             augmentedLabel = torch.cat([augmentedLabel, label])
             if len(augmentedData) > max_length:
@@ -97,6 +116,17 @@ class NYCTaxiDataset:
                 break
 
         return augmentedData, augmentedLabel
+
+    def preprocessing(self):
+        if self.train:
+            # Train the scaler
+            self.scaler.fit(self.data)
+            # Augment the data
+            if self.augment:
+                self.data, self.label = self.augmentation(self.data, self.label, std=self.scaler.std)
+
+        # Apply standardization or normalization
+        self.data = self.scaler.transform(self.data)
 
     @classmethod
     def from_pickle(cls, train=True, **kwargs):
