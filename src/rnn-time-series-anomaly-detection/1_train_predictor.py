@@ -76,8 +76,8 @@ torch.cuda.manual_seed(args.seed)
 TimeseriesData = preprocess_data.PickleDataLoad(data_type=args.data, filename=args.filename,
                                                 augment_test_data=args.augment)
 
-args.batch_size=1
-args.eval_batch_size=1
+args.batch_size = 1
+args.eval_batch_size = 1
 # data = list(range(13104))
 # data = np.array([data, data, data]).T
 # TimeseriesData.trainData = torch.from_numpy(data).float()
@@ -113,17 +113,12 @@ def get_batch(args, source, i):
     return data, target
 
 
-
-
 def batchify(data, bsz):
     nbatch = data.size(0) // bsz
     trimmed_data = data.narrow(0, 0, nbatch * bsz)
     batched_data = trimmed_data.contiguous().view(bsz, -1, trimmed_data.size(-1)).transpose(0, 1)
     # batched_data = batched_data.to(device(args.device))
     return batched_data
-
-
-
 
 
 def generate_output(args, epoch, model, gen_dataset, disp_uncertainty=True, startPoint=500, endPoint=3500):
@@ -343,7 +338,7 @@ if not args.pretrained:
             val_loss = evaluate(args, model, test_dataset)
             print('-' * 89)
             print('| end of epoch {:3d} | time: {:5.2f}s | valid loss {:5.4f} | '.format(epoch, (
-                        time.time() - epoch_start_time), val_loss))
+                    time.time() - epoch_start_time), val_loss))
             print('-' * 89)
 
             generate_output(args, epoch, model, gen_dataset, startPoint=1500)

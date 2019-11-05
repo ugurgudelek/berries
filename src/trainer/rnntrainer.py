@@ -16,6 +16,8 @@ from collections import defaultdict
 import matplotlib.pyplot as plt
 import torchvision
 
+import os
+
 
 # class TimeSeriesDataloader():
 #     def __init__(self, dataset, batch_size, seq_len, **kwargs):
@@ -61,22 +63,39 @@ import torchvision
 
 
 class RNNTrainer:
-    def __init__(self, model, dataset, hyperparams, params, optimizer=None, criterion=None, use_cuda=True):
+    def __init__(self, model, dataset, hyperparams, params, optimizer=None, criterion=None):
         self.hyperparams = hyperparams
         self.params = params
 
-        self.model = model
+        self.device = torch.device('cuda:0' if self.params['device'] == 'cuda' else 'cpu')
+
+        self.model = model.to(self.device)
         self.dataset = dataset
         self.criterion = criterion or MSELoss()
         self.optimizer = optimizer or Adam(params=model.parameters(),
                                            lr=self.hyperparams['lr'],
                                            weight_decay=self.hyperparams['weight_decay'])
-        self.device = self.params['device']
-        self.model = self.model.to(self.device)
+
         # self.loader_kwargs = {'num_workers': 1, 'pin_memory': True} if self.use_cuda else {}
-        self.loader_kwargs = {'drop_last': False, 'shuffle': False}
+        # self.loader_kwargs = {'drop_last': False, 'shuffle': False}
 
+        self.experiment_fpath = Path(f'../experiments/{self.params["experiment_name"]}')
+        self.experiment_fpath.mkdir(parents=True, exist_ok=True)
 
+        if self.params['resume'] or self.params['pretrained']:
+            print("=> loading checkpoint ")
+            cpt_path = self.experiment_fpath/'checkpoints'
+            if not cpt_path.exists():
+                 raise Exception("You do not have any checkpoint to resume\n if you want to start over. Make sure --resume and --pretrained is False")
+            last_epoch = sorted(list(map(int, os.listdir(cpt_path))))[-1]
+            self.load_checkpoint(epoch=last_epoch)
+            print("=> loaded checkpoint")
+        else:
+            self.start_epoch = 1
+            print("=> Start training from scratch")
+
+        # Dataloader are not working with timeseries signal data.
+        # TODO: check for further info.
         # self.train_loader = TimeSeriesDataloader(self.dataset.trainset,
         #                                batch_size=self.hyperparams['train_batch_size'],
         #                                          seq_len=self.hyperparams['seq_len'],
@@ -89,9 +108,64 @@ class RNNTrainer:
 
         self.history = History()
 
+
+    def learning_curve(self):
+        train_df, test_df = self.history.to_dataframe(phase='both')
+        fig, ax = plt.subplots(2, 1, sharex=True)
+        ax[0].plot(train_df['epoch'], train_df['loss'], label='training loss', color='orange')
+        ax[0].set_ylabel('Magnitude')
+        ax[0].legend(loc='upper right')
+
+        ax[1].plot(test_df['epoch'], test_df['loss'], label='test loss', color='blue')
+        ax[1].set_ylabel('Magnitude')
+        ax[1].legend(loc='upper right')
+        ax[1].set_xlabel('Epoch')
+
+        save_dir = self.experiment_fpath / 'figures'
+        save_dir.mkdir(parents=True, exist_ok=True)
+        plt.savefig(save_dir/'lr.png')
+        plt.close()
+
+
+
+    def save_checkpoint(self, epoch):
+        # Save the model if the validation loss is the best we've seen so far.
+        # is_best = val_loss > best_val_loss
+        # best_val_loss = max(val_loss, best_val_loss)
+
+        self.cpt_fpath = self.experiment_fpath/'checkpoints'/str(epoch)
+        self.cpt_fpath.mkdir(parents=True, exist_ok=True)
+        # save model
+        torch.save({'epoch': epoch,
+                    'model_state_dict': self.model.state_dict(),
+                    'optimizer_state_dict': self.optimizer.state_dict(),
+                    'hyperparams': self.hyperparams,
+                    'params': self.params},
+                   self.cpt_fpath/'model-optim.pth')
+
+    def load_checkpoint(self, epoch):
+        # load model
+        map_location = f"{self.device.type}:{self.device.index}"
+        if self.device.type == 'cpu':
+            map_location = self.device.type
+
+        checkpoint = torch.load(self.experiment_fpath/'checkpoints'/str(epoch)/'model-optim.pth',
+                                map_location=map_location)
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.start_epoch = checkpoint['epoch']+1
+        # self.hyperparams = checkpoint['hyperparams']
+        # self.params = checkpoint['params']
+
+        if self.device.type == 'cuda':
+            for state in self.optimizer.state.values():
+                for k, v in state.items():
+                    if torch.is_tensor(v):
+                        state[k] = v.cuda()
+
     @staticmethod
-    def get_batch(source, i):
-        seq_len = min(50, len(source) - 1 - i)
+    def get_batch(source, i, seq_len):
+        seq_len = min(seq_len, len(source) - 1 - i)
         data = source[i:i + seq_len]  # [ seq_len * batch_size * feature_size ]
         target = source[i + 1:i + 1 + seq_len]  # [ (seq_len x batch_size x feature_size) ]
         return data, target
@@ -109,9 +183,9 @@ class RNNTrainer:
 
             logs = dict()
             logs['loss'] = list()
-            for batch_ix, i in enumerate(range(0, len(dataset), 50)):
+            for batch_ix, i in enumerate(range(0, len(dataset), self.hyperparams['seq_len'])):
 
-                data, targets = self.get_batch(dataset, i)
+                data, targets = self.get_batch(dataset, i, seq_len=self.hyperparams['seq_len'])
                 data, targets = data.to(self.device), targets.to(self.device)
 
                 # Starting each batch, we detach the hidden state from how it was previously produced.
@@ -172,84 +246,108 @@ class RNNTrainer:
 
 
     def fit(self):
-        # # See what the scores are before training
-        # with torch.no_grad():
-        #     for loss in self._on_epoch(train=False, epoch=0):
-        #         pass
 
-        for epoch in range(1, self.hyperparams['epoch'] + 1):
-            train_loss = self._on_epoch(train=True, epoch=epoch)
-            print(f'Train| end of epoch {epoch:3d} | | {train_loss:5.4f} |')
-            val_loss = self._on_epoch(train=False, epoch=epoch)
-            print(f'Val | end of epoch {epoch:3d} | | {val_loss:5.4f} |')
+        if self.params['pretrained']:
+            raise Exception("-You can not use fit with --pretrained=True")
 
-            self.generate_output(self.hyperparams, self.params, epoch, self.model, self.dataset.testset,
-                                 startPoint=1500)
+        # At any point you can hit Ctrl + C to break out of training early.
+        try:
+            # # See what the scores are before training
+            # with torch.no_grad():
+            #     for loss in self._on_epoch(train=False, epoch=0):
+            #         pass
 
-            if epoch % self.params['save_interval'] == 0:
-                # Save the model if the validation loss is the best we've seen so far.
-                # is_best = val_loss > best_val_loss
-                # best_val_loss = max(val_loss, best_val_loss)
-                model_dictionary = {'epoch': epoch,
-                                    # 'best_loss': best_val_loss,
-                                    'state_dict': self.model.state_dict(),
-                                    'optimizer': self.optimizer.state_dict(),
-                                    'hyperparams': self.hyperparams,
-                                    'params': self.params
-                                    }
-                # self.model.save_checkpoint(model_dictionary, True)
+            for epoch in range(self.start_epoch, self.hyperparams['epoch'] + 1):
+                train_loss = self._on_epoch(train=True, epoch=epoch)
+                print(f'Train| end of epoch {epoch:3d} | | {train_loss:5.4f} |')
+                val_loss = self._on_epoch(train=False, epoch=epoch)
+                print(f'Val | end of epoch {epoch:3d} | | {val_loss:5.4f} |')
 
+
+                if epoch % self.params['save_interval'] == 0:
+                    if self.params['save_fig']:
+                        self.generate_output(model=self.model, testset=self.dataset.testset,
+                                             epoch=epoch, experiment_fpath=self.experiment_fpath, device=self.device,
+                                             start_point=self.params['start_point'],
+                                             recursive_start_point=self.params['recursive_start_point'],
+                                             end_point=self.params['end_point'])
+                        self.save_checkpoint(epoch=epoch)
+
+                        self.learning_curve()
+
+
+        except KeyboardInterrupt:
+            print('Exiting from training early')
+
+    def plot(self, epoch, train=False):
+        self.generate_output(model=self.model, testset=self.dataset.trainset if train else self.dataset.testset,
+                             epoch=epoch, experiment_fpath=self.experiment_fpath, device=self.device,
+                             start_point=self.params['start_point'],
+                             recursive_start_point=self.params['recursive_start_point'],
+                             end_point=self.params['end_point'])
 
     @staticmethod
-    def generate_output(hyperparams, params, epoch, model, testset, disp_uncertainty=True, startPoint=500,
-                        endPoint=3500):
-        if params['save_fig']:
+    def generate_output(model, testset, epoch,  experiment_fpath,device,
+                        start_point=3000,
+                        recursive_start_point=3500,
+                        end_point=4000):
+
             # Turn on evaluation mode which disables dropout.
             model.eval()
             hidden = model.init_hidden(1)
-            outSeq = []
-            upperlim95 = []
-            lowerlim95 = []
+            out_sequences = []
             with torch.no_grad():
-                for i in range(endPoint):
-                    if i >= startPoint:
+                for i in range(end_point):
+                    if i >= recursive_start_point:
                         out, hidden = model.forward(out, hidden)
                     else:
-                        out, hidden = model.forward(testset.data[i].unsqueeze(0).unsqueeze(0), hidden)
-                    outSeq.append(out.data.cpu()[0][0].unsqueeze(0))
+                        out, hidden = model.forward(testset.data[i].unsqueeze(0).unsqueeze(0).to(device), hidden)
+                    out_sequences.append(out.data.cpu()[0][0].unsqueeze(0))
 
-            outSeq = torch.cat(outSeq, dim=0)  # [seqLength * feature_dim]
-            # self.data = self.scaler.transform(self.data)
-            target = testset.scaler.inverse_transform(testset.data).unsqueeze(1)
-            outSeq = testset.scaler.inverse_transform(outSeq)
+
+
+            out_sequences = torch.cat(out_sequences, dim=0)  # [seqLength * feature_dim]
+            target = testset.scaler.inverse_transform(testset.data)[:out_sequences.shape[0]]
+            out_sequences = testset.scaler.inverse_transform(out_sequences)
+
+
+            seq_loss = torch.abs(out_sequences - target)
+            seq_loss = (seq_loss - seq_loss.min(dim=0)[0])/(seq_loss.max(dim=0)[0] - seq_loss.min(dim=0)[0])*0.01
+
+            # seq_loss_sum = pd.Series(seq_loss.numpy()[:,0]).rolling(window=22, center=False).mean().shift(-11).fillna(0).values.reshape(-1,1)
 
             plt.figure(figsize=(15, 5))
             for i in range(target.size(-1)):
-                plt.plot(target[:, :, i].numpy(), label='Target' + str(i),
+                # plot target data
+                plt.plot(target[:, i].numpy(), label='Target' + str(i),
                          color='black', marker='.', linestyle='--', markersize=1, linewidth=0.5)
-                plt.plot(range(startPoint), outSeq[:startPoint, i].numpy(),
+                # plot 1-step predictions
+                plt.plot(range(start_point, recursive_start_point), out_sequences[start_point:recursive_start_point, i].numpy(),
                          label='1-step predictions for target' + str(i),
                          color='green', marker='.', linestyle='--', markersize=1.5, linewidth=1)
 
-                plt.plot(range(startPoint, endPoint), outSeq[startPoint:, i].numpy(),
-                         label='Recursive predictions for target' + str(i),
-                         color='blue', marker='.', linestyle='--', markersize=1.5, linewidth=1)
+                # # plot multi-step predictions
+                # plt.plot(range(recursive_start_point, end_point), out_sequences[recursive_start_point:end_point, i].numpy(),
+                #          label='Recursive predictions for target' + str(i),
+                #          color='blue', marker='.', linestyle='--', markersize=1.5, linewidth=1)
+                # plot seq loss
+                # plt.plot(seq_loss[:, i].numpy(), label='seq-loss', color='red', marker='.', linestyle='--', markersize=1.5, linewidth=1)
+                # plot seq loss
+                # plt.plot(seq_loss_sum[:, i], label='seq-loss-ma', color='yellow', marker='.', linestyle='--',
+                #          markersize=1.5, linewidth=1)
 
-            plt.xlim([startPoint - 500, endPoint])
+            plt.xlim([start_point, end_point])
             plt.xlabel('Index', fontsize=15)
             plt.ylabel('Value', fontsize=15)
-            # plt.title('Time-series Prediction on ' + args.data + ' Dataset', fontsize=18, fontweight='bold')
-            plt.legend()
+            plt.title('Time-series Prediction on ' + experiment_fpath.name, fontsize=18, fontweight='bold')
+            plt.legend(loc='upper right', bbox_to_anchor=(0.5, -0.05))
             plt.tight_layout()
-            plt.text(startPoint - 500 + 10, target.min(), 'Epoch: ' + str(epoch), fontsize=15)
-            save_dir = Path('../results')
+            plt.text(start_point + 10, target.min(), 'Epoch: ' + str(epoch), fontsize=15)
+            save_dir = experiment_fpath/'figures'
             save_dir.mkdir(parents=True, exist_ok=True)
             plt.savefig(save_dir.joinpath('fig_epoch' + str(epoch)).with_suffix('.png'))
             plt.close()
-            return outSeq
-
-        else:
-            pass
+            return out_sequences
 
 
     @staticmethod

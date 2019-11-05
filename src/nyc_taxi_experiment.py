@@ -6,6 +6,7 @@ from model.genericrnn import RNNPredictor
 from torch.optim import Adam
 
 from trainer.rnntrainer import RNNTrainer
+from dataset.generic import Standardizer, TimeSeriesDatasetWrapper
 
 if __name__ == "__main__":
     torch.multiprocessing.freeze_support()
@@ -39,7 +40,8 @@ if __name__ == "__main__":
               'prediction_window_size': 10,
               'augment': True,
               'seed': 42,
-              'device': 'cpu'
+              'device': 'cuda',
+              'experiment_name': 'nyc_taxi'
               }
 
     torch.manual_seed(params['seed'])
@@ -51,7 +53,7 @@ if __name__ == "__main__":
     train_dataset = NYCTaxiDataset.from_pickle(train=True, scaler=scaler, augment=params['augment'])
     test_dataset = NYCTaxiDataset.from_pickle(train=False, scaler=scaler)
 
-    dataset = NYCTaxiDatasetWrapper(trainset=train_dataset,
+    dataset = TimeSeriesDatasetWrapper(trainset=train_dataset,
                                     testset=test_dataset)
 
 

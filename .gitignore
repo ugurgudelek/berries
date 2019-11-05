@@ -1,5 +1,7 @@
-
-*.pyc
 experiment/*
-.idea/*
-input/machining/*
+experiments/*
+input/*
+*.pyc
+
+*.pth
+*.idea

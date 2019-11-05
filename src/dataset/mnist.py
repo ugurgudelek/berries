@@ -10,7 +10,7 @@ import numpy as np
 import errno
 from PIL import Image
 
-from dataset.dataset import GenericDataset
+from dataset.generic import GenericDataset
 
 
 class MNIST(GenericDataset):

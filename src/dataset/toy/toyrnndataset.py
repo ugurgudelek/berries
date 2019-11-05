@@ -3,7 +3,7 @@ __email__ = "ugurgudelek@gmail.com"
 
 import torch
 from torch.utils.data import Dataset
-from dataset.dataset import GenericDataset
+from dataset.generic import GenericDataset
 
 
 class ToyRNNDataset(GenericDataset):
