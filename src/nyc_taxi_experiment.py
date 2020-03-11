@@ -2,10 +2,10 @@ import torch
 import torch.nn as nn
 from dataset.nyctaxi import *
 import matplotlib.pyplot as plt
-from model.genericrnn import RNNPredictor
+from model.encoder_decoder_rnn import RNNPredictor
 from torch.optim import Adam
 
-from trainer.rnntrainer import RNNTrainer
+from trainer.encoder_decoder_rnntrainer import RNNTrainer
 from dataset.generic import Standardizer, TimeSeriesDatasetWrapper
 
 if __name__ == "__main__":

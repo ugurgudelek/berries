@@ -6,9 +6,11 @@ from torch import nn
 
 
 class LSTM(nn.Module):
-    """Simplest LSTM Implementation for time series.
+    """
+    Simplest LSTM Implementation for time series.
     Keep in mind that after each forward pass, hiddens are detached from computational
-    network but they keep their computed values."""
+    network but they keep their computed values.
+    """
 
     def __init__(self, input_dim, hidden_dim, output_dim=1,
                  num_layers=2):
@@ -54,28 +56,4 @@ class LSTM(nn.Module):
         return y_pred.view(batch, seq_len)
 
 
-class LSTMTagger(nn.Module):
-    """
-    Not working right now!!
-    """
 
-    def __init__(self, embedding_dim, hidden_dim, vocab_size, tagset_size):
-        super(LSTMTagger, self).__init__()
-        self.hidden_dim = hidden_dim
-
-        self.word_embeddings = nn.Embedding(vocab_size, embedding_dim)
-
-        # The LSTM takes word embeddings as inputs, and outputs hidden states
-        # with dimensionality hidden_dim.
-        self.lstm = nn.LSTM(embedding_dim, hidden_dim)
-
-        # The linear layer that maps from hidden state space to tag space
-        self.hidden2tag = nn.Linear(hidden_dim, tagset_size)
-
-    def forward(self, sentence):  # batch, seq_len , 1
-        embeds = self.word_embeddings(sentence)  # batch, seq_len, embed_dim
-        # input:  seq_len, batch_size, input_size
-        # output: seq_len, batch, num_directions * hidden_size
-        lstm_out, _ = self.lstm(embeds.view(len(sentence[0]), 1, -1))
-        tag_space = self.hidden2tag(lstm_out.view(1, len(sentence[0]), -1))
-        return tag_space

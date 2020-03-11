@@ -1,13 +1,15 @@
+# -*- coding: utf-8 -*-
+# @Time   : 3/11/2020 11:55 PM
+# @Author : Ugur Gudelek
+# @Email  : ugurgudelek@gmail.com
+# @File   : toolwear_experiment2.py
+
 import torch
 import torch.nn as nn
 import numpy as np
 from dataset.toolwear import ToolwearTorchDataset
-import matplotlib.pyplot as plt
-from model.encoder_decoder_rnn import RNNPredictor
-from torch.optim import Adam
-
-from trainer.encoder_decoder_rnntrainer import RNNTrainer
 from dataset.generic import Standardizer, TimeSeriesDatasetWrapper
+from trainer.encoder_decoder_rnntrainer import RNNTrainer
 
 if __name__ == "__main__":
     torch.multiprocessing.freeze_support()
@@ -55,31 +57,13 @@ if __name__ == "__main__":
 
     scaler = Standardizer()
 
+    # Dataset
+    dataset = None
 
-    # ToolwearDataset.from_file(True, scaler=scaler,  params=params, hyperparams=hyperparams)
-    train_dataset = ToolwearTorchDataset.from_pickle(train=True, scaler=scaler, params=params, hyperparams=hyperparams)
-    test_dataset = ToolwearTorchDataset.from_pickle(train=False, scaler=scaler, params=params, hyperparams=hyperparams)
+    # Model
+    model = None
 
-    dataset = TimeSeriesDatasetWrapper(trainset=train_dataset,
-                                       testset=test_dataset)
-
-    model = RNNPredictor(rnn_type=hyperparams['model'],
-                         enc_inp_size=dataset.feature_dim,
-                         rnn_inp_size=hyperparams['emsize'],
-                         rnn_hid_size=hyperparams['nhid'],
-                         dec_out_size=dataset.feature_dim,
-                         nlayers=hyperparams['nlayers'],
-                         dropout=hyperparams['dropout'],
-                         tie_weights=hyperparams['tied'],
-                         res_connection=hyperparams['res_connection'])
-    trainer = RNNTrainer(model=model,
-                         dataset=dataset,
-                         hyperparams=hyperparams,
-                         params=params)
+    # Trainer
+    trainer = None
 
     trainer.fit()
-
-
-
-    # trainer.plot(epoch=1000, train=True)
-    # trainer.plot(epoch=1000, train=False)

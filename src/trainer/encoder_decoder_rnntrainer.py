@@ -1,38 +1,81 @@
-# -*- coding: utf-8 -*-
-# @Time   : 3/12/2020 12:03 AM
-# @Author : Ugur Gudelek
-# @Email  : ugurgudelek@gmail.com
-# @File   : rnntrainer.py
+__author__ = "Ugur Gudelek"
+__email__ = "ugurgudelek@gmail.com"
 
 import torch
 from torch.nn import MSELoss
 from torch.optim import Adam
-
-import os
-from pathlib import Path
+from torch.utils.data import DataLoader
 
 import numpy as np
-import matplotlib.pyplot as plt
-
+import pandas as pd
+from pathlib import Path
 
 from history.history import History
-from trainer.trainer import Trainer
+
+from collections import defaultdict
+import matplotlib.pyplot as plt
+import torchvision
+
+import os
 
 
-class RNNTrainer(Trainer):  # add base generic trainer class
+# class TimeSeriesDataloader():
+#     def __init__(self, dataset, batch_size, seq_len, **kwargs):
+#         self.dataset = dataset
+#         self.seq_len = seq_len
+#         self.batch_size = batch_size
+#         self.time_skip = len(self.dataset) // self.batch_size
+#
+#     def __iter__(self):
+#         for ix in range(len(self.dataset)):
+#
+#             col_ix = ix % self.batch_size
+#             batch_ix = ix // self.batch_size
+#
+#             real_ix = col_ix * self.time_skip + batch_ix * self.seq_len
+#             yield self.dataset[real_ix]
+
+# class TimeSeriesDatasetSampler(torch.utils.data.sampler.Sampler):
+#     """Samples elements randomly from a given list of indices for imbalanced dataset
+#     Arguments:
+#         indices (list, optional): a list of indices
+#         num_samples (int, optional): number of samples to draw
+#
+#     Examples:
+#         train_loader = torch.utils.data.DataLoader(
+#         train_dataset,
+#         sampler=ImbalancedDatasetSampler(train_dataset),
+#         batch_size=args.batch_size,
+#         **kwargs
+#     )
+#     """
+#
+#     def __init__(self, num_samples, time_skip):
+#         self.num_samples = num_samples
+#         self.time_skip = time_skip
+#
+#     def __iter__(self):
+#         for i in range(0, self.num_samples, self.time_skip):
+#             yield i
+#
+#     def __len__(self):
+#         return self.num_samples
+
+
+class RNNTrainer:
     def __init__(self, model, dataset, hyperparams, params, optimizer=None, criterion=None):
-        super().__init__()
-
-        self._validate_hyperparams(hyperparams)
         self.hyperparams = hyperparams
         self.params = params
+
         self.device = torch.device('cuda:0' if self.params['device'] == 'cuda' else 'cpu')
+
         self.model = model.to(self.device)
         self.dataset = dataset
         self.criterion = criterion or MSELoss()
         self.optimizer = optimizer or Adam(params=model.parameters(),
                                            lr=self.hyperparams['lr'],
                                            weight_decay=self.hyperparams['weight_decay'])
+
         # self.loader_kwargs = {'num_workers': 1, 'pin_memory': True} if self.use_cuda else {}
         # self.loader_kwargs = {'drop_last': False, 'shuffle': False}
 
@@ -41,11 +84,10 @@ class RNNTrainer(Trainer):  # add base generic trainer class
 
         if self.params['resume'] or self.params['pretrained']:
             print("=> loading checkpoint ")
-            cpt_path = self.experiment_fpath / 'checkpoints'
+            cpt_path = self.experiment_fpath/'checkpoints'
             if not cpt_path.exists():
-                raise Exception(
-                    "You do not have any checkpoint to resume\n if you want to start over. Make sure --resume and --pretrained is False")
-            last_epoch = sorted(list(map(int, os.listdir(cpt_path))))[-1]  # todo: change with Path
+                 raise Exception("You do not have any checkpoint to resume\n if you want to start over. Make sure --resume and --pretrained is False")
+            last_epoch = sorted(list(map(int, os.listdir(cpt_path))))[-1]
             self.load_checkpoint(epoch=last_epoch)
             print("=> loaded checkpoint")
         else:
@@ -84,7 +126,9 @@ class RNNTrainer(Trainer):  # add base generic trainer class
         plt.savefig(save_dir/'lr.png')
         plt.close()
 
-    def save_checkpoint(self, epoch):  # todo: move into generic model
+
+
+    def save_checkpoint(self, epoch):
         # Save the model if the validation loss is the best we've seen so far.
         # is_best = val_loss > best_val_loss
         # best_val_loss = max(val_loss, best_val_loss)
@@ -99,7 +143,7 @@ class RNNTrainer(Trainer):  # add base generic trainer class
                     'params': self.params},
                    self.cpt_fpath/'model-optim.pth')
 
-    def load_checkpoint(self, epoch):  # todo: move into generic model
+    def load_checkpoint(self, epoch):
         # load model
         map_location = f"{self.device.type}:{self.device.index}"
         if self.device.type == 'cpu':
@@ -121,27 +165,20 @@ class RNNTrainer(Trainer):  # add base generic trainer class
 
     @staticmethod
     def get_batch(source, i, seq_len):
-        """
-        Custom batch method.
-        Dataloader are not working with timeseries signal data.
-        # todo: check for further info.
-        """
         seq_len = min(seq_len, len(source) - 1 - i)
         data = source[i:i + seq_len]  # [ seq_len * batch_size * feature_size ]
         target = source[i + 1:i + 1 + seq_len]  # [ (seq_len x batch_size x feature_size) ]
         return data, target
 
     def _on_epoch(self, epoch, train=True):
-        # todo: reimplement this function
-
-        # Disable gradient calculations if validation or test period is active.
+        # Train and test differences
         with_grad_or_not = torch.enable_grad if train else torch.no_grad
         # loader = self.train_loader if train else self.test_loader
         dataset = self.dataset.trainset.batched_data if train else self.dataset.testset.batched_data
+        self.model.train(train)  # enable or disable dropout
 
         hidden = self.model.init_hidden(self.hyperparams['train_batch_size'])
 
-        self.model.train(train)  # enable or disable dropout
         with with_grad_or_not():
 
             logs = dict()
@@ -157,8 +194,30 @@ class RNNTrainer(Trainer):  # add base generic trainer class
                 hidden_ = self.model.repackage_hidden(hidden)
                 self.optimizer.zero_grad()  # Pytorch accumulates gradients.
 
-                # Loss
-                loss = None # todo: add loss calculations. you can look into encoder_decoder_rnntrainer.py for more info.
+                # Loss1: Free Running Loss
+                outVal = data[0].unsqueeze(0)
+                outVals = []
+                hids1 = []
+                for i in range(data.size(0)):
+                    outVal, hidden_, hid = self.model.forward(outVal, hidden_, return_hiddens=True)
+                    outVals.append(outVal)
+                    hids1.append(hid)
+                outSeq1 = torch.cat(outVals, dim=0)
+                hids1 = torch.cat(hids1, dim=0)
+                loss1 = self.criterion(outSeq1.view(self.hyperparams['train_batch_size'], -1),
+                                       targets.contiguous().view(self.hyperparams['train_batch_size'], -1))
+
+                '''Loss2: Teacher forcing loss'''
+                outSeq2, hidden, hids2 = self.model.forward(data, hidden, return_hiddens=True)
+                loss2 = self.criterion(outSeq2.view(self.hyperparams['train_batch_size'], -1),
+                                       targets.contiguous().view(self.hyperparams['train_batch_size'], -1))
+
+                '''Loss3: Simplified Professor forcing loss'''
+                loss3 = self.criterion(hids1.view(self.hyperparams['train_batch_size'], -1),
+                                       hids2.view(self.hyperparams['train_batch_size'], -1).detach())
+
+                '''Total loss = Loss1+Loss2+Loss3'''
+                loss = loss1 + loss2 + loss3
 
                 if train:
                     loss.backward()
@@ -181,11 +240,12 @@ class RNNTrainer(Trainer):  # add base generic trainer class
                                           'loss': np.mean(logs['loss']),
                                           })
 
-        self.model.train(not train)
+            self.model.train(not train)
 
         return np.mean(logs['loss'])
 
-    def fit(self):  # todo: move into trainer
+
+    def fit(self):
 
         if self.params['pretrained']:
             raise Exception("-You can not use fit with --pretrained=True")
@@ -219,12 +279,7 @@ class RNNTrainer(Trainer):  # add base generic trainer class
         except KeyboardInterrupt:
             print('Exiting from training early')
 
-    @staticmethod
-    def proba(output):   # todo: move into trainer
-        return torch.nn.functional.softmax(output.detach(), dim=1).cpu().numpy()
-
-
-    def plot(self, epoch, train=False):  # todo: look again
+    def plot(self, epoch, train=False):
         self.generate_output(model=self.model, testset=self.dataset.trainset if train else self.dataset.testset,
                              epoch=epoch, experiment_fpath=self.experiment_fpath, device=self.device,
                              start_point=self.params['start_point'],
@@ -235,7 +290,7 @@ class RNNTrainer(Trainer):  # add base generic trainer class
     def generate_output(model, testset, epoch,  experiment_fpath,device,
                         start_point=3000,
                         recursive_start_point=3500,
-                        end_point=4000):   # todo: look again
+                        end_point=4000):
 
             # Turn on evaluation mode which disables dropout.
             model.eval()
@@ -294,5 +349,35 @@ class RNNTrainer(Trainer):  # add base generic trainer class
             plt.close()
             return out_sequences
 
-    def _validate_hyperparams(self, hyperparams):
-        raise NotImplementedError()
+
+    @staticmethod
+    def proba(output):
+        return torch.nn.functional.softmax(output.detach(), dim=1).cpu().numpy()
+
+
+    def predict(self, data=None):
+        if data is None:
+            data = self.dataset.testset.data
+
+        self.model.hidden = None
+        pred = self.model(data)
+        return pred.detach().numpy()
+
+
+    def predict_log_proba(self):
+        pass
+
+
+    def predict_proba(self):
+        pass
+
+    # def score(self, data=None, targets=None, kind='accuracy'):
+    #     if data is None:
+    #         data = self.dataset.testset.data
+    #     if targets is None:
+    #         targets = self.dataset.testset.targets
+    #
+    #     output = self.model(data)
+    #     if kind == 'accuracy':
+    #         return self.accuracy(output, targets)
+    #     raise RuntimeError(f"{kind} is not recognized in available kinds.")
