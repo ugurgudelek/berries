@@ -14,7 +14,7 @@ from trainer.trainer import Trainer
 
 class RNNTrainer(Trainer):  # add base generic trainer class
     def __init__(self, model, dataset, hyperparams, params, optimizer=None, criterion=None):
-        super().__init__(model, dataset, hyperparams, optimizer=optimizer, criterion=criterion)
+        super().__init__(model, dataset, hyperparams, params, optimizer=optimizer, criterion=criterion)
 
         # Dataloader are not working with timeseries signal data.
         # TODO: check for further info.
@@ -63,12 +63,40 @@ class RNNTrainer(Trainer):  # add base generic trainer class
 
                 # Starting each batch, we detach the hidden state from how it was previously produced.
                 # If we didn't, the model would try backpropagating all the way to start of the dataset.
-                hidden = self.model.repackage_hidden(hidden)
-                hidden_ = self.model.repackage_hidden(hidden)
+                self.model.reset_states()
+                # hidden_ = self.model.repackage_hidden(hidden)
                 self.optimizer.zero_grad()  # Pytorch accumulates gradients.
 
                 # Loss
-                loss = None  # todo: add loss calculations. you can look into encoder_decoder_rnntrainer.py for more info.
+                # todo: add loss calculations. you can look into encoder_decoder_rnntrainer.py for more info.
+                output = self.model(data)
+                loss = self.criterion(output, targets)
+
+
+                # # Loss1: Free Running Loss
+                # outVal = data[0].unsqueeze(0)
+                # outVals = []
+                # hids1 = []
+                # for i in range(data.size(0)):
+                #     outVal, hidden_, hid = self.model.forward(outVal, hidden_, return_hiddens=True)
+                #     outVals.append(outVal)
+                #     hids1.append(hid)
+                # outSeq1 = torch.cat(outVals, dim=0)
+                # hids1 = torch.cat(hids1, dim=0)
+                # loss1 = self.criterion(outSeq1.view(self.hyperparams['train_batch_size'], -1),
+                #                        targets.contiguous().view(self.hyperparams['train_batch_size'], -1))
+                #
+                # '''Loss2: Teacher forcing loss'''
+                # outSeq2, hidden, hids2 = self.model.forward(data, hidden, return_hiddens=True)
+                # loss2 = self.criterion(outSeq2.view(self.hyperparams['train_batch_size'], -1),
+                #                        targets.contiguous().view(self.hyperparams['train_batch_size'], -1))
+                #
+                # '''Loss3: Simplified Professor forcing loss'''
+                # loss3 = self.criterion(hids1.view(self.hyperparams['train_batch_size'], -1),
+                #                        hids2.view(self.hyperparams['train_batch_size'], -1).detach())
+                #
+                # '''Total loss = Loss1+Loss2+Loss3'''
+                # loss = loss1 + loss2 + loss3
 
                 if train:
                     loss.backward()

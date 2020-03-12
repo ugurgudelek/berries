@@ -37,7 +37,7 @@ class NYCTaxiDataset:
         self.batch_size = 64
         self.time_skip = self.data.size(0) // self.batch_size
         self.data = self.data.narrow(0, 0, self.time_skip * self.batch_size)
-        self.batched_data = self.data.contiguous().view(self.batch_size, -1, 3).transpose(0,1)
+        self.batched_data = self.data.contiguous().view(self.batch_size, -1, 3).transpose(0, 1)
 
 
         # w_tensor = None

@@ -52,6 +52,8 @@ class InnerToyRNNDataset(Dataset):
         return len(self.data)
 
 
+
+
 if __name__ == '__main__':
     toyrnn_dataset = ToyRNNDataset()
     print(ToyRNNDataset.prepare_sequence("The dog ate the apple".split(),

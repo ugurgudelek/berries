@@ -1,12 +1,20 @@
+# -*- coding: utf-8 -*-
+# @Time   : 3/12/2020 3:53 PM
+# @Author : Ugur Gudelek
+# @Email  : ugurgudelek@gmail.com
+# @File   : toy_lstm_experiment.py
+
 import torch
 import torch.nn as nn
-from dataset.nyctaxi import *
+from dataset.toy.toy_timeseries_dataset import ToyTimeseriesDataset
 import matplotlib.pyplot as plt
-from model.encoder_decoder_rnn import RNNPredictor
-from model.lstm import  LSTM
-from torch.optim import Adam
 
-from trainer.encoder_decoder_rnntrainer import RNNTrainer
+import numpy as np
+
+from model.lstm import LSTM
+
+
+from trainer.rnntrainer import RNNTrainer
 from dataset.generic import Standardizer, TimeSeriesDatasetWrapper
 
 if __name__ == "__main__":
@@ -54,21 +62,12 @@ if __name__ == "__main__":
 
     scaler = Standardizer()
 
-    train_dataset = NYCTaxiDataset.from_pickle(train=True, scaler=scaler, augment=params['augment'])
-    test_dataset = NYCTaxiDataset.from_pickle(train=False, scaler=scaler)
+    dataset = ToyTimeseriesDataset()
+    dataset = TimeSeriesDatasetWrapper(trainset=dataset.trainset,
+                                       testset=dataset.testset)
 
-    dataset = TimeSeriesDatasetWrapper(trainset=train_dataset,
-                                       testset=test_dataset)
-
-    model = RNNPredictor(rnn_type=hyperparams['model'],
-                         enc_inp_size=dataset.feature_dim,
-                         rnn_inp_size=hyperparams['emsize'],
-                         rnn_hid_size=hyperparams['nhid'],
-                         dec_out_size=dataset.feature_dim,
-                         nlayers=hyperparams['nlayers'],
-                         dropout=hyperparams['dropout'],
-                         tie_weights=hyperparams['tied'],
-                         res_connection=hyperparams['res_connection']).to(params['device'])
+    model = LSTM(input_size=dataset.feature_dim,
+                 hidden_size=hyperparams['nhid'])
 
 
     trainer = RNNTrainer(model=model,

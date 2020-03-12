@@ -14,8 +14,9 @@ from history.history import History
 
 class Trainer:
     def __init__(self, model, dataset, hyperparams, params, optimizer=None, criterion=None):
-        self._validate_hyperparams(hyperparams)
-        self._validate_params(params)
+        # self._validate_hyperparams(hyperparams)
+        # self._validate_params(params)
+
         self.hyperparams = hyperparams
         self.params = params
         self.device = torch.device('cuda:0' if self.params['device'] == 'cuda' else 'cpu')
