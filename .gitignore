@@ -1,8 +1,10 @@
 experiment/*
 experiments/*
-input/*
-*.pyc
+input/energy/*
+input/MNIST/*
+input/nyc_taxi/*
 
+*.pyc
 *.pth
 *.idea
 *.pickle
