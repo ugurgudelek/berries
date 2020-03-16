@@ -31,13 +31,14 @@ from torchvision import transforms
 
 # Local libraries
 from dataset.generic import Standardizer, TimeSeriesDatasetWrapper
+from sklearn.preprocessing import MinMaxScaler,StandardScaler
 
 
 class ExcelData:
     """
     In order to read cutting dataset excel
     """
-    EXCEL_PATH = Path('D:/machining/data/raw/Experimental Data Sheet.xlsx')
+    EXCEL_PATH = Path('D:/YandexDisk/machining/data/raw/Experimental Data Sheet.xlsx')
 
     def __init__(self):
         self.excel = pd.read_excel(self.EXCEL_PATH)
@@ -67,7 +68,6 @@ class Toolwear:
         self.n_cycle = n_cycle
         self.start_sec = start_sec
         self.add_noise = add_noise
-        self.subset = None
 
         if not fake:
             # read raw tdms data
@@ -180,8 +180,7 @@ class Toolwear:
         return self._make_subset(start_idx=int(self.sampling_freq * self.start_sec))
 
     def _make_subset(self, start_idx):
-        self.subset = self.reading.iloc[start_idx:start_idx + self.num_points_in_one_period * self.n_cycle, :]
-        return self.subset
+        return self.reading.iloc[start_idx:start_idx + self.num_points_in_one_period * self.n_cycle, :]
 
     def static_plot(self, save=True):
         plt.figure(figsize=(20, 10))
@@ -607,6 +606,10 @@ class Toolwear:
         with open(f'{self.path}/data.pickle', 'wb') as f:
             pickle.dump(self, f)
 
+    def to_torch_csv(self):
+        path = f'{self.path}/data-timeseries.csv'
+        self.reading.loc[int(self.reading.shape[0] * 0.8):, ['data', 'toolwear']].to_csv(path, index=False)
+
     @staticmethod
     def from_pickle(path):
         return pickle.load(open(path, 'rb'))
@@ -629,107 +632,67 @@ class Toolwear:
                 """
 
 
+class ToolwearTorchInnerDataset(Dataset):
+    def __init__(self, vibration, toolwear, seq_len):
+        self.vibration = vibration
+        self.toolwear = toolwear
+        self.seq_len = seq_len
+
+    def __len__(self):
+        return self.vibration.shape[0]
+
+    def __getitem__(self, ix):
+        # x : [batch, seq, feature]
+        # y : [batch, seq]
+        return (torch.DoubleTensor(self.vibration[ix:ix + self.seq_len]).view(-1, 1),
+                torch.DoubleTensor(self.toolwear[ix:ix + self.seq_len]).view(-1, 1))
+
+
 class ToolwearTorchDataset:
-    CSV_PATH = Path('../input/machining/tool_wear/tool4/raw/data.csv')
-    PICKLE_FPATH = Path('../input/machining/tool_wear/tool4/labeled')
+    PATH = Path("D:/YandexDisk/machining/data/raw/1/data-timeseries.csv")
 
-    def __init__(self, data, label, train, scaler, params, hyperparams):
-        self.params = params
-        self.hyperparams = hyperparams
-        self.data = data
-        self.label = label
+    def __init__(self, seq_length, train_split):
+        self.seq_length = seq_length
+        self.train_split = train_split
 
-        self.train = train
-        self.scaler = scaler
-        self.augment = params['augment'] if train else False
+        timeseries = pd.read_csv(self.PATH).values
 
-        self.preprocessing()  # augment data and labels + applies scaler
+        self.scaler = StandardScaler()
+        self.scaler.fit(timeseries)
 
-        self.seq_len = self.hyperparams['seq_len']
-        self.batch_size = self.hyperparams['train_batch_size']
-        self.input_dim = 1
-        self.time_skip = self.data.size(0) // self.batch_size
-        self.data = self.data.narrow(0, 0, self.time_skip * self.batch_size)
-        self.batched_data = self.data.contiguous().view(self.batch_size, -1, self.input_dim).transpose(0, 1)
+        timeseries = self.transform(timeseries)
 
-    @staticmethod
-    def augmentation(data, label, std, noise_ratio=0.05, noise_interval=0.0005, max_length=100000):
-        noiseSeq = torch.randn(data.size())
-        augmentedData = data.clone()
-        augmentedLabel = label.clone()
-        for i in np.arange(0, noise_ratio, noise_interval):
-            scaled_noiseSeq = noise_ratio * std.expand_as(data) * noiseSeq
-            augmentedData = torch.cat([augmentedData, data + scaled_noiseSeq], dim=0)
-            augmentedLabel = torch.cat([augmentedLabel, label])
-            if len(augmentedData) > max_length:
-                augmentedData = augmentedData[:max_length]
-                augmentedLabel = augmentedLabel[:max_length]
-                break
+        self.train_size = int(timeseries.shape[0] * self.train_split)
+        self.test_size = timeseries.shape[0] - self.train_size
 
-        return augmentedData, augmentedLabel
+        self.trainset = ToolwearTorchInnerDataset(vibration=timeseries[:self.train_size, 0],
+                                                  toolwear=timeseries[:self.train_size, 1],
+                                                  seq_len=self.seq_length)
+        self.testset = ToolwearTorchInnerDataset(vibration=timeseries[self.train_size:, 0],
+                                                 toolwear=timeseries[self.train_size:, 1],
+                                                 seq_len=self.seq_length)
 
-    def preprocessing(self):
-        if self.train:
-            # Train the scaler
-            self.scaler.fit(self.data)
-            # Augment the data
-            if self.augment:
-                self.data, self.label = self.augmentation(self.data, self.label, std=self.scaler.std)
+    def transform(self, x):
+        return self.scaler.transform(x)
 
-        # Apply standardization or normalization
-        self.data = self.scaler.transform(self.data)
-
-    @classmethod
-    def from_pickle(cls, train=True, **kwargs):
-        path = cls.PICKLE_FPATH / ('train' if train else 'test') / 'toolwear.pkl'
-
-        def load_data(path):
-            with open(str(path), 'rb') as f:
-                df = pickle.load(f)
-                # label = torch.FloatTensor(df.loc[:, 'wear_len'].values)
-                # data = torch.FloatTensor(df.loc[:, 'acc'].values.reshape(-1, 1))
-                df.index = pd.to_datetime(df.index)
-                label = torch.FloatTensor(df.loc[:, 'wear_len'].resample('1S').mean().values)
-                data = torch.FloatTensor(df.loc[:, 'acc'].resample('1S').std().values.reshape((-1, 1)))
-                # data = torch.FloatTensor(df.loc[:, 'acc'].resample('1S').std().diff(1).fillna(0).values.reshape((-1, 1)))
-            return data, label
-
-        data, label = load_data(path)
-        return cls(data=data, label=label, train=train, **kwargs)
-
-    @classmethod
-    def from_file(cls, train=True, **kwargs):
-        # 
-        #         data = self.raw_data['acc'].values.astype(float)
-        #         targets = self.raw_data['wear_len'].values.astype(float)
-        raw_path = cls.CSV_PATH
-        raw_data = pd.read_csv(raw_path, index_col=0)
-        train_path = raw_path.parent.parent.joinpath('labeled', 'train', 'toolwear.pkl').with_suffix('.pkl')
-
-        train_size = int(raw_data.shape[0] * 0.8)
-        train_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(str(train_path), 'wb') as pkl:
-            pickle.dump(raw_data[:train_size], pkl)
-
-        test_path = raw_path.parent.parent.joinpath('labeled', 'test', 'toolwear.pkl').with_suffix('.pkl')
-        test_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(str(test_path), 'wb') as pkl:
-            pickle.dump(raw_data[train_size:], pkl)
-
-        return cls.from_pickle(train, **kwargs)
+    def inverse_transform(self, x):
+        return self.scaler.inverse_transform(x)
 
 
 def toolwear_class_usage():
     # ======= DATA READ ==========
     NUM_CYCLE = 10
-    vib = Toolwear.batch_read(fpath=Path('D:/machining/data/raw'), cut_no=1, kind='acc', n_cycle=NUM_CYCLE)
+    vib = Toolwear.batch_read(fpath=Path('D:/YandexDisk/machining/data/raw'), cut_no=1, kind='acc', n_cycle=NUM_CYCLE)
     # vib = Toolwear.from_pickle(Path('D:/machining/data/raw/1/data.pickle'))
 
     # ======= DATA PLOT ==========
     START_SEC = 5000
     # vib.apply_aggregation() # apply several filters
     subset = vib.make_subset_after(sec=START_SEC)
-    vib.to_pickle()
+    # vib.to_pickle()
+    print("Saving to csv")
+    vib.to_torch_csv()
+    print("Csv operation is finished")
 
     # # # plot data
     # vib.static_plot()
@@ -768,17 +731,10 @@ def toolwear_class_usage():
 
 def pytorch_dataset_usage():
     # ======= PYTORCH DATASET ===========
-    import os
-    os.chdir('..')
-    scaler = Standardizer()
-
-    # ToolwearTorchDataset.from_file()
-    train_dataset = ToolwearTorchDataset.from_pickle(train=True, scaler=scaler)
-    test_dataset = ToolwearTorchDataset.from_pickle(train=False, scaler=scaler)
-
-    dataset = TimeSeriesDatasetWrapper(trainset=train_dataset,
-                                       testset=test_dataset)
+    dataset = ToolwearTorchDataset(seq_length=100, train_split=0.95)
+    print()
 
 
 if __name__ == "__main__":
     pytorch_dataset_usage()
+    # toolwear_class_usage()

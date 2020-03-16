@@ -2,6 +2,7 @@ __author__ = "Ugur Gudelek"
 __email__ = "ugurgudelek@gmail.com"
 
 import torch
+from torch.utils.data import DataLoader
 from torch.nn import MSELoss
 from torch.optim import Adam
 
@@ -9,8 +10,10 @@ import os
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 from history.history import History
+
 
 class Trainer:
     def __init__(self, model, dataset, hyperparams, params, optimizer=None, criterion=None):
@@ -20,18 +23,33 @@ class Trainer:
         self.hyperparams = hyperparams
         self.params = params
         self.device = torch.device('cuda:0' if self.params['device'] == 'cuda' else 'cpu')
-        self.model = model.to(self.device)
+        self.model = model.to(self.device).double()
         self.dataset = dataset
         self.criterion = criterion or MSELoss()
         self.optimizer = optimizer or Adam(params=model.parameters(),
                                            lr=self.hyperparams['lr'],
                                            weight_decay=self.hyperparams['weight_decay'])
+
         # self.loader_kwargs = {'num_workers': 1, 'pin_memory': True} if self.use_cuda else {}
         # self.loader_kwargs = {'drop_last': False, 'shuffle': False}
+
+        self.train_loader = DataLoader(self.dataset.trainset,
+                                       batch_size=self.hyperparams['train_batch_size'],
+                                       drop_last=True)  # todo: output.view(batch_size, -1) needs this!
+
+        self.test_loader = DataLoader(self.dataset.testset,
+                                      batch_size=self.hyperparams['test_batch_size'],
+                                      drop_last=True)
+
+        # self.test_loader = Dataloader(self.dataset.testset,
+        #                               batch_size=self.hyperparams['test_batch_size'],
+        #                                         seq_len=self.hyperparams['seq_len'],
+        #                               **self.loader_kwargs)
 
         self.experiment_fpath = Path(f'../experiments/{self.params["experiment_name"]}')
         self.experiment_fpath.mkdir(parents=True, exist_ok=True)
 
+        # Resume or not
         if self.params['resume'] or self.params['pretrained']:
             print("=> loading checkpoint ")
             cpt_path = self.experiment_fpath / 'checkpoints'
@@ -45,10 +63,21 @@ class Trainer:
             self.start_epoch = 1
             print("=> Start training from scratch")
 
+        # Init history to log loss or something
         self.history = History()
 
     def callbacks(self, epoch, train=False):
-        raise NotImplementedError()
+        self.model.train(False)
+        y = self.dataset.trainset.labels
+        yhat = self.model(torch.DoubleTensor(self.dataset.trainset.data)).detach().numpy()
+
+
+        plt.plot(self.dataset.inverse_transform(y[:, 0, :]), label='y')
+        for i in range(yhat.shape[2]):
+            plt.plot(self.dataset.inverse_transform(yhat[:, 0, i][:, np.newaxis]), label=f'yhat{i}')
+        plt.legend()
+        plt.show()
+        self.model.train(True)
 
     def _validate_hyperparams(self, hyperparams):
         raise NotImplementedError()
@@ -57,7 +86,85 @@ class Trainer:
         raise NotImplementedError()
 
     def _on_epoch(self, epoch, train=True):
-        raise NotImplementedError()
+        # todo: reimplement this function
+        batch_size = self.hyperparams['train_batch_size'] if train else self.hyperparams['test_batch_size']
+        # Disable gradient calculations if validation or test period is active.
+        with_grad_or_not = torch.enable_grad if train else torch.no_grad
+        loader = self.train_loader if train else self.test_loader
+
+        # hidden = self.model.init_hidden(self.hyperparams['train_batch_size'])
+
+        self.model.train(train)  # enable or disable dropout
+        with with_grad_or_not():
+
+            logs = dict()
+            logs['loss'] = list()
+            for data, targets in loader:
+
+                data, targets = data.to(self.device), targets.to(self.device)
+
+                # Starting each batch, we detach the hidden state from how it was previously produced.
+                # If we didn't, the model would try backpropagating all the way to start of the dataset.
+                # self.model.reset_states()
+                # hidden_ = self.model.repackage_hidden(hidden)
+                self.optimizer.zero_grad()  # Pytorch accumulates gradients.
+
+                # Loss
+                # todo: add loss calculations. you can look into encoder_decoder_rnntrainer.py for more info.
+                output = self.model(data)
+                loss = self.criterion(output, targets)
+
+                # # Loss1: Free Running Loss
+                # outVal = data[0].unsqueeze(0)
+                # outVals = []
+                # hids1 = []
+                # for i in range(data.size(0)):
+                #     outVal, hidden_, hid = self.model.forward(outVal, hidden_, return_hiddens=True)
+                #     outVals.append(outVal)
+                #     hids1.append(hid)
+                # outSeq1 = torch.cat(outVals, dim=0)
+                # hids1 = torch.cat(hids1, dim=0)
+                # loss1 = self.criterion(outSeq1.view(self.hyperparams['train_batch_size'], -1),
+                #                        targets.contiguous().view(self.hyperparams['train_batch_size'], -1))
+                #
+                # '''Loss2: Teacher forcing loss'''
+                # outSeq2, hidden, hids2 = self.model.forward(data, hidden, return_hiddens=True)
+                # loss2 = self.criterion(outSeq2.view(self.hyperparams['train_batch_size'], -1),
+                #                        targets.contiguous().view(self.hyperparams['train_batch_size'], -1))
+                #
+                # '''Loss3: Simplified Professor forcing loss'''
+                # loss3 = self.criterion(hids1.view(self.hyperparams['train_batch_size'], -1),
+                #                        hids2.view(self.hyperparams['train_batch_size'], -1).detach())
+                #
+                # '''Total loss = Loss1+Loss2+Loss3'''
+                # loss = loss1 + loss2 + loss3
+
+                if train:
+                    loss.backward()
+                    # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
+                    if self.hyperparams.get('clip', None):  # if clip is given
+                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.hyperparams['clip'])
+                    self.optimizer.step()
+
+                logs['loss'].append(loss.item())
+
+
+                # print('\t'.join((
+                #     f"{'Train' if train else 'Test'}",
+                #     f"Epoch: {epoch} ",
+                #     # [{batch_ix * len(data)}/{len(loader.dataset)} ({100. * batch_ix / len(loader):.0f} % )]
+                #     f"Loss: {np.array(logs['loss']).mean().item():.6f}",
+                #     # f"Proba: {self.proba(output)}",
+                # )))
+
+            self.history.append(phase='train' if train else 'test',
+                                log_dict={'epoch': epoch,
+                                          'loss': np.mean(logs['loss']),
+                                          })
+
+        self.model.train(not train)
+
+        return np.mean(logs['loss'])
 
     def fit(self):  # todo: move into trainer
 
@@ -73,14 +180,12 @@ class Trainer:
 
             for epoch in range(self.start_epoch, self.hyperparams['epoch'] + 1):
                 train_loss = self._on_epoch(train=True, epoch=epoch)
-                print(f'Train| end of epoch {epoch:3d} | | {train_loss:5.4f} |')
+                print(f'[  Training] Epoch {epoch:3d} || Loss:{train_loss:5.4f} |')
                 val_loss = self._on_epoch(train=False, epoch=epoch)
-                print(f'Val | end of epoch {epoch:3d} | | {val_loss:5.4f} |')
-
+                print(f'[Validation] Epoch {epoch:3d} || Loss:{val_loss:5.4f} |')
 
                 if epoch % self.params['save_interval'] == 0:
                     if self.params['save_fig']:
-
                         self.callbacks(epoch=epoch)
                         self.save_checkpoint(epoch=epoch)
 
@@ -95,7 +200,7 @@ class Trainer:
         # is_best = val_loss > best_val_loss
         # best_val_loss = max(val_loss, best_val_loss)
 
-        self.cpt_fpath = self.experiment_fpath/'checkpoints'/str(epoch)
+        self.cpt_fpath = self.experiment_fpath / 'checkpoints' / str(epoch)
         self.cpt_fpath.mkdir(parents=True, exist_ok=True)
         # save model
         torch.save({'epoch': epoch,
@@ -103,7 +208,7 @@ class Trainer:
                     'optimizer_state_dict': self.optimizer.state_dict(),
                     'hyperparams': self.hyperparams,
                     'params': self.params},
-                   self.cpt_fpath/'model-optim.pth')
+                   self.cpt_fpath / 'model-optim.pth')
 
     def load_checkpoint(self, epoch):  # todo: move into generic model
         # load model
@@ -111,11 +216,11 @@ class Trainer:
         if self.device.type == 'cpu':
             map_location = self.device.type
 
-        checkpoint = torch.load(self.experiment_fpath/'checkpoints'/str(epoch)/'model-optim.pth',
+        checkpoint = torch.load(self.experiment_fpath / 'checkpoints' / str(epoch) / 'model-optim.pth',
                                 map_location=map_location)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        self.start_epoch = checkpoint['epoch']+1
+        self.start_epoch = checkpoint['epoch'] + 1
         # self.hyperparams = checkpoint['hyperparams']
         # self.params = checkpoint['params']
 
@@ -129,7 +234,7 @@ class Trainer:
         raise NotImplementedError()
 
     @staticmethod
-    def proba(output):   # todo: move into trainer
+    def proba(output):  # todo: move into trainer
         return torch.nn.functional.softmax(output.detach(), dim=1).cpu().numpy()
 
     def predict_log_proba(self):
@@ -152,6 +257,5 @@ class Trainer:
 
         save_dir = self.experiment_fpath / 'figures'
         save_dir.mkdir(parents=True, exist_ok=True)
-        plt.savefig(save_dir/'lr.png')
+        plt.savefig(save_dir / 'lr.png')
         plt.close()
-

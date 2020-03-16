@@ -4,27 +4,160 @@ Blog post: http://www.jessicayung.com/generating-autoregressive-data-for-experim
 Author: Jessiac Yung
 Sept 2018
 """
+
+
+import numpy as np
+import pandas as pd
+
 import torch
 from torch.utils.data import Dataset
-import numpy as np
-from sklearn.model_selection import train_test_split
 
-# A set of coefficients that are stable (to produce replicable plots, experiments)
-fixed_ar_coefficients = {2: [0.46152873, -0.29890739],
-                         5: [0.02519834, -0.24396899, 0.2785921, 0.14682383, 0.39390468],
-                         10: [-0.10958935, -0.34564819, 0.3682048, 0.3134046, -0.21553732, 0.34613629,
-                              0.41916508, 0.0165352, 0.14163503, -0.38844378],
-                         20: [0.1937815, 0.01201026, 0.00464018, -0.21887467, -0.20113385, -0.02322278,
-                              0.34285319, -0.21069086, 0.06604683, -0.22377364, 0.11714593, -0.07122126,
-                              -0.16346554, 0.03174824, 0.308584, 0.06881604, 0.24840789, -0.32735569,
-                              0.21939492, 0.3996207]}
+
+from sklearn.preprocessing import MinMaxScaler
+
+
+
+
+
+class TimeSeriesManyToOneInnerDataset(Dataset):
+    def __init__(self, data, labels):
+        self.data = data
+        self.labels = labels
+
+    def __len__(self):
+        return self.data.shape[0]
+
+    def __getitem__(self, ix):
+        # x : [batch, seq, feature]
+        # y : [batch, 1]
+        return torch.DoubleTensor(self.data[ix, :, :]), torch.DoubleTensor(self.labels[ix, :])
+
+class TimeSeriesManyToOneDataset():
+    def __init__(self, path, colname, seq_length, train_split):
+        self.seq_length = seq_length
+        self.train_split = train_split
+
+        timeseries = pd.read_csv(path)[colname].values[:, np.newaxis]
+
+        self.scaler = MinMaxScaler()
+        self.scaler.fit(timeseries)
+
+        timeseries = self.transform(timeseries)
+        x, y = self.sliding_windows(timeseries, self.seq_length)
+
+        self.train_size = int(len(y) * self.train_split)
+        self.test_size = len(y) - self.train_size
+
+        self.trainset = TimeSeriesManyToOneInnerDataset(data=x[:self.train_size, :],
+                                                        labels=y[:self.train_size, :])
+        self.testset = TimeSeriesManyToOneInnerDataset(data=x[self.train_size:, :],
+                                                       labels=y[self.train_size:, :])
+
+    def transform(self, x):
+        return self.scaler.transform(x)
+
+    def inverse_transform(self, x):
+        return self.scaler.inverse_transform(x)
+
+    @staticmethod
+    def sliding_windows(data, seq_length):
+        x = []
+        y = []
+
+        for i in range(len(data) - seq_length - 1):
+            _x = data[i:(i + seq_length)]
+            _y = data[i + seq_length]
+            x.append(_x)
+            y.append(_y)
+
+        return np.array(x), np.array(y)
+
+
+class TimeSeriesManyToManyInnerDataset(Dataset):
+    def __init__(self, data, labels):
+        self.data = data
+        self.labels = labels
+
+    def __len__(self):
+        return self.data.shape[0]
+
+    def __getitem__(self, ix):
+        # x : [batch, seq, feature]
+        # y : [batch, seq]
+        return torch.DoubleTensor(self.data[ix, :, :]), torch.DoubleTensor(self.labels[ix, :, :])
+
+class TimeSeriesManyToManyDataset():
+    def __init__(self, path, colname, seq_length, train_split):
+        self.seq_length = seq_length
+        self.train_split = train_split
+
+        timeseries = pd.read_csv(path)[colname].values[:, np.newaxis]
+
+        self.scaler = MinMaxScaler()
+        self.scaler.fit(timeseries)
+
+        timeseries = self.transform(timeseries)
+        x, y = self.sliding_windows(timeseries, self.seq_length)
+
+        self.train_size = int(len(y) * self.train_split)
+        self.test_size = len(y) - self.train_size
+
+        self.trainset = TimeSeriesManyToManyInnerDataset(data=x[:self.train_size, :],
+                                                         labels=y[:self.train_size, :])
+        self.testset = TimeSeriesManyToManyInnerDataset(data=x[self.train_size:, :],
+                                                        labels=y[self.train_size:, :])
+
+    @staticmethod
+    def sliding_windows(data, seq_length):
+        x = []
+        y = []
+
+        for i in range(len(data) - seq_length - 1):
+            _x = data[i:(i + seq_length)]
+            _y = np.power(_x, 2) + _x + 5  # x^2 + x + 5
+            x.append(_x)
+            y.append(_y)
+
+        return np.array(x), np.array(y)
+
+    def transform(self, x):
+        return self.scaler.transform(x)
+
+    def inverse_transform(self, x):
+        return self.scaler.inverse_transform(x)
+
+    # FROM TRAINER CLASS
+    # def plot(self):
+    #     self.model.train(False)
+    #     y = self.dataset.trainset.labels
+    #     yhat = self.model(torch.DoubleTensor(self.dataset.trainset.data)).detach().numpy()
+    #
+    #
+    #     plt.plot(self.dataset.inverse_transform(y[:, 0, :]), label='y')
+    #     for i in range(yhat.shape[2]):
+    #         plt.plot(self.dataset.inverse_transform(yhat[:, 0, i][:, np.newaxis]), label=f'yhat{i}')
+    #     plt.legend()
+    #     plt.show()
+    #     self.model.train(True)
+
+
+
 
 
 class ARDataset:
+    # A set of coefficients that are stable (to produce replicable plots, experiments)
+    fixed_ar_coefficients = {2: [0.46152873, -0.29890739],
+                             5: [0.02519834, -0.24396899, 0.2785921, 0.14682383, 0.39390468],
+                             10: [-0.10958935, -0.34564819, 0.3682048, 0.3134046, -0.21553732, 0.34613629,
+                                  0.41916508, 0.0165352, 0.14163503, -0.38844378],
+                             20: [0.1937815, 0.01201026, 0.00464018, -0.21887467, -0.20113385, -0.02322278,
+                                  0.34285319, -0.21069086, 0.06604683, -0.22377364, 0.11714593, -0.07122126,
+                                  -0.16346554, 0.03174824, 0.308584, 0.06881604, 0.24840789, -0.32735569,
+                                  0.21939492, 0.3996207]}
     def __init__(self, num_datapoints=100, num_prev=20, test_size=0.2, noise_var=0,
                  coeffs=None):
         if coeffs is None:
-            coeffs = fixed_ar_coefficients[num_prev]
+            coeffs = self.fixed_ar_coefficients[num_prev]
         data = ARData(num_datapoints=num_datapoints, num_prev=num_prev, test_size=test_size, noise_var=noise_var,
                       coeffs=coeffs)
 
@@ -53,7 +186,7 @@ class ARDataset:
             return len(self.targets)
 
 
-class TimeSeriesData:
+class TimeSeriesARData:
     def __init__(self, num_datapoints, test_size=0.2, max_t=20, num_prev=1,
                  noise_var=1):
         """
@@ -106,7 +239,7 @@ class TimeSeriesData:
         return self.X_train, self.y_train, self.X_test, self.y_test
 
 
-class ARData(TimeSeriesData):
+class ARData(TimeSeriesARData):
     """Class to generate autoregressive data."""
 
     def __init__(self, *args, coeffs=None, **kwargs):

@@ -18,16 +18,8 @@ class RNNTrainer(Trainer):  # add base generic trainer class
 
         # Dataloader are not working with timeseries signal data.
         # TODO: check for further info.
-        # self.train_loader = TimeSeriesDataloader(self.dataset.trainset,
-        #                                batch_size=self.hyperparams['train_batch_size'],
-        #                                          seq_len=self.hyperparams['seq_len'],
-        #                                # sampler=TimeSeriesDatasetSampler(13056, 204),
-        #                                **self.loader_kwargs)
-        # self.test_loader = TimeSeriesDataloader(self.dataset.testset,
-        #                               batch_size=self.hyperparams['test_batch_size'],
-        #                                         seq_len=self.hyperparams['seq_len'],
-        #                               **self.loader_kwargs)
-
+        self.train_loader = None
+        self.test_loader = None
 
     @staticmethod
     def get_batch(source, i, seq_len):

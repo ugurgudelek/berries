@@ -14,22 +14,20 @@ class LSTM(nn.Module):
     """
 
     def __init__(self, input_size, hidden_size, output_size=1,
-                 num_layers=2, batch_size=64, stateful=False, hidden_reset_period=None):
+                 num_layers=2, batch_size=64, stateful=False, hidden_reset_period=None, problem_type='many-to-many'):
         super(LSTM, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.num_layers = num_layers
-        self.batch_size = batch_size # todo: check this
-        self.device = torch.device('cuda:0')
+        self.batch_size = batch_size  # todo: check this
+        self.problem_type = problem_type
 
         self.stateful = stateful  # todo: check this
         self.step = 0
         if self.stateful and hidden_reset_period is None:
             raise Exception("When stateful is True, you should pass hidden_reset_period")
         self.hidden_reset_period = hidden_reset_period
-
-
 
         # Define the LSTM layer
         # Inputs: input, (h_0,c_0)
@@ -51,12 +49,17 @@ class LSTM(nn.Module):
                             )
 
         # Define the output layer
-        self.fc = nn.Sequential(nn.Linear(in_features=self.hidden_size, out_features=self.output_size))
+        self.classifier = nn.Sequential(nn.Linear(in_features=self.hidden_size,
+                                                  out_features=self.output_size))
 
-        self.hidden = self.init_hidden()
-        self.init_weights()
+        self.hidden = self._init_hidden()
+        self._init_weights()
 
-    def init_weights(self):
+    @property
+    def device(self):
+        return torch.device('cuda') if next(self.parameters()).is_cuda else torch.device('cpu')
+
+    def _init_weights(self):
         # default lstm cell init
         """
         stdv = 1.0 / math.sqrt(self.hidden_size)
@@ -74,7 +77,7 @@ class LSTM(nn.Module):
         """
         pass
 
-    def init_hidden(self, batch_size=None):
+    def _init_hidden(self, batch_size=None):
         """
         Returns:
             (Variable,Variable): (h_0, c_0)
@@ -82,16 +85,28 @@ class LSTM(nn.Module):
         """
         if batch_size is None:
             batch_size = self.batch_size
-        (h0, c0) = (Variable(torch.zeros(self.num_layers, batch_size, self.hidden_size)),  # h_0
-                    Variable(torch.zeros(self.num_layers, batch_size, self.hidden_size)))  # c_0
 
-        return (h0.to(self.device), c0.to(self.device))
+        h0 = nn.Parameter(
+            nn.init.xavier_uniform_(
+                torch.Tensor(
+                    self.num_layers,
+                    batch_size,
+                    self.hidden_size).type(torch.DoubleTensor)), requires_grad=False).to(self.device)
+
+        c0 = nn.Parameter(
+            nn.init.xavier_uniform_(
+                torch.Tensor(
+                    self.num_layers,
+                    batch_size,
+                    self.hidden_size).type(torch.DoubleTensor)), requires_grad=False).to(self.device)
+
+        return h0, c0
 
     def reset_states(self, batch_size=None):
         # print(f"States reset on {self.step}")
-        self.hidden = self.init_hidden(batch_size=batch_size)
+        self.hidden = self._init_hidden(batch_size=batch_size)
 
-    def forward(self, x, return_sequences=False):
+    def forward(self, x):
         """
         # required x shape: (batch_size, seq_len, input_size) because batch_first=True
         # required hidden shape:(num_layers * num_directions, batch_size, hidden_size)
@@ -101,44 +116,33 @@ class LSTM(nn.Module):
         # See. [Stateful vs Stateless LSTM](http://philipperemy.github.io/keras-stateful-lstm/)
         """
 
-        # Inputs: input, (h_0, c_0)
-        # input: (seq_len, batch, input_size)
-        # h_0: (num_layers * num_directions, batch, hidden_size)
-        # c_0: (num_layers * num_directions, batch, hidden_size)
-
-        seq_len, batch_size, input_size = x.shape
+        batch_size, seq_len, input_size = x.shape
 
         if not self.stateful:
             self.reset_states(batch_size=batch_size)
         else:  # do not reset on every forward pass
             if (self.hidden_reset_period != -1) and ((self.step % self.hidden_reset_period) == 0):
-                self.hidden = self._init_hidden(batch_size=batch_size)
+                self.reset_states(batch_size=batch_size)
             self.step += 1  # increment step to determine to reset hidden
 
         # forward pass
         # auto iterates over seq_len
         lstm_out, self.hidden = self.lstm(x, self.hidden)
-
-        # return last sequence
         # lstm_out'shape (batch, seq_len, num_directions * hidden_size)
-        # tensor containing the output features (h_t) from the last layer of the LSTM
-        last_seq_out = lstm_out[:, -1, :]  # all_batch, last_seq, all_hidden
-        last_hidden_out = lstm_out[:, :, -1]  # all_batch, last_seq, all_hidden
 
-        if return_sequences:
-            return last_seq_out
+        if self.problem_type == 'many-to-many':
+            fc_out = self.classifier(lstm_out)  # iterate over all hidden dim
+            # fc_out shape: [batch_size, seq_len, output_size]
 
-        # fc_seq_out = self.fc_seq(last_hidden_out)
-        # fc_hidden_out = self.fc_hidden(last_seq_out)
+        elif self.problem_type == 'many-to-one':
+            # tensor containing the output features (h_t) from the last layer of the LSTM
+            last_seq_out = lstm_out[:, -1, :]  # all_batch, last_seq, all_hidden
+            fc_out = self.classifier(last_seq_out)
 
-        # fc_out = self.fc(torch.cat((fc_seq_out, fc_hidden_out), dim=0).view(1, -1))
-
-        fc_out = self.fc(last_seq_out)
+        else:
+            raise ValueError(f"Wrong 'problem_type':{self.problem_type}")
 
         # detach hidden, otherwise retain_graph=True is necessary if stateful=True.
         self.hidden = (self.hidden[0].detach_(), self.hidden[1].detach_())
 
         return fc_out
-
-
-
