@@ -634,18 +634,18 @@ class Toolwear:
 
 class ToolwearTorchInnerDataset(Dataset):
     def __init__(self, vibration, toolwear, seq_len):
-        self.vibration = vibration
-        self.toolwear = toolwear
+        self.data = vibration
+        self.labels = toolwear
         self.seq_len = seq_len
 
     def __len__(self):
-        return self.vibration.shape[0]
+        return self.data.shape[0]
 
     def __getitem__(self, ix):
         # x : [batch, seq, feature]
         # y : [batch, seq]
-        return (torch.DoubleTensor(self.vibration[ix:ix + self.seq_len]).view(-1, 1),
-                torch.DoubleTensor(self.toolwear[ix:ix + self.seq_len]).view(-1, 1))
+        return (torch.DoubleTensor(self.data[ix:ix + self.seq_len]).view(-1, 1),
+                torch.DoubleTensor(self.labels[ix:ix + self.seq_len]).view(-1, 1))
 
 
 class ToolwearTorchDataset:

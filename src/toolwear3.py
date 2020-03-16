@@ -36,8 +36,8 @@ if __name__ == "__main__":
     hyperparams = {'lr': 0.1,
                    'weight_decay': 0.,
                    'epoch': 10000,
-                   'train_batch_size': 640,
-                   'test_batch_size': 640,
+                   'train_batch_size': 32000,
+                   'test_batch_size': 32000,
                    'seq_len':1000}
 
     torch.manual_seed(params['seed'])
