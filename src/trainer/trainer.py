@@ -100,7 +100,7 @@ class Trainer:
 
             logs = dict()
             logs['loss'] = list()
-            for data, targets in loader:
+            for batch_ix, (data, targets) in enumerate(loader):
 
                 data, targets = data.to(self.device), targets.to(self.device)
 
@@ -149,14 +149,13 @@ class Trainer:
 
                 logs['loss'].append(loss.item())
 
-
-                # print('\t'.join((
-                #     f"{'Train' if train else 'Test'}",
-                #     f"Epoch: {epoch} ",
-                #     # [{batch_ix * len(data)}/{len(loader.dataset)} ({100. * batch_ix / len(loader):.0f} % )]
-                #     f"Loss: {np.array(logs['loss']).mean().item():.6f}",
-                #     # f"Proba: {self.proba(output)}",
-                # )))
+                print('\t'.join((
+                    f"{'[  Training]' if train else '[Validation]'}",
+                    f"Epoch: {epoch:3d} ",
+                    f"[{batch_ix * len(data)}/{len(loader.dataset)} ({100. * batch_ix / len(loader):.0f} % )]",
+                    f"Loss: {np.array(logs['loss']).mean().item():5.4f}",
+                    # f"Proba: {self.proba(output)}",
+                )))
 
             self.history.append(phase='train' if train else 'test',
                                 log_dict={'epoch': epoch,
@@ -181,9 +180,9 @@ class Trainer:
 
             for epoch in range(self.start_epoch, self.hyperparams['epoch'] + 1):
                 train_loss = self._on_epoch(train=True, epoch=epoch)
-                print(f'[  Training] Epoch {epoch:3d} || Loss:{train_loss:5.4f} |')
+                print(f'[E.   Training] Epoch {epoch:3d} || Loss:{train_loss:5.4f} |')
                 val_loss = self._on_epoch(train=False, epoch=epoch)
-                print(f'[Validation] Epoch {epoch:3d} || Loss:{val_loss:5.4f} |')
+                print(f'[E. Validation] Epoch {epoch:3d} || Loss:{val_loss:5.4f} |')
 
                 if epoch % self.params['save_interval'] == 0:
                     if self.params['save_fig']:
