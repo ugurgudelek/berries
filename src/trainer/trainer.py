@@ -191,12 +191,14 @@ class Trainer:
 
     def predict(self):
 
-        x, y = self.dataset.trainset[:100]
+        x, y = self.dataset.trainset[:1000]
+        x, y = x.to(self.device), y.to(self.device)
         self.model.train(False)
         with torch.no_grad():
             output = self.model(x)
 
         output = output.detach().cpu().numpy()
+        y = y.cpu().numpy()
         return y, output
 
 

@@ -13,7 +13,7 @@ import torch
 from torch.utils.data import Dataset
 
 
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 
 
@@ -104,7 +104,7 @@ class TimeSeriesManyToManyDataset():
         y = np.power(x, 2) + x + 5  # x^2 + x + 5))
         timeseries = np.concatenate((x, y), axis=1)
 
-        self.scaler = MinMaxScaler()
+        self.scaler = StandardScaler()
         self.scaler.fit(timeseries)
 
         timeseries = self.transform(timeseries)

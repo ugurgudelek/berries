@@ -24,8 +24,8 @@ if __name__ == "__main__":
     hidden_size = 2
     num_layers = 1
 
-    params = {'seed':42,
-              'device': 'cuda',
+    params = {'seed': 42,
+              'device': 'cuda' if torch.cuda.is_available() else 'cpu',
               'resume': False,
               'pretrained': False,
               'experiment_name':'toolwear',
@@ -45,7 +45,7 @@ if __name__ == "__main__":
     np.random.seed(params['seed'])
 
     dataset = ToolwearTorchDataset(seq_length=hyperparams['seq_len'], train_split=.95)
-    # model = ShampooLSTM(num_classes, input_size, hidden_size, num_layers, seq_length=seq_length)
+    dataset.plot()
     model = LSTM(input_size=input_size, hidden_size=hidden_size,
                  output_size=1, num_layers=1,
                  batch_size=hyperparams['train_batch_size'],

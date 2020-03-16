@@ -680,6 +680,15 @@ class ToolwearTorchDataset:
                                                  toolwear=timeseries[self.train_size:, 1],
                                                  seq_len=self.seq_length)
 
+    def plot(self):
+        # x, y = self.trainset[:1000]
+        # y = y[:, -1, :]
+
+        plt.plot(self.trainset.labels, label='y')
+        plt.legend()
+        plt.show()
+
+
     def transform(self, x):
         return self.scaler.transform(x)
 
