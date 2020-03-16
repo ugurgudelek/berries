@@ -736,5 +736,5 @@ def pytorch_dataset_usage():
 
 
 if __name__ == "__main__":
-    pytorch_dataset_usage()
-    # toolwear_class_usage()
+    # pytorch_dataset_usage()
+    toolwear_class_usage()

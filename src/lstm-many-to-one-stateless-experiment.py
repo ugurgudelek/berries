@@ -27,7 +27,7 @@ if __name__ == "__main__":
     num_layers = 1
 
     params = {'seed':42,
-              'device': 'cpu',
+              'device': 'cuda',
               'resume': False,
               'pretrained': False,
               'experiment_name':'lstm-many-to-one-stateless',

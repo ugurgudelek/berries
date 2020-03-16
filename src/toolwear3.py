@@ -25,11 +25,11 @@ if __name__ == "__main__":
     num_layers = 1
 
     params = {'seed':42,
-              'device': 'cpu',
+              'device': 'cuda',
               'resume': False,
               'pretrained': False,
               'experiment_name':'toolwear',
-              'save_interval':100,
+              'save_interval':1,
               'save_fig': True,
               'problem_type':'many-to-many'}
 

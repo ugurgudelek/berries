@@ -69,7 +69,8 @@ class Trainer:
     def callbacks(self, epoch, train=False):
         self.model.train(False)
         y = self.dataset.trainset.labels
-        yhat = self.model(torch.DoubleTensor(self.dataset.trainset.data)).detach().numpy()
+
+        yhat = self.model(torch.DoubleTensor(self.dataset.trainset.data).to(self.device)).detach().cpu().numpy()
 
 
         plt.plot(self.dataset.inverse_transform(y[:, 0, :]), label='y')
