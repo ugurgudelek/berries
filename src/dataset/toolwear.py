@@ -639,11 +639,19 @@ class ToolwearTorchInnerDataset(Dataset):
         self.seq_len = seq_len
 
     def __len__(self):
-        return self.data.shape[0]
+        return self.data.shape[0]-self.seq_len
 
     def __getitem__(self, ix):
         # x : [batch, seq, feature]
         # y : [batch, seq]
+
+        if isinstance(ix, slice):
+            xs, ys = [], []
+            for ii in range(*ix.indices(len(self))):  # *ix.indices(len(self)): (start, stop, step)
+                x, y = self[ii]
+                xs.append(x)
+                ys.append(y)
+            return torch.stack(xs), torch.stack(ys)
         return (torch.DoubleTensor(self.data[ix:ix + self.seq_len]).view(-1, 1),
                 torch.DoubleTensor(self.labels[ix:ix + self.seq_len]).view(-1, 1))
 

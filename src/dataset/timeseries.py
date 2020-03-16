@@ -74,51 +74,50 @@ class TimeSeriesManyToOneDataset():
 
 
 class TimeSeriesManyToManyInnerDataset(Dataset):
-    def __init__(self, data, labels):
+    def __init__(self, data, labels, seq_len):
         self.data = data
         self.labels = labels
+        self.seq_len = seq_len
 
     def __len__(self):
-        return self.data.shape[0]
+        return self.data.shape[0]-self.seq_len
 
     def __getitem__(self, ix):
         # x : [batch, seq, feature]
         # y : [batch, seq]
-        return torch.DoubleTensor(self.data[ix, :, :]), torch.DoubleTensor(self.labels[ix, :, :])
+        if isinstance(ix, slice):
+            xs, ys = [], []
+            for ii in range(*ix.indices(len(self))): # *ix.indices(len(self)): (start, stop, step)
+                x, y = self[ii]
+                xs.append(x)
+                ys.append(y)
+            return torch.stack(xs), torch.stack(ys)
+        return (torch.DoubleTensor(self.data[ix:ix + self.seq_len, :]),
+                torch.DoubleTensor(self.labels[ix:ix + self.seq_len, :]))
 
 class TimeSeriesManyToManyDataset():
     def __init__(self, path, colname, seq_length, train_split):
         self.seq_length = seq_length
         self.train_split = train_split
 
-        timeseries = pd.read_csv(path)[colname].values[:, np.newaxis]
+        x = pd.read_csv(path)[colname].values[:, np.newaxis]
+        y = np.power(x, 2) + x + 5  # x^2 + x + 5))
+        timeseries = np.concatenate((x, y), axis=1)
 
         self.scaler = MinMaxScaler()
         self.scaler.fit(timeseries)
 
         timeseries = self.transform(timeseries)
-        x, y = self.sliding_windows(timeseries, self.seq_length)
 
-        self.train_size = int(len(y) * self.train_split)
-        self.test_size = len(y) - self.train_size
+        self.train_size = int(timeseries.shape[0] * self.train_split)
+        self.test_size = timeseries.shape[0] - self.train_size
 
-        self.trainset = TimeSeriesManyToManyInnerDataset(data=x[:self.train_size, :],
-                                                         labels=y[:self.train_size, :])
-        self.testset = TimeSeriesManyToManyInnerDataset(data=x[self.train_size:, :],
-                                                        labels=y[self.train_size:, :])
-
-    @staticmethod
-    def sliding_windows(data, seq_length):
-        x = []
-        y = []
-
-        for i in range(len(data) - seq_length - 1):
-            _x = data[i:(i + seq_length)]
-            _y = np.power(_x, 2) + _x + 5  # x^2 + x + 5
-            x.append(_x)
-            y.append(_y)
-
-        return np.array(x), np.array(y)
+        self.trainset = TimeSeriesManyToManyInnerDataset(data=timeseries[:self.train_size, 0].reshape((-1, 1)),
+                                                         labels=timeseries[:self.train_size, 1].reshape((-1, 1)),
+                                                         seq_len=self.seq_length)
+        self.testset = TimeSeriesManyToManyInnerDataset(data=timeseries[self.train_size:, 0].reshape((-1, 1)),
+                                                        labels=timeseries[self.train_size:, 1].reshape((-1, 1)),
+                                                        seq_len=self.seq_length)
 
     def transform(self, x):
         return self.scaler.transform(x)

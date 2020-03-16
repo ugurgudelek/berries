@@ -25,7 +25,7 @@ if __name__ == "__main__":
     num_layers = 1
 
     params = {'seed':42,
-        'device': 'cuda',
+            'device': 'cuda' if torch.cuda.is_available() else 'cpu',
               'resume': False,
               'pretrained': False,
               'experiment_name':'lstm-many-to-many-stateless',

@@ -66,19 +66,7 @@ class Trainer:
         # Init history to log loss or something
         self.history = History()
 
-    def callbacks(self, epoch, train=False):
-        self.model.train(False)
-        y = self.dataset.trainset.labels
 
-        yhat = self.model(torch.DoubleTensor(self.dataset.trainset.data).to(self.device)).detach().cpu().numpy()
-
-
-        plt.plot(self.dataset.inverse_transform(y[:, 0, :]), label='y')
-        for i in range(yhat.shape[2]):
-            plt.plot(self.dataset.inverse_transform(yhat[:, 0, i][:, np.newaxis]), label=f'yhat{i}')
-        plt.legend()
-        plt.show()
-        self.model.train(True)
 
     def _validate_hyperparams(self, hyperparams):
         raise NotImplementedError()
@@ -87,13 +75,10 @@ class Trainer:
         raise NotImplementedError()
 
     def _on_epoch(self, epoch, train=True):
-        # todo: reimplement this function
-        batch_size = self.hyperparams['train_batch_size'] if train else self.hyperparams['test_batch_size']
+
         # Disable gradient calculations if validation or test period is active.
         with_grad_or_not = torch.enable_grad if train else torch.no_grad
         loader = self.train_loader if train else self.test_loader
-
-        # hidden = self.model.init_hidden(self.hyperparams['train_batch_size'])
 
         self.model.train(train)  # enable or disable dropout
         with with_grad_or_not():
@@ -115,31 +100,6 @@ class Trainer:
                 output = self.model(data)
                 loss = self.criterion(output, targets)
 
-                # # Loss1: Free Running Loss
-                # outVal = data[0].unsqueeze(0)
-                # outVals = []
-                # hids1 = []
-                # for i in range(data.size(0)):
-                #     outVal, hidden_, hid = self.model.forward(outVal, hidden_, return_hiddens=True)
-                #     outVals.append(outVal)
-                #     hids1.append(hid)
-                # outSeq1 = torch.cat(outVals, dim=0)
-                # hids1 = torch.cat(hids1, dim=0)
-                # loss1 = self.criterion(outSeq1.view(self.hyperparams['train_batch_size'], -1),
-                #                        targets.contiguous().view(self.hyperparams['train_batch_size'], -1))
-                #
-                # '''Loss2: Teacher forcing loss'''
-                # outSeq2, hidden, hids2 = self.model.forward(data, hidden, return_hiddens=True)
-                # loss2 = self.criterion(outSeq2.view(self.hyperparams['train_batch_size'], -1),
-                #                        targets.contiguous().view(self.hyperparams['train_batch_size'], -1))
-                #
-                # '''Loss3: Simplified Professor forcing loss'''
-                # loss3 = self.criterion(hids1.view(self.hyperparams['train_batch_size'], -1),
-                #                        hids2.view(self.hyperparams['train_batch_size'], -1).detach())
-                #
-                # '''Total loss = Loss1+Loss2+Loss3'''
-                # loss = loss1 + loss2 + loss3
-
                 if train:
                     loss.backward()
                     # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
@@ -153,8 +113,7 @@ class Trainer:
                     f"{'[  Training]' if train else '[Validation]'}",
                     f"Epoch: {epoch:3d} ",
                     f"[{batch_ix * len(data)}/{len(loader.dataset)} ({100. * batch_ix / len(loader):.0f} % )]",
-                    f"Loss: {np.array(logs['loss']).mean().item():5.4f}",
-                    # f"Proba: {self.proba(output)}",
+                    f"Loss: {np.array(logs['loss']).mean().item():5.4f}"
                 )))
 
             self.history.append(phase='train' if train else 'test',
@@ -166,7 +125,7 @@ class Trainer:
 
         return np.mean(logs['loss'])
 
-    def fit(self):  # todo: move into trainer
+    def fit(self):
 
         if self.params['pretrained']:
             raise Exception("-You can not use fit with --pretrained=True")
@@ -230,11 +189,35 @@ class Trainer:
                     if torch.is_tensor(v):
                         state[k] = v.cuda()
 
-    def predict(self, data):
-        raise NotImplementedError()
+    def predict(self):
+
+        x, y = self.dataset.trainset[:100]
+        self.model.train(False)
+        with torch.no_grad():
+            output = self.model(x)
+
+        output = output.detach().cpu().numpy()
+        return y, output
+
+
+    def callbacks(self, epoch, train=False):
+        y, prediction = self.predict()
+        # prediction's shape: [batch, seq, feature]
+
+
+        y = y[:, -1, :]
+        prediction = prediction[:, -1, :]
+
+        # for i in range(y.shape[0]): # iterate over batches
+        plt.plot(y, label='y')
+        plt.plot(prediction, label='yhat')
+
+        plt.legend()
+        plt.show()
+        self.model.train(True)
 
     @staticmethod
-    def proba(output):  # todo: move into trainer
+    def proba(output):
         return torch.nn.functional.softmax(output.detach(), dim=1).cpu().numpy()
 
     def predict_log_proba(self):
