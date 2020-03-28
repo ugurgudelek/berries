@@ -8,3 +8,8 @@ input/nyc_taxi/*
 *.pth
 *.idea
 *.pickle
+*.jpg
+*.jpeg
+*.gif
+src/libs/PyTorchWavelets/
+*.npy
