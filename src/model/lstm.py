@@ -42,7 +42,7 @@ class LSTM(nn.Module):
         self.lstm = nn.LSTM(input_size=self.input_size,
                             hidden_size=self.hidden_size,
                             num_layers=self.num_layers,
-                            bias=False,
+                            bias=True,
                             dropout=0.,  # default:0 means no probability
                             bidirectional=False,
                             batch_first=True
@@ -50,7 +50,8 @@ class LSTM(nn.Module):
 
         # Define the output layer
         self.classifier = nn.Sequential(nn.Linear(in_features=self.hidden_size,
-                                                  out_features=self.output_size))
+                                                  out_features=self.output_size),
+                                        nn.Sigmoid())
 
         self.hidden = self._init_hidden()
         self._init_weights()
@@ -129,6 +130,8 @@ class LSTM(nn.Module):
         # auto iterates over seq_len
         lstm_out, self.hidden = self.lstm(x, self.hidden)
         # lstm_out'shape (batch, seq_len, num_directions * hidden_size)
+        last_seq_out = lstm_out[:, -1, :]  # all_batch, last_seq, all_hidden
+
 
         if self.problem_type == 'many-to-many':
             fc_out = self.classifier(lstm_out)  # iterate over all hidden dim
@@ -136,7 +139,6 @@ class LSTM(nn.Module):
 
         elif self.problem_type == 'many-to-one':
             # tensor containing the output features (h_t) from the last layer of the LSTM
-            last_seq_out = lstm_out[:, -1, :]  # all_batch, last_seq, all_hidden
             fc_out = self.classifier(last_seq_out)
 
         else:
