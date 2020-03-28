@@ -19,10 +19,15 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import plotly.io as pio
 import plotly.tools as tls
+import plotly.express as px
 from ipywidgets import interactive, HBox, VBox, widgets, Output, interact, interact_manual, Layout, Box
 # py.init_notebook_mode(connected=True)
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.collections import PolyCollection, LineCollection
 import matplotlib.ticker as ticker
+
+# plt.style.use('seaborn-whitegrid')
 
 # Deep learning libraries
 import torch
@@ -31,7 +36,13 @@ from torchvision import transforms
 
 # Local libraries
 from dataset.generic import Standardizer, TimeSeriesDatasetWrapper
-from sklearn.preprocessing import MinMaxScaler,StandardScaler
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
+
+import gc
+import multiprocessing
+import itertools
+
+# from utils.plot_utils import camera_ready_matplotlib_style
 
 
 class ExcelData:
@@ -75,6 +86,8 @@ class Toolwear:
             self.reading = self.reading.rename(
                 columns={self.reading.columns[0]: "data"})
 
+            self.reading['raw_data'] = self.reading['data'].copy()
+
             # add time column
             self.reading['time'] = np.arange(self.__len__()) * self.T
 
@@ -91,7 +104,6 @@ class Toolwear:
 
             # add ref signal: signal_freq*0.5 Hz
             # self.reading['data'] += 0.005*np.sin(2*np.pi*self.expected_tooth_freq*0.5*self.reading['time'])
-
         else:
             self.create_fake_data()
 
@@ -135,11 +147,195 @@ class Toolwear:
 
     @property
     def T(self):
+        """
+        T: interval : 1/Fs
+        :return:
+        """
         return 1 / self.sampling_freq
 
     @property
     def dt_tooth(self):
         return 1 / ((self.rpm / 60) * self.n_flute)
+
+    def second2index(self, sec):
+        return int(sec * self.sampling_freq)
+
+    @staticmethod
+    def denoise(subsets,
+                threshold_mul=0.2, threshold_epsilon=0.0,
+                method='envelope',
+                inplace=False, plot=False, save=False, figsize=None, filename=None, verbose=False):
+        """
+
+        :param subsets:
+        :param threshold_mul:
+        :param method: savgol_difference, envelope
+        :param plot:
+        :return:
+        """
+
+        _islist = (type(subsets) is list) or (type(subsets) is tuple)
+
+        subsets = subsets if _islist else [subsets]
+
+        if plot:
+            fig, axes = plt.subplots(nrows=len(subsets) if _islist else 2, ncols=2 if _islist else len(subsets), squeeze=False, sharex=True, figsize=figsize)
+
+        denoiseds = list()
+        for i, subset in enumerate(subsets):
+            t = np.arange(0, subset['time'].values.shape[0]) if _islist else subset['time'].values
+            raw_data = subset['data'].values
+            data = raw_data.copy()
+
+            if method == 'basic':
+                threshold = threshold_epsilon
+                nan_valid_bool = np.abs(data) > threshold
+
+            elif method == 'envelope':
+
+
+                envelope_result = Toolwear.envelope(subset)
+                pos_index = envelope_result['pos_index']
+                pos_envelope = envelope_result['pos_envelope']
+                neg_index = envelope_result['neg_index']
+                neg_envelope = envelope_result['neg_envelope']
+
+                nan_valid_bool = np.empty(data.shape, dtype=np.bool)
+
+
+                # axes[i, 0].plot(t[pos_index], pos_envelope, label='pos_envelope', alpha=1., c='b', linewidth=0.7)
+                # axes[i, 0].plot(t[neg_index], neg_envelope, label='neg_envelope', alpha=1., c='b', linewidth=0.7)
+
+                pos_envelope = signal.savgol_filter(pos_envelope,
+                                              window_length=51,
+                                              polyorder=1)
+
+                neg_envelope = signal.savgol_filter(neg_envelope,
+                                              window_length=51,
+                                              polyorder=1)
+
+                pos_threshold = pos_envelope + (threshold_epsilon + threshold_mul*data[pos_index].mean())
+                neg_threshold = neg_envelope - (threshold_epsilon - threshold_mul*data[neg_index].mean())
+
+
+                nan_valid_bool[pos_index] = (data[pos_index] > pos_threshold)
+                nan_valid_bool[neg_index] = (data[neg_index] < neg_threshold)
+
+                nan_valid_index = np.where(nan_valid_bool)
+
+                drop_count = np.count_nonzero(nan_valid_bool)
+                drop_ratio = np.count_nonzero(nan_valid_bool)/nan_valid_bool.shape[0]
+                if verbose:
+                    print(f'Pos_mean:{data[pos_index].mean()}')
+                    print(f'Neg_mean:{data[neg_index].mean()}')
+                    print(f'Pos_threshold_coef:{(threshold_epsilon + threshold_mul*data[pos_index].mean())}')
+                    print(f'Neg_threshold_coef:{(threshold_epsilon - threshold_mul*data[neg_index].mean())}')
+                    print(f'Dropped data number:{drop_count} (%{drop_ratio:.5f})')
+
+                axes[i if _islist else 0, 0 if _islist else i].scatter(t[nan_valid_index], data[nan_valid_index], label=f'dropped {drop_count}(%{drop_ratio})', alpha=1., c='crimson', s=10, marker='+')
+                axes[i if _islist else 0, 0 if _islist else i].plot(t[pos_index], pos_threshold, label='pos_threshold', alpha=.5, c='r', linewidth=0.7, linestyle='dashed')
+                axes[i if _islist else 0, 0 if _islist else i].plot(t[neg_index], neg_threshold, label='neg_threshold', alpha=.5, c='r', linewidth=0.7, linestyle='dashed')
+
+            elif method == 'envelope_mean':
+                threshold = Toolwear.envelope(subset).mean() * threshold_mul + threshold_epsilon
+                nan_valid_bool = np.abs(data) > threshold
+
+            elif method == 'savgol_difference':
+                threshold = 1 * threshold_mul + threshold_epsilon
+                savgol = signal.savgol_filter(data,
+                                              window_length=9,
+                                              polyorder=3)
+
+                diff = np.abs(data - savgol)
+
+                nan_valid_bool = diff >= threshold
+
+            else:
+                raise ValueError(f'{method} not an option.')
+
+            # data[nan_valid_bool] = np.nan
+            # denoised = pd.Series(data).interpolate(method='cubic')
+            data[nan_valid_bool] = 0
+            denoised = data
+            denoiseds.append(denoised)
+
+            if inplace:
+                subset.loc[:, 'data'] = denoised
+
+            if plot:
+                # axes[i, 0].scatter(t, raw_data, label='original', c='b', marker='+', s=20.)
+                axes[i if _islist else 0, 0 if _islist else i].scatter(t, denoised, label='denoised', alpha=1., c='y', marker='.', s=10)
+
+                # axes[i, 0].plot(threshold, c='r', linestyle='dashed', linewidth=0.4,  label='threshold')
+                # axes[i, 0].plot(-threshold, c='r', linestyle='dashed', linewidth=0.4,)
+
+                axes[i if _islist else 1, 1 if _islist else i].scatter(t, denoised, label='denoised', alpha=1., c='y', marker='.', s=10)
+
+                ylim = (-2, 2)
+                axes[i if _islist else 0, 0 if _islist else i].set_ylim(*ylim)
+                axes[i if _islist else 1, 1 if _islist else i].set_ylim(*ylim)
+
+
+                axes[0, 0].legend(loc='upper center', bbox_to_anchor=(0.5, 1.25), fancybox=True, shadow=True, ncol=5)
+
+                if save:
+                    os.makedirs('denoised', exist_ok=True)
+                    plt.figure(fig.number)
+                    plt.savefig(filename or f'denoised/denoised_{subset["time"].iloc[0]}.jpg')
+
+        if plot:
+            plt.close()
+
+
+        return denoiseds if _islist else denoiseds[0]
+
+    @staticmethod
+    def envelope(subsets, plot=False):
+        _type = type(subsets)
+
+        subsets = subsets if _type is list else [subsets]
+
+        if plot:
+            fig, axes = plt.subplots(nrows=len(subsets), ncols=1, squeeze=False, sharex=True)
+
+        amplitude_envelopes = list()
+        for i, subset in enumerate(subsets):
+            s = subset['data'].values
+            # t = subset['time'].values
+            t = np.arange(0, subset['time'].values.shape[0])
+
+
+            pos_s_index = np.where(s >= 0)[0]
+            neg_s_index = np.where(s < 0)[0]
+
+            pos_s = s[pos_s_index]
+            neg_s = s[neg_s_index]
+
+
+            pos_envelope = np.abs(signal.hilbert(pos_s))
+            neg_envelope = -np.abs(signal.hilbert(np.abs(neg_s)))
+
+
+            amplitude_envelopes.append({'pos_index':pos_s_index,
+                                        'pos_envelope': pos_envelope,
+                                        'neg_index': neg_s_index,
+                                        'neg_envelope': neg_envelope})
+            if plot:
+                axes[i, 0].plot(t, s, '.', label='signal')
+                axes[i, 0].plot(t[pos_s_index], pos_envelope, '-', label='pos_envelope')
+                axes[i, 0].plot(t[neg_s_index], neg_envelope, '-', label='neg_envelope')
+                axes[i, 0].axhline(y=pos_envelope.mean(), c='r', linestyle='dashed',
+                                   label='pos_env.mean')
+                axes[i, 0].axhline(y=neg_envelope.mean(), c='r', linestyle='dashed',
+                                   label='neg_env.mean')
+
+                axes[i, 0].axhline(y=0, c='k', linestyle='dashed')
+
+                ylim = max(pos_envelope.max(), -neg_envelope.min())
+                axes[i, 0].set_ylim(-ylim, ylim)
+                fig.legend(*axes[0, 0].get_legend_handles_labels(), loc='upper left')
+                fig.suptitle('Envelope')
+        return amplitude_envelopes if _type is list else amplitude_envelopes[0]
 
     def apply_aggregation(self):
 
@@ -180,12 +376,19 @@ class Toolwear:
         return self._make_subset(start_idx=int(self.sampling_freq * self.start_sec))
 
     def _make_subset(self, start_idx):
-        return self.reading.iloc[start_idx:start_idx + self.num_points_in_one_period * self.n_cycle, :]
+        return self.reading.iloc[start_idx:start_idx + self.num_points_in_one_period * self.n_cycle, :].copy()
 
-    def static_plot(self, save=True):
-        plt.figure(figsize=(20, 10))
-        plt.plot(self.reading['time'], self.reading['data'], '.')
-        ax = plt.gca()
+    def static_plot(self, subset=None, bound=None, figsize=None, save=False):
+
+        if subset is None:
+            subset = self.reading
+        if bound is not None:
+            subset = subset.iloc[
+                     int(self.sampling_freq * bound[0]):int(self.sampling_freq * bound[1]), :]
+
+        plt.figure(figsize=figsize)
+        ax = plt.plot(subset['time'], subset['data'], '.')
+
         if save:
             self.save_fig(ax.get_figure(), suffix='signal-full', kind='matplotlib')
 
@@ -355,14 +558,17 @@ class Toolwear:
         fft_data = S_fft
         fft_freqs = freq
 
-        fig = go.Figure(data=[go.Scattergl(x=fft_freqs, y=fft_data, name='fft', mode='markers+lines')],
-                        layout=go.Layout(xaxis={'title': 'Freq(Hz)'},
-                                         yaxis={'title': 'Amplitude'},
-                                         template=Toolwear.PLOT_TEMPLATE))
+        if save or plot:
+            fig = go.Figure(data=[go.Scattergl(x=fft_freqs, y=fft_data, name='fft', mode='markers+lines')],
+                            layout=go.Layout(xaxis={'title': 'Freq(Hz)'},
+                                             yaxis={'title': 'Amplitude'},
+                                             template=Toolwear.PLOT_TEMPLATE))
         if save:
             self.save_fig(fig, suffix='fft', kind='plotly')
         if plot:
             fig.show()
+
+        return fft_data, fft_freqs
 
     def spectrogram(self, data, bound=(0, 2500), plot=False, save=True, engine='plotly'):
 
@@ -434,7 +640,9 @@ class Toolwear:
         y = signal.lfilter(b, a, data)
         return y
 
-    def wavelet(self, data, wavelet='cmor6-1.5', xlim=None, ylim=None, clim=None, save=True):
+    def wavelet(self, data, wavelet='cmor6-1.5',
+                xlim=None, ylim=None, clim=None,
+                save=True, batch_size=5000, return_fig=True):
         """
         X-axis: time
         Y-axis: scale - The scale correspond to the signal periodicity to which the transform is sentitive to.
@@ -459,17 +667,102 @@ class Toolwear:
     
         """
 
+        def disable_spines(ax):
+            # Hide the right and left spines
+            ax.spines['right'].set_visible(False)
+            ax.spines['left'].set_visible(False)
+            ax.tick_params(left=False, labelleft=False)
+
+        def manual_xticks(ax, xticks):
+            # Manually enter time ticks
+            xticks = np.round(xticks, 2)
+            ax.axes.set_xticklabels(xticks, rotation=45)
+
         #         scales = np.arange(1, 500, 1)
         scales = scg.periods2scales(np.logspace(start=0,
                                                 stop=2.5,
                                                 num=200)  # 10**0 -- 10**2
                                     )
 
-        cwt = scg.CWT(time=data['time'].values,
-                      signal=data['data'].values - data['data'].mean(),
-                      scales=scales,
-                      wavelet=wavelet)
+        time = data['time'].values
+        signal = data['data'].values - data['data'].mean()
+        N = int(time.shape[0] / batch_size) + 1
 
+        with tqdm(total=N, desc='Wavelet Calculations..') as pbar:
+            # cwt = None
+            for i, (subset_time, subset_signal) in enumerate(zip(np.array_split(time, N), np.array_split(signal, N))):
+                cur_cwt = scg.CWT(time=subset_time,
+                                  signal=subset_signal,
+                                  scales=scales,
+                                  wavelet=wavelet)
+
+                # if cwt is None:
+                #     cwt.time = cur_cwt.time
+                #     cwt.signal = cur_cwt.signal
+                #     cwt.coefs = np.abs(cur_cwt.coefs)
+                # else:
+                #     cwt.time = np.hstack((cwt.time, cur_cwt.time))
+                #     cwt.signal = np.hstack((cwt.signal, cur_cwt.signal))
+                #     cwt.coefs = np.hstack((cwt.coefs, np.abs(cur_cwt.coefs)))
+
+                fig, axes = plt.subplots(nrows=2, ncols=1, figsize=None, squeeze=False, frameon=False)
+                # Remove vertical space between axes
+                fig.subplots_adjust(wspace=0, hspace=.5)
+
+                # Wavelet subplot
+                ax = axes[0, 0]
+                # ax.axes.set_xticklabels(ax.axes.get_xticklabels(), rotation=45, horizontalalignment='right')
+                # if i != 0:  # other than first subplot
+                #     disable_spines(ax)
+                # else:
+                ax.set_ylabel('Frequency')
+
+                z = np.abs(cur_cwt.coefs).astype(np.float)
+
+                pbar.set_postfix_str(f"z.max() : {z.max()}")
+
+                qmesh = ax.pcolormesh(cur_cwt.time, range(cur_cwt.scales_freq.shape[0]), z)
+                colorbar = plt.colorbar(qmesh, orientation='vertical', ax=ax)
+
+                # Vibration subplot
+                ax = axes[1, 0]
+                # ax.axes.set_xticklabels(ax.axes.get_xticklabels(), rotation=45, horizontalalignment='right')
+                # if i != 0:  # other than first subplot
+                #     disable_spines(ax)
+                # else:
+                ax.set_ylabel('Magnitude')
+
+                time_plot = ax.plot(cur_cwt.time, cur_cwt.signal)
+
+                plt.figure(fig.number)
+                plt.suptitle('Vibration Wavelet Analysis')
+                plt.xlabel('Time [ms]')
+
+                if save:
+                    plt.savefig(f'wavelet-fig-{i}.jpeg')
+                # plt.tick_params(labelcolor="none", top=False, bottom=False, left=False, right=False)
+
+                pbar.update(1)
+
+
+                # or release all memory dump and return None
+                fig.clf()
+                plt.close()
+                del z, qmesh, fig, axes, cur_cwt
+                gc.collect()
+
+
+        # trace = go.Heatmapgl(name='wavelet',
+        #                      x=cwt.time,
+        #                      # y=cwt.scales_freq,
+        #                      z=np.abs(cwt.coefs),
+        #                      )
+        # layout = go.Layout(yaxis={'tickmode':'array',
+        #                           'tickvals':cwt.scales_freq})
+        # fig = go.Figure(data=[trace], layout=layout)
+        # fig.show()
+
+        """
         ax = scg.cws(cwt,
                      spectrum='power',
                      figsize=(12, 6),
@@ -479,18 +772,18 @@ class Toolwear:
                      xlim=xlim, ylim=ylim, clim=clim)
 
         text = ax.annotate("found freq",
-                           xy=(data['time'].iloc[100], 1 / self.expected_tooth_freq),
+                           xy=(time[100], 1 / self.expected_tooth_freq),
                            xytext=None,
                            bbox=dict(boxstyle="round", facecolor="y", edgecolor="0.5"),
                            arrowprops=dict(facecolor='yellow', shrink=0.05))
 
         text = ax.annotate(f"Ref freq x2.0:{self.expected_tooth_freq * 2}",
-                           xy=(data['time'].iloc[100], 1 / (self.expected_tooth_freq * 2)),
+                           xy=(time[100], 1 / (self.expected_tooth_freq * 2)),
                            xytext=None,
                            bbox=dict(boxstyle="round", facecolor="y", edgecolor="0.5"),
                            arrowprops=dict(facecolor='yellow', shrink=0.05))
         text = ax.annotate(f"Ref freq x0.5:{self.expected_tooth_freq * 0.5}",
-                           xy=(data['time'].iloc[100], 1 / (self.expected_tooth_freq * 0.5)),
+                           xy=(time[100], 1 / (self.expected_tooth_freq * 0.5)),
                            xytext=None,
                            bbox=dict(boxstyle="round", facecolor="y", edgecolor="0.5"),
                            arrowprops=dict(facecolor='yellow', shrink=0.05))
@@ -510,9 +803,12 @@ class Toolwear:
         if save:
             self.save_fig(ax.get_figure(), suffix='wavelet', kind='matplotlib')
         #         if plot:
-        #             fig.show()
+        plt.show()
+        
+        """
 
-        return (ax, cwt)
+        # ax = None
+        # return (ax, cwt)
 
     def append(self, other):
 
@@ -553,15 +849,19 @@ class Toolwear:
         exceldata = ExcelData()
 
         vib = None
-        for slot_no, path in tqdm(enumerate((fpath / str(cut_no)).glob(f'{kind}*.tdms'), start=1)):
-            vib_current = Toolwear(path=path,
-                                   n_cycle=n_cycle,
-                                   attributes=exceldata.get_attribute(cut_no=cut_no, slot_no=slot_no, kind=kind))
+        tdms_glob = list((fpath / str(cut_no)).glob(f'{kind}*.tdms'))
+        with tqdm(total=len(tdms_glob), desc='Batch File Read') as pbar:
+            for slot_no, path in enumerate(tdms_glob, start=1):
+                vib_current = Toolwear(path=path,
+                                       n_cycle=n_cycle,
+                                       attributes=exceldata.get_attribute(cut_no=cut_no, slot_no=slot_no, kind=kind))
 
-            if vib is None:
-                vib = vib_current
-            else:
-                vib.append(vib_current)
+                if vib is None:
+                    vib = vib_current
+                else:
+                    vib.append(vib_current)
+
+                pbar.update(1)
 
         vib.interpolate('cutting_length')
         vib.interpolate('toolwear')
@@ -608,7 +908,7 @@ class Toolwear:
 
     def to_torch_csv(self):
         path = f'{self.path}/data-timeseries.csv'
-        self.reading.loc[int(self.reading.shape[0] * 0.8):, ['data', 'toolwear']].to_csv(path, index=False)
+        self.reading.loc[int(self.reading.shape[0] * 0.):, ['data', 'toolwear']].to_csv(path, index=False)
 
     @staticmethod
     def from_pickle(path):
@@ -631,15 +931,78 @@ class Toolwear:
                 
                 """
 
+    # @camera_ready_matplotlib_style
+    def plot_3d(self, subsets, kind, plot=True):
+        """
+        :param subsets: should be list containing subsets
+        :param plot:
+        :return:
+        """
+
+        measurement_points = list()
+        rep = list()
+        zmin, zmax = None, None
+
+        for i, subset in enumerate(subsets):
+            if kind == 'fft':
+                fft_data, fft_freqs = self.fft(data=subset, plot=False, save=False)
+                x = fft_freqs
+                y = fft_data
+                xlabel = 'Frequencies [Hz]'
+                ylabel = 'Measurement Point'
+                zlabel = 'Amplitude'
+                xlim = (0, 2500)
+
+
+
+            elif kind == 'signal':
+                y = subset['data'].values
+                x = np.arange(0, y.shape[0])
+                xlabel = 'Time'
+                ylabel = 'Measurement Point'
+                zlabel = 'Amplitude'
+                xlim = (x.min(), x.max())
+
+            else:
+                raise NotImplementedError(f"{kind} not implemented for 3d plot.")
+
+            if zmax is not None:
+                if zmax < y.max():
+                    y.max()
+
+            zmax = y.max() if zmax is None or zmax < y.max() else zmax
+            zmin = y.min() if zmin is None or zmin > y.min() else zmin
+
+            measurement_points.append(subset['time'].iloc[0])
+            rep.append(list(zip(x, y)))
+
+        fig = plt.figure()
+        ax = fig.gca(projection='3d')
+        poly = LineCollection(rep)
+        poly.set_alpha(0.7)
+
+        zs = measurement_points
+        ax.add_collection3d(poly, zs=zs, zdir='y')
+
+        ax.set_xlabel(xlabel)
+        ax.set_xlim3d(*xlim)
+        ax.set_ylabel(ylabel)
+        ax.set_ylim3d(min(zs), max(zs))
+        ax.set_zlabel(zlabel)
+        if zmax == 0:
+            raise ValueError('zmax should be higher than 0.')
+        ax.set_zlim3d(zmin, zmax)
+        return ax
+
 
 class ToolwearTorchInnerDataset(Dataset):
     def __init__(self, vibration, toolwear, seq_len):
-        self.data = vibration
-        self.labels = toolwear
+        self.data = vibration.reshape(-1, 1)
+        self.labels = toolwear.reshape(-1, 1)
         self.seq_len = seq_len
 
     def __len__(self):
-        return self.data.shape[0]-self.seq_len
+        return self.data.shape[0] - self.seq_len
 
     def __getitem__(self, ix):
         # x : [batch, seq, feature]
@@ -652,23 +1015,32 @@ class ToolwearTorchInnerDataset(Dataset):
                 xs.append(x)
                 ys.append(y)
             return torch.stack(xs), torch.stack(ys)
-        return (torch.DoubleTensor(self.data[ix:ix + self.seq_len]).view(-1, 1),
-                torch.DoubleTensor(self.labels[ix:ix + self.seq_len]).view(-1, 1))
+        return (torch.DoubleTensor(self.data[ix:ix + self.seq_len, :]),
+                torch.DoubleTensor(self.labels[ix + self.seq_len, :]))
 
 
 class ToolwearTorchDataset:
     PATH = Path("D:/YandexDisk/machining/data/raw/1/data-timeseries.csv")
 
-    def __init__(self, seq_length, train_split):
+    def __init__(self, seq_length, train_split, cut_lim=None):
         self.seq_length = seq_length
         self.train_split = train_split
 
         timeseries = pd.read_csv(self.PATH).values
 
-        self.scaler = StandardScaler()
+        # sub-sample some data
+        if cut_lim is None:
+            bottom, top = (0.650, 0.660)
+        else:
+            bottom, top = cut_lim
+        timeseries = timeseries[int(timeseries.shape[0] * bottom):int(timeseries.shape[0] * top), :]
+
+        self.scaler = MinMaxScaler()
         self.scaler.fit(timeseries)
 
         timeseries = self.transform(timeseries)
+
+        print(timeseries.max(), timeseries.min())
 
         self.train_size = int(timeseries.shape[0] * self.train_split)
         self.test_size = timeseries.shape[0] - self.train_size
@@ -688,7 +1060,6 @@ class ToolwearTorchDataset:
         plt.legend()
         plt.show()
 
-
     def transform(self, x):
         return self.scaler.transform(x)
 
@@ -696,20 +1067,40 @@ class ToolwearTorchDataset:
         return self.scaler.inverse_transform(x)
 
 
+
+
+
+
 def toolwear_class_usage():
     # ======= DATA READ ==========
-    NUM_CYCLE = 10
-    vib = Toolwear.batch_read(fpath=Path('D:/YandexDisk/machining/data/raw'), cut_no=1, kind='acc', n_cycle=NUM_CYCLE)
-    # vib = Toolwear.from_pickle(Path('D:/machining/data/raw/1/data.pickle'))
+    NUM_CYCLE = 200
+
+    # vib = Toolwear.from_pickle(Path('D:/YandexDisk/machining/data/raw/1/data.pickle'))
+
+
+
+
+    # with tqdm(total=len(subsets), desc='Processing subsets..:') as pbar:
+
+
+
+
+
+
+
+
 
     # ======= DATA PLOT ==========
-    START_SEC = 5000
+    # START_SEC = 4000
     # vib.apply_aggregation() # apply several filters
-    subset = vib.make_subset_after(sec=START_SEC)
+    # subset = vib.make_subset_after(sec=START_SEC)
+
+
+
+    # denoised_data = vib.denoise(subsets=subsets[-1], method='basic', threshold_epsilon=1, plot=True)
+
     # vib.to_pickle()
-    print("Saving to csv")
-    vib.to_torch_csv()
-    print("Csv operation is finished")
+    # vib.to_torch_csv()
 
     # # # plot data
     # vib.static_plot()
@@ -724,7 +1115,8 @@ def toolwear_class_usage():
     #                 plot=True)
 
     # plot wavelet
-    # (ax,cwt) = vib.wavelet(data=subset, wavelet='cmor3-1.5', clim=[0, 0.1])
+    # vib.wavelet(data=subset, wavelet='cmor3-1.5', clim=None, batch_size=8000*60)
+    vib.wavelet(data=vib.reading, wavelet='cmor3-1.5', clim=None, batch_size=8000*23)  # 23 sec data at once
 
     # vib.plot_toolwear()
 
@@ -745,13 +1137,36 @@ def toolwear_class_usage():
     # # vib.spectrogram(data=subset, plot=True, save=False, engine='plotly')
     # ax, cwt = vib.wavelet(data=subset, wavelet='cgau5', save=False)
 
-
 def pytorch_dataset_usage():
     # ======= PYTORCH DATASET ===========
-    dataset = ToolwearTorchDataset(seq_length=100, train_split=0.95)
+    dataset = ToolwearTorchDataset(seq_length=8000, train_split=0.95)
     print()
 
 
+
+def costly_func(subset):
+    denoised_data = Toolwear.denoise(subsets=subset, method='envelope',
+                                threshold_epsilon=0.1, threshold_mul=1.,
+                                plot=True, figsize=(12, 6),
+                                save=True, filename=None,
+                                verbose=False)
+
 if __name__ == "__main__":
-    # pytorch_dataset_usage()
-    toolwear_class_usage()
+    vib = Toolwear.batch_read(fpath=Path('D:/YandexDisk/machining/data/raw'),
+                              cut_no=1, kind='acc', n_cycle=200)
+
+    subset_min = vib.reading['time'].iloc[0]  # sec
+    subset_max = vib.reading['time'].iloc[-1]  # sec
+    subset_len = 1  # sec
+    subset_stride = 0.2
+    print(f"Subset creation starting: [{subset_min}{subset_max}) stride:{subset_stride} len:{subset_len}")
+    subsets = [vib.reading.iloc[vib.second2index(sec0):vib.second2index(sec1), :]
+               for sec0, sec1 in zip(np.arange(subset_min, subset_max - subset_len + 1, subset_stride),
+                                     np.arange(subset_min + subset_len, subset_max + 1, subset_stride))]
+
+    with multiprocessing.Pool(processes=8) as pool:
+        pool.map(costly_func, subsets)
+
+
+    from utils.plot_utils import image_folder_to_gif
+    image_folder_to_gif('denoised', glob='*.jpg')
