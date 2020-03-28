@@ -11,6 +11,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+from tqdm import tqdm
 
 from history.history import History
 
@@ -35,11 +36,13 @@ class Trainer:
 
         self.train_loader = DataLoader(self.dataset.trainset,
                                        batch_size=self.hyperparams['train_batch_size'],
-                                       drop_last=True)  # todo: output.view(batch_size, -1) needs this!
+                                       drop_last=True,
+                                       shuffle=False)  # todo: output.view(batch_size, -1) needs this!
 
         self.test_loader = DataLoader(self.dataset.testset,
                                       batch_size=self.hyperparams['test_batch_size'],
-                                      drop_last=True)
+                                      drop_last=True,
+                                      shuffle=True)
 
         # self.test_loader = Dataloader(self.dataset.testset,
         #                               batch_size=self.hyperparams['test_batch_size'],
@@ -65,8 +68,6 @@ class Trainer:
 
         # Init history to log loss or something
         self.history = History()
-
-
 
     def _validate_hyperparams(self, hyperparams):
         raise NotImplementedError()
@@ -111,10 +112,11 @@ class Trainer:
 
                 print('\t'.join((
                     f"{'[  Training]' if train else '[Validation]'}",
-                    f"Epoch: {epoch:3d} ",
                     f"[{batch_ix * len(data)}/{len(loader.dataset)} ({100. * batch_ix / len(loader):.0f} % )]",
                     f"Loss: {np.array(logs['loss']).mean().item():5.4f}"
                 )))
+
+                self.plot_small_data(x=data, y=targets)
 
             self.history.append(phase='train' if train else 'test',
                                 log_dict={'epoch': epoch,
@@ -123,6 +125,7 @@ class Trainer:
 
         self.model.train(not train)
 
+        print(f"[E. {'Training' if train else 'Validation'}] Epoch {epoch:3d} || Loss:{np.mean(logs['loss']):5.4f} |")
         return np.mean(logs['loss'])
 
     def fit(self):
@@ -145,7 +148,7 @@ class Trainer:
 
                 if epoch % self.params['save_interval'] == 0:
                     if self.params['save_fig']:
-                        self.callbacks(epoch=epoch)
+                        # self.callbacks(epoch=epoch)
                         self.save_checkpoint(epoch=epoch)
 
                         self.learning_curve()
@@ -189,34 +192,95 @@ class Trainer:
                     if torch.is_tensor(v):
                         state[k] = v.cuda()
 
-    def predict(self):
+    def predict(self, x):
 
-        x, y = self.dataset.trainset[:1000]
-        x, y = x.to(self.device), y.to(self.device)
         self.model.train(False)
         with torch.no_grad():
-            output = self.model(x)
+            output = self.model(x.to(self.device))
 
         output = output.detach().cpu().numpy()
-        y = y.cpu().numpy()
-        return y, output
+        self.model.train(True)
+        return output
+
+    def plot_small_data(self, x, y):
+
+            prediction = self.predict(x)
+            # prediction's shape: [batch, seq, feature]
+
+            # many output part
+            # x = x[-1, :, :].cpu().numpy()
+            # y = y[-1, :, :].cpu().numpy()
+            # prediction = prediction[-1, :, :]
+            # one output part
+            x = x[:, 0, :].cpu().numpy()
+            y = y[:, :].cpu().numpy()
+
+            t_xy = self.dataset.inverse_transform(np.hstack((x, y)))
+            prediction = self.dataset.inverse_transform(np.hstack((x, prediction)))[:, 1].reshape(-1, 1)
+
+            t_xyp = np.hstack((t_xy, prediction))
+
+            # return t_xyp[:, 0], t_xyp[:, 1], t_xyp[:, 2],  # [x, y, prediction]
+
+            x,y,p = t_xyp[:, 0], t_xyp[:, 1], t_xyp[:, 2]
+            fig, axs = plt.subplots(nrows=2, ncols=1, sharex=True, squeeze=False)
+            axs[0, 0].plot(x, label='x')
+            axs[0, 0].legend()
+
+            axs[1, 0].plot(y, label='y')
+            axs[1, 0].plot(p, label='prediction')
+            axs[1, 0].legend()
+
+
+
+            plt.show()
+
+
 
 
     def callbacks(self, epoch, train=False):
-        y, prediction = self.predict()
-        # prediction's shape: [batch, seq, feature]
 
 
-        y = y[:, -1, :]
-        prediction = prediction[:, -1, :]
 
-        # for i in range(y.shape[0]): # iterate over batches
-        plt.plot(y, label='y')
-        plt.plot(prediction, label='yhat')
+        plot_container = None
+        loader = DataLoader(self.dataset.trainset,
+                                       batch_size=self.hyperparams['train_batch_size'],
+                                       drop_last=True,
+                                       shuffle=False)
+        with tqdm(total=len(loader)) as pbar:
+            for x, y in loader:
+                prediction = self.predict(x)
+                # prediction's shape: [batch, seq, feature]
 
-        plt.legend()
+                x = x[:, -1, :].cpu().numpy()
+                y = y[:, -1, :].cpu().numpy()
+                prediction = prediction[:, -1, :]
+
+                t_xy = self.dataset.inverse_transform(np.hstack((x, y)))
+                prediction = self.dataset.inverse_transform(np.hstack((x, prediction)))[:, 1].reshape(-1, 1)
+
+                t_xyp = np.hstack((t_xy, prediction))
+                if plot_container is None:
+                    plot_container = t_xyp
+                else:
+                    plot_container = np.vstack((plot_container, t_xyp))
+                pbar.update(x.shape[0])
+
+        x, y, p = plot_container[:, 0], plot_container[:, 1], plot_container[:, 2]
+
+        fig, axs = plt.subplots(nrows=3, ncols=1, sharex=True, squeeze=False)
+
+        axs[0, 0].plot(x, label='x')
+        axs[0, 0].legend()
+
+        axs[1, 0].plot(y, label='y')
+        axs[1, 0].legend()
+
+        axs[2, 0].plot(p, label='prediction')
+        axs[2, 0].legend()
+
         plt.show()
-        self.model.train(True)
+
 
     @staticmethod
     def proba(output):
