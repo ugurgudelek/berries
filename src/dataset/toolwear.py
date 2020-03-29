@@ -42,6 +42,7 @@ import gc
 import multiprocessing
 import itertools
 
+
 # from utils.plot_utils import camera_ready_matplotlib_style
 
 
@@ -179,7 +180,8 @@ class Toolwear:
         subsets = subsets if _islist else [subsets]
 
         if plot:
-            fig, axes = plt.subplots(nrows=len(subsets) if _islist else 2, ncols=2 if _islist else len(subsets), squeeze=False, sharex=True, figsize=figsize)
+            fig, axes = plt.subplots(nrows=len(subsets) if _islist else 2, ncols=2 if _islist else len(subsets),
+                                     squeeze=False, sharex=True, figsize=figsize)
 
         denoiseds = list()
         for i, subset in enumerate(subsets):
@@ -193,7 +195,6 @@ class Toolwear:
 
             elif method == 'envelope':
 
-
                 envelope_result = Toolwear.envelope(subset)
                 pos_index = envelope_result['pos_index']
                 pos_envelope = envelope_result['pos_envelope']
@@ -202,21 +203,19 @@ class Toolwear:
 
                 nan_valid_bool = np.empty(data.shape, dtype=np.bool)
 
-
                 # axes[i, 0].plot(t[pos_index], pos_envelope, label='pos_envelope', alpha=1., c='b', linewidth=0.7)
                 # axes[i, 0].plot(t[neg_index], neg_envelope, label='neg_envelope', alpha=1., c='b', linewidth=0.7)
 
                 pos_envelope = signal.savgol_filter(pos_envelope,
-                                              window_length=51,
-                                              polyorder=1)
+                                                    window_length=51,
+                                                    polyorder=1)
 
                 neg_envelope = signal.savgol_filter(neg_envelope,
-                                              window_length=51,
-                                              polyorder=1)
+                                                    window_length=51,
+                                                    polyorder=1)
 
-                pos_threshold = pos_envelope + (threshold_epsilon + threshold_mul*data[pos_index].mean())
-                neg_threshold = neg_envelope - (threshold_epsilon - threshold_mul*data[neg_index].mean())
-
+                pos_threshold = pos_envelope + (threshold_epsilon + threshold_mul * data[pos_index].mean())
+                neg_threshold = neg_envelope - (threshold_epsilon - threshold_mul * data[neg_index].mean())
 
                 nan_valid_bool[pos_index] = (data[pos_index] > pos_threshold)
                 nan_valid_bool[neg_index] = (data[neg_index] < neg_threshold)
@@ -224,17 +223,21 @@ class Toolwear:
                 nan_valid_index = np.where(nan_valid_bool)
 
                 drop_count = np.count_nonzero(nan_valid_bool)
-                drop_ratio = np.count_nonzero(nan_valid_bool)/nan_valid_bool.shape[0]
+                drop_ratio = np.count_nonzero(nan_valid_bool) / nan_valid_bool.shape[0]
                 if verbose:
                     print(f'Pos_mean:{data[pos_index].mean()}')
                     print(f'Neg_mean:{data[neg_index].mean()}')
-                    print(f'Pos_threshold_coef:{(threshold_epsilon + threshold_mul*data[pos_index].mean())}')
-                    print(f'Neg_threshold_coef:{(threshold_epsilon - threshold_mul*data[neg_index].mean())}')
+                    print(f'Pos_threshold_coef:{(threshold_epsilon + threshold_mul * data[pos_index].mean())}')
+                    print(f'Neg_threshold_coef:{(threshold_epsilon - threshold_mul * data[neg_index].mean())}')
                     print(f'Dropped data number:{drop_count} (%{drop_ratio:.5f})')
 
-                axes[i if _islist else 0, 0 if _islist else i].scatter(t[nan_valid_index], data[nan_valid_index], label=f'dropped {drop_count}(%{drop_ratio})', alpha=1., c='crimson', s=10, marker='+')
-                axes[i if _islist else 0, 0 if _islist else i].plot(t[pos_index], pos_threshold, label='pos_threshold', alpha=.5, c='r', linewidth=0.7, linestyle='dashed')
-                axes[i if _islist else 0, 0 if _islist else i].plot(t[neg_index], neg_threshold, label='neg_threshold', alpha=.5, c='r', linewidth=0.7, linestyle='dashed')
+                axes[i if _islist else 0, 0 if _islist else i].scatter(t[nan_valid_index], data[nan_valid_index],
+                                                                       label=f'dropped {drop_count}(%{drop_ratio})',
+                                                                       alpha=1., c='crimson', s=10, marker='+')
+                axes[i if _islist else 0, 0 if _islist else i].plot(t[pos_index], pos_threshold, label='pos_threshold',
+                                                                    alpha=.5, c='r', linewidth=0.7, linestyle='dashed')
+                axes[i if _islist else 0, 0 if _islist else i].plot(t[neg_index], neg_threshold, label='neg_threshold',
+                                                                    alpha=.5, c='r', linewidth=0.7, linestyle='dashed')
 
             elif method == 'envelope_mean':
                 threshold = Toolwear.envelope(subset).mean() * threshold_mul + threshold_epsilon
@@ -264,17 +267,18 @@ class Toolwear:
 
             if plot:
                 # axes[i, 0].scatter(t, raw_data, label='original', c='b', marker='+', s=20.)
-                axes[i if _islist else 0, 0 if _islist else i].scatter(t, denoised, label='denoised', alpha=1., c='y', marker='.', s=10)
+                axes[i if _islist else 0, 0 if _islist else i].scatter(t, denoised, label='denoised', alpha=1., c='y',
+                                                                       marker='.', s=10)
 
                 # axes[i, 0].plot(threshold, c='r', linestyle='dashed', linewidth=0.4,  label='threshold')
                 # axes[i, 0].plot(-threshold, c='r', linestyle='dashed', linewidth=0.4,)
 
-                axes[i if _islist else 1, 1 if _islist else i].scatter(t, denoised, label='denoised', alpha=1., c='y', marker='.', s=10)
+                axes[i if _islist else 1, 1 if _islist else i].scatter(t, denoised, label='denoised', alpha=1., c='y',
+                                                                       marker='.', s=10)
 
                 ylim = (-2, 2)
                 axes[i if _islist else 0, 0 if _islist else i].set_ylim(*ylim)
                 axes[i if _islist else 1, 1 if _islist else i].set_ylim(*ylim)
-
 
                 axes[0, 0].legend(loc='upper center', bbox_to_anchor=(0.5, 1.25), fancybox=True, shadow=True, ncol=5)
 
@@ -285,7 +289,6 @@ class Toolwear:
 
         if plot:
             plt.close()
-
 
         return denoiseds if _islist else denoiseds[0]
 
@@ -304,19 +307,16 @@ class Toolwear:
             # t = subset['time'].values
             t = np.arange(0, subset['time'].values.shape[0])
 
-
             pos_s_index = np.where(s >= 0)[0]
             neg_s_index = np.where(s < 0)[0]
 
             pos_s = s[pos_s_index]
             neg_s = s[neg_s_index]
 
-
             pos_envelope = np.abs(signal.hilbert(pos_s))
             neg_envelope = -np.abs(signal.hilbert(np.abs(neg_s)))
 
-
-            amplitude_envelopes.append({'pos_index':pos_s_index,
+            amplitude_envelopes.append({'pos_index': pos_s_index,
                                         'pos_envelope': pos_envelope,
                                         'neg_index': neg_s_index,
                                         'neg_envelope': neg_envelope})
@@ -640,9 +640,11 @@ class Toolwear:
         y = signal.lfilter(b, a, data)
         return y
 
-    def wavelet(self, data, wavelet='cmor6-1.5',
-                xlim=None, ylim=None, clim=None,
-                save=True, batch_size=5000, return_fig=True):
+    @staticmethod
+    def wavelet(subset, wavelet='cmor6-1.5',
+                cwt_save=True,
+                plot=True,
+                plot_func='own'):  # plot_func can be 'lib' to use more robust scaleogram plot
         """
         X-axis: time
         Y-axis: scale - The scale correspond to the signal periodicity to which the transform is sentitive to.
@@ -667,148 +669,94 @@ class Toolwear:
     
         """
 
-        def disable_spines(ax):
-            # Hide the right and left spines
-            ax.spines['right'].set_visible(False)
-            ax.spines['left'].set_visible(False)
-            ax.tick_params(left=False, labelleft=False)
+        os.makedirs("wavelet-results", exist_ok=True)
+        os.makedirs("wavelet-results/figures", exist_ok=True)
+        os.makedirs("wavelet-results/data", exist_ok=True)
 
-        def manual_xticks(ax, xticks):
-            # Manually enter time ticks
-            xticks = np.round(xticks, 2)
-            ax.axes.set_xticklabels(xticks, rotation=45)
+        t = subset['time'].values
+        signal = subset['data'].values
+        output_filename = f"{t[0]:.3}"
 
-        #         scales = np.arange(1, 500, 1)
-        scales = scg.periods2scales(np.logspace(start=0,
-                                                stop=2.5,
-                                                num=200)  # 10**0 -- 10**2
-                                    )
+        # scales = np.arange(1, 500, 1)
+        scales = scg.periods2scales(np.logspace(start=0, stop=2.5, num=200))
 
-        time = data['time'].values
-        signal = data['data'].values - data['data'].mean()
-        N = int(time.shape[0] / batch_size) + 1
+        # Calculate wavelet
+        cwt = scg.CWT(time=t,
+                      signal=signal,
+                      scales=scales,
+                      wavelet=wavelet)
 
-        with tqdm(total=N, desc='Wavelet Calculations..') as pbar:
-            # cwt = None
-            for i, (subset_time, subset_signal) in enumerate(zip(np.array_split(time, N), np.array_split(signal, N))):
-                cur_cwt = scg.CWT(time=subset_time,
-                                  signal=subset_signal,
-                                  scales=scales,
-                                  wavelet=wavelet)
-
-                # if cwt is None:
-                #     cwt.time = cur_cwt.time
-                #     cwt.signal = cur_cwt.signal
-                #     cwt.coefs = np.abs(cur_cwt.coefs)
-                # else:
-                #     cwt.time = np.hstack((cwt.time, cur_cwt.time))
-                #     cwt.signal = np.hstack((cwt.signal, cur_cwt.signal))
-                #     cwt.coefs = np.hstack((cwt.coefs, np.abs(cur_cwt.coefs)))
-
+        if plot:
+            if plot_func == "own":
                 fig, axes = plt.subplots(nrows=2, ncols=1, figsize=None, squeeze=False, frameon=False)
-                # Remove vertical space between axes
-                fig.subplots_adjust(wspace=0, hspace=.5)
 
                 # Wavelet subplot
-                ax = axes[0, 0]
-                # ax.axes.set_xticklabels(ax.axes.get_xticklabels(), rotation=45, horizontalalignment='right')
-                # if i != 0:  # other than first subplot
-                #     disable_spines(ax)
-                # else:
-                ax.set_ylabel('Frequency')
-
-                z = np.abs(cur_cwt.coefs).astype(np.float)
-
-                pbar.set_postfix_str(f"z.max() : {z.max()}")
-
-                qmesh = ax.pcolormesh(cur_cwt.time, range(cur_cwt.scales_freq.shape[0]), z)
-                colorbar = plt.colorbar(qmesh, orientation='vertical', ax=ax)
+                z = np.abs(cwt.coefs).astype(np.float)
+                qmesh = axes[0, 0].pcolormesh(cwt.time, range(cwt.scales_freq.shape[0]), z)
+                axes[0, 0].set_ylabel('Frequency')
+                colorbar = plt.colorbar(qmesh, orientation='vertical', ax=axes[0, 0])
 
                 # Vibration subplot
-                ax = axes[1, 0]
-                # ax.axes.set_xticklabels(ax.axes.get_xticklabels(), rotation=45, horizontalalignment='right')
-                # if i != 0:  # other than first subplot
-                #     disable_spines(ax)
-                # else:
-                ax.set_ylabel('Magnitude')
-
-                time_plot = ax.plot(cur_cwt.time, cur_cwt.signal)
+                time_plot = axes[1, 0].plot(cwt.time, cwt.signal)
+                axes[1, 0].set_ylabel('Magnitude')
 
                 plt.figure(fig.number)
                 plt.suptitle('Vibration Wavelet Analysis')
                 plt.xlabel('Time [ms]')
 
-                if save:
-                    plt.savefig(f'wavelet-fig-{i}.jpeg')
-                # plt.tick_params(labelcolor="none", top=False, bottom=False, left=False, right=False)
+            elif plot_func == "lib":
+                ax = scg.cws(cwt,
+                             spectrum='power',
+                             figsize=(12, 6),
+                             yscale='log',
+                             ylabel="Period [seconds]",
+                             xlabel='Time [seconds]')
 
-                pbar.update(1)
-
-
-                # or release all memory dump and return None
-                fig.clf()
-                plt.close()
-                del z, qmesh, fig, axes, cur_cwt
-                gc.collect()
-
-
-        # trace = go.Heatmapgl(name='wavelet',
-        #                      x=cwt.time,
-        #                      # y=cwt.scales_freq,
-        #                      z=np.abs(cwt.coefs),
-        #                      )
-        # layout = go.Layout(yaxis={'tickmode':'array',
-        #                           'tickvals':cwt.scales_freq})
-        # fig = go.Figure(data=[trace], layout=layout)
-        # fig.show()
-
-        """
-        ax = scg.cws(cwt,
-                     spectrum='power',
-                     figsize=(12, 6),
-                     yscale='log',
-                     ylabel="Period [seconds]",
-                     xlabel='Time [seconds]',
-                     xlim=xlim, ylim=ylim, clim=clim)
-
-        text = ax.annotate("found freq",
-                           xy=(time[100], 1 / self.expected_tooth_freq),
-                           xytext=None,
-                           bbox=dict(boxstyle="round", facecolor="y", edgecolor="0.5"),
-                           arrowprops=dict(facecolor='yellow', shrink=0.05))
-
-        text = ax.annotate(f"Ref freq x2.0:{self.expected_tooth_freq * 2}",
-                           xy=(time[100], 1 / (self.expected_tooth_freq * 2)),
-                           xytext=None,
-                           bbox=dict(boxstyle="round", facecolor="y", edgecolor="0.5"),
-                           arrowprops=dict(facecolor='yellow', shrink=0.05))
-        text = ax.annotate(f"Ref freq x0.5:{self.expected_tooth_freq * 0.5}",
-                           xy=(time[100], 1 / (self.expected_tooth_freq * 0.5)),
-                           xytext=None,
-                           bbox=dict(boxstyle="round", facecolor="y", edgecolor="0.5"),
-                           arrowprops=dict(facecolor='yellow', shrink=0.05))
-
-        #         ax.use_sticky_edges = False
-        #         p2f = lambda x:1/x
-        #         f2p = lambda x:1/x
-        #         secax = ax.secondary_yaxis('right', functions=(p2f, f2p))
-        #         secax.set_ylabel('Freq [Hz]')
-        #         pseudo_frequencies = pywt.scale2frequency(wavelet=wavelet, scale=scales)
-        #          for i in range(self.n_cycle):
-        #             ax.axvline(x=subset['time'].values[i*self.num_points_in_one_period], ymin=0.1, ymax=0.9, c='w')
-
-        #         # remove colorbar
-        #         ax.collections[0].colorbar.remove()
-
-        if save:
-            self.save_fig(ax.get_figure(), suffix='wavelet', kind='matplotlib')
-        #         if plot:
-        plt.show()
+                """
+                text = ax.annotate("found freq",
+                                   xy=(time[100], 1 / self.expected_tooth_freq),
+                                   xytext=None,
+                                   bbox=dict(boxstyle="round", facecolor="y", edgecolor="0.5"),
+                                   arrowprops=dict(facecolor='yellow', shrink=0.05))
         
-        """
+                text = ax.annotate(f"Ref freq x2.0:{self.expected_tooth_freq * 2}",
+                                   xy=(time[100], 1 / (self.expected_tooth_freq * 2)),
+                                   xytext=None,
+                                   bbox=dict(boxstyle="round", facecolor="y", edgecolor="0.5"),
+                                   arrowprops=dict(facecolor='yellow', shrink=0.05))
+                text = ax.annotate(f"Ref freq x0.5:{self.expected_tooth_freq * 0.5}",
+                                   xy=(time[100], 1 / (self.expected_tooth_freq * 0.5)),
+                                   xytext=None,
+                                   bbox=dict(boxstyle="round", facecolor="y", edgecolor="0.5"),
+                                   arrowprops=dict(facecolor='yellow', shrink=0.05))
+        
+                #         ax.use_sticky_edges = False
+                #         p2f = lambda x:1/x
+                #         f2p = lambda x:1/x
+                #         secax = ax.secondary_yaxis('right', functions=(p2f, f2p))
+                #         secax.set_ylabel('Freq [Hz]')
+                #         pseudo_frequencies = pywt.scale2frequency(wavelet=wavelet, scale=scales)
+                #          for i in range(self.n_cycle):
+                #             ax.axvline(x=subset['time'].values[i*self.num_points_in_one_period], ymin=0.1, ymax=0.9, c='w')
+        
+                #         # remove colorbar
+                #         ax.collections[0].colorbar.remove()
+        
+                if save:
+                    self.save_fig(ax.get_figure(), suffix='wavelet', kind='matplotlib')
+                #         if plot:
+                plt.show()
+                
+                """
 
-        # ax = None
-        # return (ax, cwt)
+            else:
+                raise ValueError(f"plot_func:{plot_func} not implemented.")
+
+            plt.savefig(f"wavelet-results/figures/{output_filename}.jpg")
+
+        if cwt_save:
+            with open(f"wavelet-results/data/{output_filename}.pickle", "wb") as f:
+                pickle.dump(cwt, f)
 
     def append(self, other):
 
@@ -1067,35 +1015,18 @@ class ToolwearTorchDataset:
         return self.scaler.inverse_transform(x)
 
 
-
-
-
-
 def toolwear_class_usage():
     # ======= DATA READ ==========
     NUM_CYCLE = 200
 
     # vib = Toolwear.from_pickle(Path('D:/YandexDisk/machining/data/raw/1/data.pickle'))
 
-
-
-
     # with tqdm(total=len(subsets), desc='Processing subsets..:') as pbar:
-
-
-
-
-
-
-
-
 
     # ======= DATA PLOT ==========
     # START_SEC = 4000
     # vib.apply_aggregation() # apply several filters
     # subset = vib.make_subset_after(sec=START_SEC)
-
-
 
     # denoised_data = vib.denoise(subsets=subsets[-1], method='basic', threshold_epsilon=1, plot=True)
 
@@ -1116,7 +1047,7 @@ def toolwear_class_usage():
 
     # plot wavelet
     # vib.wavelet(data=subset, wavelet='cmor3-1.5', clim=None, batch_size=8000*60)
-    vib.wavelet(data=vib.reading, wavelet='cmor3-1.5', clim=None, batch_size=8000*23)  # 23 sec data at once
+    vib.wavelet(data=vib.reading, wavelet='cmor3-1.5', clim=None, batch_size=8000 * 23)  # 23 sec data at once
 
     # vib.plot_toolwear()
 
@@ -1137,19 +1068,20 @@ def toolwear_class_usage():
     # # vib.spectrogram(data=subset, plot=True, save=False, engine='plotly')
     # ax, cwt = vib.wavelet(data=subset, wavelet='cgau5', save=False)
 
+
 def pytorch_dataset_usage():
     # ======= PYTORCH DATASET ===========
     dataset = ToolwearTorchDataset(seq_length=8000, train_split=0.95)
     print()
 
 
-
 def costly_func(subset):
     denoised_data = Toolwear.denoise(subsets=subset, method='envelope',
-                                threshold_epsilon=0.1, threshold_mul=1.,
-                                plot=True, figsize=(12, 6),
-                                save=True, filename=None,
-                                verbose=False)
+                                     threshold_epsilon=0.1, threshold_mul=1.,
+                                     plot=True, figsize=(12, 6),
+                                     save=True, filename=None,
+                                     verbose=False)
+
 
 if __name__ == "__main__":
     vib = Toolwear.batch_read(fpath=Path('D:/YandexDisk/machining/data/raw'),
@@ -1167,6 +1099,6 @@ if __name__ == "__main__":
     with multiprocessing.Pool(processes=8) as pool:
         pool.map(costly_func, subsets)
 
-
     from utils.plot_utils import image_folder_to_gif
+
     image_folder_to_gif('denoised', glob='*.jpg')
