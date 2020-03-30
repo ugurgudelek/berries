@@ -22,6 +22,8 @@ import plotly.tools as tls
 import plotly.express as px
 from ipywidgets import interactive, HBox, VBox, widgets, Output, interact, interact_manual, Layout, Box
 # py.init_notebook_mode(connected=True)
+import matplotlib
+matplotlib.use('TKAgg')
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.collections import PolyCollection, LineCollection
@@ -642,9 +644,11 @@ class Toolwear:
 
     @staticmethod
     def wavelet(subset, wavelet='cmor6-1.5',
+                plot_func='own',
+                fpath='wavelet-results',
                 cwt_save=True,
                 plot=True,
-                plot_func='own'):  # plot_func can be 'lib' to use more robust scaleogram plot
+                ):  # plot_func can be 'lib' to use more robust scaleogram plot
         """
         X-axis: time
         Y-axis: scale - The scale correspond to the signal periodicity to which the transform is sentitive to.
@@ -669,9 +673,9 @@ class Toolwear:
     
         """
 
-        os.makedirs("wavelet-results", exist_ok=True)
-        os.makedirs("wavelet-results/figures", exist_ok=True)
-        os.makedirs("wavelet-results/data", exist_ok=True)
+        os.makedirs(fpath, exist_ok=True)
+        os.makedirs(f"{fpath}/figures", exist_ok=True)
+        os.makedirs(f"{fpath}/data", exist_ok=True)
 
         t = subset['time'].values
         signal = subset['data'].values
@@ -686,9 +690,17 @@ class Toolwear:
                       scales=scales,
                       wavelet=wavelet)
 
+        if cwt_save:
+            with open(f"{fpath}/data/{output_filename}.pickle", "wb") as f:
+                pickle.dump(cwt, f)
+
         if plot:
+            fig, axes = plt.subplots(nrows=2, ncols=1, figsize=None, squeeze=False, frameon=False, sharex=True)
+            # Vibration subplot
+            time_plot = axes[1, 0].plot(cwt.time, cwt.signal)
+            axes[1, 0].set_ylabel('Magnitude')
+
             if plot_func == "own":
-                fig, axes = plt.subplots(nrows=2, ncols=1, figsize=None, squeeze=False, frameon=False)
 
                 # Wavelet subplot
                 z = np.abs(cwt.coefs).astype(np.float)
@@ -696,21 +708,14 @@ class Toolwear:
                 axes[0, 0].set_ylabel('Frequency')
                 colorbar = plt.colorbar(qmesh, orientation='vertical', ax=axes[0, 0])
 
-                # Vibration subplot
-                time_plot = axes[1, 0].plot(cwt.time, cwt.signal)
-                axes[1, 0].set_ylabel('Magnitude')
-
-                plt.figure(fig.number)
-                plt.suptitle('Vibration Wavelet Analysis')
-                plt.xlabel('Time [ms]')
-
             elif plot_func == "lib":
-                ax = scg.cws(cwt,
-                             spectrum='power',
-                             figsize=(12, 6),
-                             yscale='log',
-                             ylabel="Period [seconds]",
-                             xlabel='Time [seconds]')
+                scg.cws(cwt,
+                         spectrum='power',
+                         figsize=(12, 6),
+                         yscale='log',
+                         ylabel="Period [seconds]",
+                         xlabel='Time [seconds]',
+                        ax=axes[0, 0])
 
                 """
                 text = ax.annotate("found freq",
@@ -752,12 +757,14 @@ class Toolwear:
             else:
                 raise ValueError(f"plot_func:{plot_func} not implemented.")
 
-            plt.savefig(f"wavelet-results/figures/{output_filename}.jpg")
+            plt.figure(fig.number)
+            plt.suptitle('Vibration Wavelet Analysis')
+            plt.xlabel('Time [seconds]')
+            plt.savefig(f"{fpath}/figures/{output_filename}.jpg")
             plt.close()
 
-        if cwt_save:
-            with open(f"wavelet-results/data/{output_filename}.pickle", "wb") as f:
-                pickle.dump(cwt, f)
+
+
 
     def append(self, other):
 
