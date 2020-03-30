@@ -753,6 +753,7 @@ class Toolwear:
                 raise ValueError(f"plot_func:{plot_func} not implemented.")
 
             plt.savefig(f"wavelet-results/figures/{output_filename}.jpg")
+            plt.close()
 
         if cwt_save:
             with open(f"wavelet-results/data/{output_filename}.pickle", "wb") as f:
