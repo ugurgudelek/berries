@@ -675,7 +675,7 @@ class Toolwear:
 
         t = subset['time'].values
         signal = subset['data'].values
-        output_filename = f"{t[0]:.3}"
+        output_filename = f"{t[0]:.3f}"
 
         # scales = np.arange(1, 500, 1)
         scales = scg.periods2scales(np.logspace(start=0, stop=2.5, num=200))
