@@ -23,7 +23,7 @@ import plotly.express as px
 from ipywidgets import interactive, HBox, VBox, widgets, Output, interact, interact_manual, Layout, Box
 # py.init_notebook_mode(connected=True)
 import matplotlib
-matplotlib.use('TKAgg')
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.collections import PolyCollection, LineCollection
@@ -380,7 +380,7 @@ class Toolwear:
     def _make_subset(self, start_idx):
         return self.reading.iloc[start_idx:start_idx + self.num_points_in_one_period * self.n_cycle, :].copy()
 
-    def static_plot(self, subset=None, bound=None, figsize=None, save=False):
+    def static_plot(self, subset=None, bound=None, figsize=None, save=False, fpath=None):
 
         if subset is None:
             subset = self.reading
@@ -392,7 +392,9 @@ class Toolwear:
         ax = plt.plot(subset['time'], subset['data'], '.')
 
         if save:
-            self.save_fig(ax.get_figure(), suffix='signal-full', kind='matplotlib')
+            # self.save_fig(ax.get_figure(), suffix='signal-full', kind='matplotlib', fpath=fpath)
+            os.makedirs(fpath, exist_ok=True)
+            plt.savefig(f"{fpath}.jpg")
 
     def plot(self, plot=True, save=True):
         def add_vline_per_period(fig):
@@ -515,21 +517,26 @@ class Toolwear:
         # if plot:
         # display(form)
 
-    def save_fig(self, fig, suffix, kind='plotly'):
+    def save_fig(self, fig, suffix, kind='plotly', fpath=None):
         # path : 'D:/machining/wear_data/raw/1/acc7000.tdms'
 
-        try:
-            filename = self.path.stem  # 'acc7000'
-            foldername = self.path.parent.name  # '1'
-        except:
-            print("You cannot save because path is not valid. This is probably because you call 'append' function.")
-            return
+        if fpath is None:
+            try:
+                filename = self.path.stem  # 'acc7000'
+                foldername = self.path.parent.name  # '1'
+                images_path = self.path.parent.parent.parent / 'images'  # 'D:/machining/wear_data/images'
+                specific_folder_path = images_path / foldername  # 'D:/machining/wear_data/images/1'
+            except:
+                print("You cannot save because path is not valid. This is probably because you call 'append' function.")
+                return
 
-        images_path = self.path.parent.parent.parent / 'images'  # 'D:/machining/wear_data/images'
-        specific_folder_path = images_path / foldername  # 'D:/machining/wear_data/images/1'
+        else:
+            specific_folder_path = fpath
+
         os.makedirs(specific_folder_path, exist_ok=True)
+        save_path = specific_folder_path
 
-        save_path = specific_folder_path / filename  # 'D:/machining/wear_data/images/1/acc7000.png
+        # save_path = specific_folder_path / filename  # 'D:/machining/wear_data/images/1/acc7000.png
 
         if kind == 'plotly':
             # fig.write_image(str(save_path.with_suffix('.png')))
@@ -1092,21 +1099,8 @@ def costly_func(subset):
 
 
 if __name__ == "__main__":
-    vib = Toolwear.batch_read(fpath=Path('D:/YandexDisk/machining/data/raw'),
-                              cut_no=1, kind='acc', n_cycle=200)
+    for cut_no in range(14, 17):
+        vib = Toolwear.batch_read(fpath=Path('D:/YandexDisk/machining/data/raw'),
+                                  cut_no=cut_no, kind='acc', n_cycle=200)
 
-    subset_min = vib.reading['time'].iloc[0]  # sec
-    subset_max = vib.reading['time'].iloc[-1]  # sec
-    subset_len = 1  # sec
-    subset_stride = 0.2
-    print(f"Subset creation starting: [{subset_min}{subset_max}) stride:{subset_stride} len:{subset_len}")
-    subsets = [vib.reading.iloc[vib.second2index(sec0):vib.second2index(sec1), :]
-               for sec0, sec1 in zip(np.arange(subset_min, subset_max - subset_len + 1, subset_stride),
-                                     np.arange(subset_min + subset_len, subset_max + 1, subset_stride))]
-
-    with multiprocessing.Pool(processes=8) as pool:
-        pool.map(costly_func, subsets)
-
-    from utils.plot_utils import image_folder_to_gif
-
-    image_folder_to_gif('denoised', glob='*.jpg')
+        vib.static_plot(save=True, fpath=f'results/{cut_no}')

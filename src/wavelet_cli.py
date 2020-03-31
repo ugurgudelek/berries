@@ -31,6 +31,10 @@ if __name__ == "__main__":
     print(args)
 
     n_core = args.n_core or 1
+    mother_wavelet = args.wavelet or 'cmor6-1.5'
+    plot_func = args.plot_func or 'own'
+    fpath = args.fpath or 'wavelet-results'
+
     vib = Toolwear.batch_read(fpath=Path('D:/YandexDisk/machining/data/raw'),
                               cut_no=args.cutno, kind=args.kind or 'acc', n_cycle=200)
 
@@ -51,17 +55,17 @@ if __name__ == "__main__":
     if n_core == 1:
         with tqdm(total=len(subsets), desc='Wavelet Calculations..') as pbar:
             for subset in subsets:
-                Toolwear.wavelet(subset, 
-                args.wavelet or 'cmor6-1.5',
-                args.plot_func or 'own',
-                args.fpath or 'wavelet-results')
+                Toolwear.wavelet(subset, mother_wavelet, plot_func, fpath)
                 pbar.update(1)
     else:
+        # with concurrent.futures.ThreadPoolExecutor(max_workers=n_core) as executor:
+        #     for subset in subsets:
+        #         executor.submit(Toolwear.wavelet, subset, mother_wavelet, plot_func, fpath)
         with multiprocessing.Pool(processes=n_core) as pool:
             pool.starmap(Toolwear.wavelet, itertools.product(subsets,
-                                                            [args.wavelet or 'cmor6-1.5'],
-                                                            [args.plot_func or 'own'],
-                                                            [args.fpath or 'wavelet-results']))
+                                                            [mother_wavelet],
+                                                            [plot_func],
+                                                            [fpath]))
 
     image_folder_to_gif(f"{args.fpath or 'wavelet-results'}/figures", glob='*.jpg')
 
