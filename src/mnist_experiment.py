@@ -12,7 +12,7 @@ import torch
 if __name__ == "__main__":
     torch.multiprocessing.freeze_support()
 
-    hyperparams = dict(lr=0.001, train_batch_size=1000, test_batch_size=1000, epoch=10)
+    hyperparams = dict(lr=0.001, train_batch_size=1000, test_batch_size=1000, epoch=1)
     params = dict(log_interval=10)
 
     dataset = MNIST(root='../input/', transform=transforms.Compose([transforms.ToTensor(),

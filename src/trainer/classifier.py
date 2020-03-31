@@ -25,7 +25,7 @@ class ClassifierTrainer:
 
         self.use_cuda = use_cuda and torch.cuda.is_available()
         self.device = torch.device("cuda" if self.use_cuda else "cpu")
-        self.model = self.model.to(self.device)
+        self.model = self.model.float().to(self.device)
         self.loader_kwargs = {'num_workers': 1, 'pin_memory': True} if self.use_cuda else {}
 
         self.train_loader = DataLoader(self.dataset.trainset, batch_size=self.hyperparams['train_batch_size'],
