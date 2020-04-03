@@ -45,9 +45,8 @@ class ChatterImage(GenericDataset):
 
         self.info_excel = self.read_info_xlsx()
 
-        self.load_data()
-
-        #self.shuffle()
+        images, labels = self.load_data()
+        self.images, self.labels = self.shuffle(images, labels)
 
         datasize = len(self.images)
         trainsize = int(datasize*0.75)
@@ -68,6 +67,15 @@ class ChatterImage(GenericDataset):
                                   transform=self.transform,
                                   target_transform=self.target_transform)
 
+        print("====== Trainset Info ======")
+        print(self.trainset)
+
+        print("====== Testset Info ======")
+        print(self.testset)
+
+    def shuffle(self, images, labels):
+        p = np.random.permutation(len(images))
+        return images[p], labels[p]
 
     def read_info_xlsx(self):
         excel = pd.read_excel(self.root/'Chatter_labels_CNN.xlsx', sheet_name='Tlusty_labels')
@@ -75,8 +83,8 @@ class ChatterImage(GenericDataset):
         return excel
 
     def load_data(self):
-        self.images = list()
-        self.labels = list()
+        images = list()
+        labels = list()
 
         with tqdm(total=self.info_excel['Used'].sum(), desc='Reading images...') as pbar:
             for ix, row in self.info_excel.iterrows():
@@ -85,13 +93,15 @@ class ChatterImage(GenericDataset):
                 use = row['Used']
                 if use:
                     slotname = filename.split('_')[1]
-                    if slotname == 'kanal1': #delete this line!
+                    if slotname == 'kanal1' or slotname == 'kanal2' or slotname == 'kanal3': #delete this line!
                         img_path = self.root/f'CNN-Inputs-Tlusty/{slotname}/{filename}'
                         img = Image.open(img_path).convert('L')
-                        img = np.array(img)
-                        self.images.append(img)
-                        self.labels.append(label)
+                        img = np.array(img)/255
+                        images.append(img)
+                        labels.append(label)
                         pbar.update(1)
+
+        return np.array(images), np.array(labels)
 
 
 
@@ -100,7 +110,7 @@ class ChatterImage(GenericDataset):
 
 class ChatterImageInner(Dataset):
     """
-    Actual MNIST class to work with.
+    Actual ChatterImage class to work with.
     Normalization should be implemented here!
     """
 
@@ -134,6 +144,13 @@ class ChatterImageInner(Dataset):
 
     def __len__(self):
         return len(self.data)
+
+    def __str__(self):
+        return f"""
+                data.shape:{self.data.shape}
+                targets.shape:{self.targets.shape}
+                targets.mean: {self.targets.mean()}
+        """
 
 
 

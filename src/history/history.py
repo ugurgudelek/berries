@@ -5,6 +5,9 @@ from collections import defaultdict
 import numpy as np
 import pandas as pd
 
+import matplotlib.pyplot as plt
+import os
+
 
 class History:
     """
@@ -44,6 +47,38 @@ class History:
 
         return pd.DataFrame(self.container[phase])
 
+    def save(self, fpath, phase='both'):
+        if phase == 'both':
+            self.save(fpath=fpath, phase='train')
+            self.save(fpath=fpath, phase='test')
+            return
+        self.to_dataframe(phase=phase).to_csv(f"{fpath}/history_{phase}.csv")
+
+    def plot(self, fpath=None, show=False):
+        train_df = self.to_dataframe('train')
+        test_df = self.to_dataframe('test')
+
+        fig, axes = plt.subplots(nrows=2, sharex=True)
+        axes[0].plot(train_df['epoch'], train_df['loss'], label='training loss')
+        axes[0].plot(test_df['epoch'], test_df['loss'], label='test loss')
+        axes[0].legend()
+        axes[1].plot(train_df['epoch'], train_df['accuracy'], label='training accuracy')
+        axes[1].plot(test_df['epoch'], test_df['accuracy'], label='test accuracy')
+        axes[1].legend()
+
+        plt.xlabel('Number of epochs')
+        plt.suptitle('Accuracy and Loss History')
+        if fpath is not None:
+            os.makedirs(fpath, exist_ok=True)
+            plt.savefig(f"{fpath}/history.jpg")
+
+        if show:
+            plt.show()
+        plt.close(fig)
+
+
+
+
 
 if __name__ == "__main__":
     h = History()
@@ -57,4 +92,5 @@ if __name__ == "__main__":
                                       })
 
     h.to_dataframe(phase='train').to_csv('test_csv.csv', index=False)
+    h.plot()
     print()

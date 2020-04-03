@@ -12,6 +12,7 @@ import pandas as pd
 from history.history import History
 
 from collections import defaultdict
+import os
 
 
 class ClassifierTrainer:
@@ -23,10 +24,13 @@ class ClassifierTrainer:
         self.hyperparams = hyperparams
         self.params = params
 
+        os.makedirs(self.params['result_path'], exist_ok=True)
+
+
         self.use_cuda = use_cuda and torch.cuda.is_available()
         self.device = torch.device("cuda" if self.use_cuda else "cpu")
         self.model = self.model.float().to(self.device)
-        self.loader_kwargs = {'num_workers': 1, 'pin_memory': True} if self.use_cuda else {}
+        self.loader_kwargs = {'num_workers': 0, 'pin_memory': True} if self.use_cuda else {}
 
         self.train_loader = DataLoader(self.dataset.trainset, batch_size=self.hyperparams['train_batch_size'],
                                        **self.loader_kwargs)
@@ -36,7 +40,7 @@ class ClassifierTrainer:
         self.history = History()
 
     def _on_epoch(self, epoch, train=True):
-        self.model.train(train)
+        self.model.train(train) # necessity for dropout layers
         loader = self.train_loader if train else self.test_loader
 
         logs = dict()
@@ -77,14 +81,19 @@ class ClassifierTrainer:
         # See what the scores are before training
         with torch.no_grad():
             for loss in self._on_epoch(train=False, epoch=0):
-                print(loss)
-
+                # print(loss)
+                pass
         for epoch in range(1, self.hyperparams['epoch']+1):
             for loss in self._on_epoch(train=True, epoch=epoch):
                 pass
             with torch.no_grad():
                 for loss in self._on_epoch(train=False, epoch=epoch):
-                    print(loss)
+                    # print(loss)
+                    pass
+
+            self.history.plot(fpath=f"{self.params['result_path']}/{epoch}", show=False)
+            self.history.plot(fpath=self.params['result_path'], show=False)
+
 
     @staticmethod
     def accuracy(output, targets):
@@ -95,8 +104,6 @@ class ClassifierTrainer:
         return torch.nn.functional.softmax(output.detach(), dim=1).cpu().numpy()
 
     def predict(self, data=None):
-        if data is None:
-            data = self.dataset.testset.data
         pass
 
     def predict_log_proba(self):

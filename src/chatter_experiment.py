@@ -7,16 +7,24 @@
 
 from dataset.chatter_image import ChatterImage
 from model.cnn import CNN
-from torchvision import transforms
+
 
 from trainer.classifier import ClassifierTrainer
 import torch
+import numpy as np
+import os
 
 if __name__ == "__main__":
+    SEED = 47
+    np.random.seed(SEED)
+    torch.manual_seed(SEED)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
     torch.multiprocessing.freeze_support()
 
     hyperparams = dict(lr=0.001, train_batch_size=2, test_batch_size=2, epoch=10)
-    params = dict(log_interval=10)
+    params = dict(log_interval=10, result_path='../results/chatter_cnn_images')
 
     dataset = ChatterImage(root='D:/YandexDisk/machining/chatter_cnn_images/Chatter_cnn',
                            # transform=transforms.Compose([transforms.ToTensor(),
@@ -27,6 +35,10 @@ if __name__ == "__main__":
     trainer = ClassifierTrainer(model=model, dataset=dataset, hyperparams=hyperparams, params=params)
 
     trainer.fit()
+
+
+    trainer.history.save(fpath=params['result_path'])
+    trainer.history.plot(fpath=params['result_path'])
 
 # trainer.predict(data=dataset.testset.data)
 #

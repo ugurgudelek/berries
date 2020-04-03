@@ -20,12 +20,12 @@ class CNN(nn.Module):
         )
 
         self.classifier = nn.Sequential(
-            nn.Linear(in_features=50 * 47 * 1092, out_features=100),
+            nn.Linear(in_features=50 * 47 * 1277, out_features=100),
             nn.Linear(in_features=100, out_features=out_channels),
         )
 
     def forward(self, x):
         out = self.feature_extractor(x)
-        out = out.view(-1, 50 * 47 * 1092)
+        out = out.view(-1, 50 * 47 * 1277)
         out = self.classifier(out)
         return out
