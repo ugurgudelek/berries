@@ -13,6 +13,7 @@ from trainer.classifier import ClassifierTrainer
 import torch
 import numpy as np
 import os
+from torchvision import transforms
 
 if __name__ == "__main__":
     SEED = 47
@@ -23,12 +24,11 @@ if __name__ == "__main__":
 
     torch.multiprocessing.freeze_support()
 
-    hyperparams = dict(lr=0.01, train_batch_size=32, test_batch_size=32, epoch=200, train_shuffle=True, test_shuffle=False)
+    hyperparams = dict(lr=0.001, train_batch_size=8, test_batch_size=8, epoch=200, train_shuffle=True, test_shuffle=False)
     params = dict(log_interval=10, result_path='../results/chatter_cnn_images')
 
     dataset = ChatterImage(root='D:/YandexDisk/machining/chatter_cnn_images/Chatter_cnn',
-                           # transform=transforms.Compose([transforms.ToTensor(),
-                           #                               transforms.Normalize((0.1307,), (0.3081,))]),
+                           transform=transforms.Compose([transforms.ToTensor()]),
                            )
     model = CNN(in_channels=1, out_channels=1)
 

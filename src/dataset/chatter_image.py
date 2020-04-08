@@ -7,6 +7,7 @@
 
 import torch
 from torch.utils.data import Dataset
+from torchvision import transforms
 from pathlib import Path
 import os
 import codecs
@@ -21,21 +22,7 @@ from dataset.generic import GenericDataset
 
 
 class ChatterImage(GenericDataset):
-    """Placeholder class for MNISTInner
-    `MNIST <http://yann.lecun.com/exdb/mnist/>`_ Dataset.
-
-    Args:
-        root (string): Root directory of dataset where ``processed/training.pt``
-            and  ``processed/test.pt`` exist.
-
-
-    """
-
-    training_file = Path('training.pt')
-    test_file = Path('test.pt')
-
-
-
+   
     classes = ['0 - no_chatter', '1 - chatter']
 
     def __init__(self, root, transform=None, target_transform=None):
@@ -45,8 +32,8 @@ class ChatterImage(GenericDataset):
 
         self.info_excel = self.read_info_xlsx()
 
-        images, labels = self.load_data()
-        self.images, self.labels = self.shuffle(images, labels)
+        images, labels, slotnos = self.load_data()
+        self.images, self.labels, self.slotnos = self.shuffle(images, labels, slotnos)
 
         datasize = len(self.images)
         trainsize = int(datasize*0.75)
@@ -76,9 +63,15 @@ class ChatterImage(GenericDataset):
     def __len__(self):
         return len(self.images)
 
-    def shuffle(self, images, labels):
-        p = np.random.permutation(len(images))
-        return images[p], labels[p]
+    def shuffle(self, images, labels, slotnos):
+        for slotno in set(slotnos):
+            ix = np.where(slotnos==slotno)[0]
+            p = np.random.permutation(ix)
+            images[ix] = images[p]
+            labels[ix] = labels[p]
+            slotnos[ix] = slotnos[p]
+
+        return images, labels, slotnos
 
     def read_info_xlsx(self):
         excel = pd.read_excel(self.root/'Chatter_labels_CNN.xlsx', sheet_name='Tlusty_labels')
@@ -88,7 +81,7 @@ class ChatterImage(GenericDataset):
     def load_data(self):
         images = list()
         labels = list()
-
+        slotnos = list()
         with tqdm(total=self.info_excel['Used'].sum(), desc='Reading images...') as pbar:
             for ix, row in self.info_excel.iterrows():
                 filename = row['Name']
@@ -101,9 +94,10 @@ class ChatterImage(GenericDataset):
                     img = np.array(img)/255
                     images.append(img)
                     labels.append(label)
+                    slotnos.append(int(slotname[5:]))
                     pbar.update(1)
 
-        return np.array(images, dtype=np.float32), np.array(labels, dtype=np.float32)
+        return np.array(images, dtype=np.float32), np.array(labels, dtype=np.float32), np.array(slotnos)
 
     def load_fake_data(self):
         images = list()
@@ -152,13 +146,15 @@ class ChatterImageInner(Dataset):
         # to return a PIL Image
         # img = Image.fromarray(img.numpy(), mode='L')
 
+        img = (img - img.mean())/(img.std())
+
         if self.transform is not None:
             img = self.transform(img)
 
         if self.target_transform is not None:
             target = self.target_transform(target)
 
-        return torch.from_numpy(img).unsqueeze(dim=0).float(), np.array([target], dtype=float)
+        return img, torch.from_numpy(np.array([target], dtype=float))
 
     def __len__(self):
         return len(self.data)
