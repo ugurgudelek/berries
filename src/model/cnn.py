@@ -17,15 +17,21 @@ class CNN(nn.Module):
             nn.Conv2d(in_channels=20, out_channels=50, kernel_size=5, stride=1),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=2),
+
+            # nn.Conv2d(in_channels=50, out_channels=10, kernel_size=5, stride=1),
+            # nn.ReLU(inplace=True),
+            # nn.MaxPool2d(kernel_size=2),
         )
 
         self.classifier = nn.Sequential(
-            nn.Linear(in_features=50 * 47 * 1277, out_features=100),
+            nn.Linear(in_features=50*4*4, out_features=100),
             nn.Linear(in_features=100, out_features=out_channels),
         )
 
     def forward(self, x):
+        batch_size = x.size(0)
+
         out = self.feature_extractor(x)
-        out = out.view(-1, 50 * 47 * 1277)
+        out = out.view(batch_size, -1) # flatten the vector
         out = self.classifier(out)
         return out

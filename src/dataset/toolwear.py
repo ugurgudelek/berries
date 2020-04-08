@@ -806,7 +806,7 @@ class Toolwear:
         self.path = Path(os.path.commonpath((self.path, other.path)))
 
     @staticmethod
-    def batch_read(fpath, cut_no, kind, n_cycle):
+    def batch_read(fpath, cut_no, kind, n_cycle, interpolate=True):
 
         # read excel file for attributes
         exceldata = ExcelData()
@@ -826,8 +826,9 @@ class Toolwear:
 
                 pbar.update(1)
 
-        vib.interpolate('cutting_length')
-        vib.interpolate('toolwear')
+        if interpolate:
+            vib.interpolate('cutting_length')
+            vib.interpolate('toolwear')
         return vib
 
     @property
@@ -868,6 +869,10 @@ class Toolwear:
     def to_pickle(self):
         with open(f'{self.path}/data.pickle', 'wb') as f:
             pickle.dump(self, f)
+    
+#     def to_csv(self, drop_cols=None):
+#         if drop_cols is not None:
+#             self.reading.drop(drop_cols).to_csv(self.path/'data.csv')
 
     def to_torch_csv(self):
         path = f'{self.path}/data-timeseries.csv'

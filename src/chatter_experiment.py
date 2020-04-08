@@ -23,14 +23,14 @@ if __name__ == "__main__":
 
     torch.multiprocessing.freeze_support()
 
-    hyperparams = dict(lr=0.001, train_batch_size=2, test_batch_size=2, epoch=10)
+    hyperparams = dict(lr=0.01, train_batch_size=32, test_batch_size=32, epoch=200, train_shuffle=True, test_shuffle=False)
     params = dict(log_interval=10, result_path='../results/chatter_cnn_images')
 
     dataset = ChatterImage(root='D:/YandexDisk/machining/chatter_cnn_images/Chatter_cnn',
                            # transform=transforms.Compose([transforms.ToTensor(),
                            #                               transforms.Normalize((0.1307,), (0.3081,))]),
                            )
-    model = CNN(in_channels=1, out_channels=2)
+    model = CNN(in_channels=1, out_channels=1)
 
     trainer = ClassifierTrainer(model=model, dataset=dataset, hyperparams=hyperparams, params=params)
 

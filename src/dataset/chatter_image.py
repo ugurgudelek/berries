@@ -73,6 +73,9 @@ class ChatterImage(GenericDataset):
         print("====== Testset Info ======")
         print(self.testset)
 
+    def __len__(self):
+        return len(self.images)
+
     def shuffle(self, images, labels):
         p = np.random.permutation(len(images))
         return images[p], labels[p]
@@ -93,16 +96,31 @@ class ChatterImage(GenericDataset):
                 use = row['Used']
                 if use:
                     slotname = filename.split('_')[1]
-                    if slotname == 'kanal1' or slotname == 'kanal2' or slotname == 'kanal3': #delete this line!
-                        img_path = self.root/f'CNN-Inputs-Tlusty/{slotname}/{filename}'
-                        img = Image.open(img_path).convert('L')
-                        img = np.array(img)/255
-                        images.append(img)
-                        labels.append(label)
-                        pbar.update(1)
+                    img_path = self.root/f'CNN-Inputs-Tlusty/{slotname}/{filename}'
+                    img = Image.open(img_path).convert('L')
+                    img = np.array(img)/255
+                    images.append(img)
+                    labels.append(label)
+                    pbar.update(1)
 
+        return np.array(images, dtype=np.float32), np.array(labels, dtype=np.float32)
+
+    def load_fake_data(self):
+        images = list()
+        labels = list()
+        filepaths = list((self.root/'mnist').glob('*/*.png'))
+        with tqdm(total=len(filepaths), desc='Reading images...') as pbar:
+            for filepath in filepaths:
+                filename = filepath.name
+                slotname = filename.split('_')[1]
+                img_path = self.root / f'mnist/{slotname}/{filename}'
+                img = Image.open(img_path).convert('L')
+                img = np.array(img) / 255
+                label = 0 if slotname == 'kanal1' else 1
+                images.append(img)
+                labels.append(label)
+                pbar.update(1)
         return np.array(images), np.array(labels)
-
 
 
 
@@ -140,7 +158,7 @@ class ChatterImageInner(Dataset):
         if self.target_transform is not None:
             target = self.target_transform(target)
 
-        return torch.from_numpy(img).unsqueeze(dim=0).float(), target
+        return torch.from_numpy(img).unsqueeze(dim=0).float(), np.array([target], dtype=float)
 
     def __len__(self):
         return len(self.data)

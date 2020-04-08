@@ -1,85 +1,63 @@
+# -*- coding: utf-8 -*-
+# @Time   : 3/16/2020 3:16 AM
+# @Author : Ugur Gudelek
+# @Email  : ugurgudelek@gmail.com
+# @File   : toolwear.py
+# @Status : -
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
 import torch
 import torch.nn as nn
-import numpy as np
-from dataset.toolwear import ToolwearTorchDataset
-import matplotlib.pyplot as plt
-from model.encoder_decoder_rnn import RNNPredictor
-from torch.optim import Adam
+from torch.autograd import Variable
+from sklearn.preprocessing import MinMaxScaler
 
-from trainer.encoder_decoder_rnntrainer import RNNTrainer
-from dataset.generic import Standardizer, TimeSeriesDatasetWrapper
+from model.lstm import LSTM
+from dataset.toolwear import ToolwearTorchDataset
+from trainer.trainer import Trainer
 
 if __name__ == "__main__":
     torch.multiprocessing.freeze_support()
 
-    hyperparams = {
-        # Model params
-        'model': 'LSTM',
-        'emsize': 32,
-        'nhid': 32,
-        'nlayers': 2,
-        'res_connection': False,  # resudial connections
-        'dropout': 0.2,
-        'tied': False,  # tie the word embedding and softmax weights (deprecated)
-        # Optim params
-        'lr': 2e-4,
-        'weight_decay': 1e-4,
-        'clip': 10,  # gradient clipping
-        # Dataloader params
-        'train_batch_size': 128,
-        'test_batch_size': 128,
-        'seq_len': 50,  # sequence length
 
-        'teacher_forcing_ratio': 0.7,  # teacher forcing ratio (deprecated)
-        'epoch': 1000,  # upper epoch limits
-    }
-    params = {'log_interval': 10,
-              'save_interval': 50,
-              'save_fig': True,
+    params = {'seed': 42,
+              'device': 'cuda' if torch.cuda.is_available() else 'cpu',
+              # 'device':'cpu',
               'resume': False,
               'pretrained': False,
-              'prediction_window_size': 10,
-              'augment': False,
-              'seed': 42,
-              'device': 'cuda',
-              'experiment_name': 'tool4wear_std',
-              # figure xlims
-              'start_point': 0, #60*1000*3,
-              'recursive_start_point': 384, #60*1000*3 + 1000*15,
-              'end_point': 384, #60*1000*3 + 1000*10 + 1000*15,
-              }
+              'experiment_name':'toolwear',
+              'save_interval':1,
+              'save_fig': True,
+              'problem_type':'many-to-one'}
+
+    hyperparams = {'lr': 0.001,
+                   'weight_decay': 0.,
+                   'epoch': 10000,
+                   'train_batch_size': 640,
+                   'test_batch_size': 640,
+                   'seq_len': 8000,
+    'input_size': 1,
+    'hidden_size': 10,
+    'num_layers': 1,
+                   'output_size':1}
 
     torch.manual_seed(params['seed'])
     torch.cuda.manual_seed(params['seed'])
     np.random.seed(params['seed'])
 
-    scaler = Standardizer()
+    dataset = ToolwearTorchDataset(seq_length=hyperparams['seq_len'], train_split=.8,
+                                   cut_lim=(0.65, 0.66))
+    dataset.plot()
+    model = LSTM(input_size=hyperparams['input_size'], hidden_size=hyperparams['hidden_size'],
+                 output_size=hyperparams['output_size'], num_layers=hyperparams['num_layers'],
+                 batch_size=hyperparams['train_batch_size'],
+                 stateful=False,  hidden_reset_period=None,
+                 problem_type=params['problem_type'])
+    trainer = Trainer(model=model, dataset=dataset, hyperparams=hyperparams,
+                      params=params)
 
-
-    # ToolwearDataset.from_file(True, scaler=scaler,  params=params, hyperparams=hyperparams)
-    train_dataset = ToolwearTorchDataset.from_pickle(train=True, scaler=scaler, params=params, hyperparams=hyperparams)
-    test_dataset = ToolwearTorchDataset.from_pickle(train=False, scaler=scaler, params=params, hyperparams=hyperparams)
-
-    dataset = TimeSeriesDatasetWrapper(trainset=train_dataset,
-                                       testset=test_dataset)
-
-    model = RNNPredictor(rnn_type=hyperparams['model'],
-                         enc_inp_size=dataset.feature_dim,
-                         rnn_inp_size=hyperparams['emsize'],
-                         rnn_hid_size=hyperparams['nhid'],
-                         dec_out_size=dataset.feature_dim,
-                         nlayers=hyperparams['nlayers'],
-                         dropout=hyperparams['dropout'],
-                         tie_weights=hyperparams['tied'],
-                         res_connection=hyperparams['res_connection'])
-    trainer = RNNTrainer(model=model,
-                         dataset=dataset,
-                         hyperparams=hyperparams,
-                         params=params)
 
     trainer.fit()
 
-
-
-    # trainer.plot(epoch=1000, train=True)
-    # trainer.plot(epoch=1000, train=False)
