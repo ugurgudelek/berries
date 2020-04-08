@@ -24,7 +24,7 @@ class CNN(nn.Module):
         )
 
         self.classifier = nn.Sequential(
-            nn.Linear(in_features=50*4*4, out_features=100),
+            nn.Linear(in_features=3000950, out_features=100),
             nn.Linear(in_features=100, out_features=out_channels),
         )
 

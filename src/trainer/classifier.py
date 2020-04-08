@@ -2,7 +2,7 @@ __author__ = "Ugur Gudelek"
 __email__ = "ugurgudelek@gmail.com"
 
 import torch
-from torch.nn import CrossEntropyLoss
+from torch.nn import CrossEntropyLoss, BCEWithLogitsLoss
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 
@@ -19,7 +19,7 @@ class ClassifierTrainer:
     def __init__(self, model, dataset, hyperparams, params, optimizer=None, criterion=None, use_cuda=True):
         self.model = model
         self.dataset = dataset
-        self.criterion = criterion or CrossEntropyLoss()
+        self.criterion = criterion or BCEWithLogitsLoss()
         self.optimizer = optimizer or Adam(params=model.parameters(), lr=hyperparams['lr'])
         self.hyperparams = hyperparams
         self.params = params
@@ -33,8 +33,10 @@ class ClassifierTrainer:
         self.loader_kwargs = {'num_workers': 0, 'pin_memory': True} if self.use_cuda else {}
 
         self.train_loader = DataLoader(self.dataset.trainset, batch_size=self.hyperparams['train_batch_size'],
+                                       shuffle=self.hyperparams['train_shuffle'],
                                        **self.loader_kwargs)
         self.test_loader = DataLoader(self.dataset.testset, batch_size=self.hyperparams['test_batch_size'],
+                                      shuffle=self.hyperparams['test_shuffle'],
                                       **self.loader_kwargs)
 
         self.history = History()
@@ -60,8 +62,8 @@ class ClassifierTrainer:
                 print('\t'.join((
                     f"{'Train' if train else 'Test'}",
                     f"Epoch: {epoch} [{batch_ix * len(data)}/{len(loader.dataset)} ({100. * batch_ix / len(loader):.0f}%)]",
-                    f"Loss: {loss.item():.6f}",
-                    f"Acc: {self.accuracy(output, targets):.6f}",
+                    f"Batch Loss: {loss.item():.6f}",
+                    f"Batch Acc: {self.accuracy(output, targets)}",
                     # f"Proba: {self.proba(output)}",
                 )))
 
@@ -81,23 +83,31 @@ class ClassifierTrainer:
         # See what the scores are before training
         with torch.no_grad():
             for loss in self._on_epoch(train=False, epoch=0):
-                # print(loss)
                 pass
+
         for epoch in range(1, self.hyperparams['epoch']+1):
             for loss in self._on_epoch(train=True, epoch=epoch):
                 pass
             with torch.no_grad():
                 for loss in self._on_epoch(train=False, epoch=epoch):
-                    # print(loss)
                     pass
 
             self.history.plot(fpath=f"{self.params['result_path']}/{epoch}", show=False)
             self.history.plot(fpath=self.params['result_path'], show=False)
 
 
+    # @staticmethod
+    # def accuracy(output, targets):
+    #     return torch.mean((torch.argmax(output.detach(), dim=1) == targets).float()).item()
+
     @staticmethod
     def accuracy(output, targets):
-        return torch.mean((torch.argmax(output.detach(), dim=1) == targets).float()).item()
+        y_pred_tag = torch.round(torch.sigmoid(output))
+
+        correct_results_sum = (y_pred_tag == targets).sum().float()
+        acc = correct_results_sum / targets.shape[0]
+        acc = torch.round(acc * 100)
+        return acc.cpu().numpy()
 
     @staticmethod
     def proba(output):
