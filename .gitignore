@@ -3,6 +3,7 @@ experiments/*
 input/energy/*
 input/MNIST/*
 input/nyc_taxi/*
+src/libs/*
 
 *.pyc
 *.pth
@@ -13,3 +14,5 @@ input/nyc_taxi/*
 *.gif
 src/libs/PyTorchWavelets/
 *.npy
+*.egg
+*.h5
