@@ -113,8 +113,28 @@ class ClassifierTrainer:
     def proba(output):
         return torch.nn.functional.softmax(output.detach(), dim=1).cpu().numpy()
 
-    def predict(self, data=None):
-        pass
+    def predict(self, dataloader=None):
+        if dataloader is None :
+            dataloader = self.test_loader
+
+        outputs = list()
+        with torch.no_grad():
+            for batch_ix, (data, targets) in enumerate(dataloader):
+                output = self.model(data)
+                output = torch.nn.functional.softmax(output)
+                outputs.append(output.cpu().numpy())
+
+        return np.concatenate(outputs)
+
+
+
+
+
+
+
+
+
+
 
     def predict_log_proba(self):
         pass
@@ -127,8 +147,8 @@ class ClassifierTrainer:
             data = self.dataset.testset.data
         if targets is None:
             targets = self.dataset.testset.targets
-
-        output = self.model(data)
+        with torch.no_grad():
+            output = self.model(data)
         if kind == 'accuracy':
             return self.accuracy(output, targets)
         raise RuntimeError(f"{kind} is not recognized in available kinds.")
