@@ -120,8 +120,9 @@ class ClassifierTrainer:
         outputs = list()
         with torch.no_grad():
             for batch_ix, (data, targets) in enumerate(dataloader):
+                data, targets = data.to(self.device), targets.to(self.device)
                 output = self.model(data)
-                output = torch.nn.functional.softmax(output)
+                output = torch.round(torch.sigmoid(output))
                 outputs.append(output.cpu().numpy())
 
         return np.concatenate(outputs)

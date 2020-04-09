@@ -84,15 +84,18 @@ class ChatterImage(GenericDataset):
                 label = row['Label']
                 use = row['Used']
                 if use:
-                    slotname = filename.split('_')[1]
-                    # if slotname == 'kanal1' or slotname == 'kanal2' or slotname == 'kanal5' or slotname == 'kanal6':
-                    img_path = self.root/f'CNN-Inputs-Tlusty/{slotname}/{filename}'
-                    img = Image.open(img_path).convert('L')
-                    img = np.array(img)/255
-                    images.append(img)
-                    labels.append(label)
-                    slotnos.append(int(slotname[5:]))
-                    pbar.update(1)
+                    try:
+                        slotname = filename.split('_')[1]
+                        # if slotname == 'kanal1' or slotname == 'kanal2' or slotname == 'kanal5' or slotname == 'kanal6':
+                        img_path = self.root/f'CNN-Inputs-Tlusty/{slotname}/{filename}'
+                        img = Image.open(img_path).convert('L')
+                        img = np.array(img)/255
+                        images.append(img)
+                        labels.append(label)
+                        slotnos.append(int(slotname[5:]))
+                        pbar.update(1)
+                    except:
+                        pass
 
         return np.array(images, dtype=np.float32), np.array(labels, dtype=np.float32), np.array(slotnos)
 
