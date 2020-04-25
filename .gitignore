@@ -16,3 +16,5 @@ src/libs/PyTorchWavelets/
 *.npy
 *.egg
 *.h5
+*.lock
+*.dirlock
