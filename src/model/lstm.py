@@ -14,13 +14,17 @@ class LSTM(nn.Module):
     """
 
     def __init__(self, input_size, hidden_size, output_size=1,
-                 num_layers=2, batch_size=64, stateful=False, hidden_reset_period=None, problem_type='many-to-many'):
+                 num_layers=2, batch_size=64, aux_input_size=0,
+                 stateful=False,
+                 hidden_reset_period=None,
+                 problem_type='many-to-many'):
         super(LSTM, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.num_layers = num_layers
         self.batch_size = batch_size  # todo: check this
+        self.aux_input_size = aux_input_size
         self.problem_type = problem_type
 
         self.stateful = stateful  # todo: check this
@@ -49,7 +53,7 @@ class LSTM(nn.Module):
                             )
 
         # Define the output layer
-        self.classifier = nn.Sequential(nn.Linear(in_features=self.hidden_size,
+        self.classifier = nn.Sequential(nn.Linear(in_features=self.hidden_size+self.aux_input_size,
                                                   out_features=self.output_size),
                                         nn.Sigmoid())
 
@@ -107,7 +111,7 @@ class LSTM(nn.Module):
         # print(f"States reset on {self.step}")
         self.hidden = self._init_hidden(batch_size=batch_size)
 
-    def forward(self, x):
+    def forward(self, x, aux=None):
         """
         # required x shape: (batch_size, seq_len, input_size) because batch_first=True
         # required hidden shape:(num_layers * num_directions, batch_size, hidden_size)
@@ -138,8 +142,11 @@ class LSTM(nn.Module):
             # fc_out shape: [batch_size, seq_len, output_size]
 
         elif self.problem_type == 'many-to-one':
+            fc_in = last_seq_out
+            if aux is not None:  # concat aux data
+                fc_in = torch.cat((last_seq_out, aux), dim=1)
             # tensor containing the output features (h_t) from the last layer of the LSTM
-            fc_out = self.classifier(last_seq_out)
+            fc_out = self.classifier(fc_in)
 
         else:
             raise ValueError(f"Wrong 'problem_type':{self.problem_type}")

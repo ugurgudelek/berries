@@ -23,7 +23,7 @@ import plotly.express as px
 from ipywidgets import interactive, HBox, VBox, widgets, Output, interact, interact_manual, Layout, Box
 # py.init_notebook_mode(connected=True)
 import matplotlib
-matplotlib.use('Agg')
+# matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.collections import PolyCollection, LineCollection
@@ -33,7 +33,7 @@ import matplotlib.ticker as ticker
 
 # Deep learning libraries
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, ConcatDataset
 from torchvision import transforms
 
 # Local libraries
@@ -46,6 +46,9 @@ import itertools
 
 
 # from utils.plot_utils import camera_ready_matplotlib_style
+
+
+from PIL import Image
 
 
 class ExcelData:
@@ -1035,6 +1038,122 @@ class ToolwearTorchDataset:
         return self.scaler.inverse_transform(x)
 
 
+class ToolwearWaveletConcatDataset:
+    def __init__(self, seq_len):
+        self.seq_len = seq_len
+
+        self.train_datasets = list()
+        for cutno in [14,15,16]:
+            dataset = ToolwearWaveletDataset(cutno=cutno, seq_len=self.seq_len)
+            self.train_datasets.append(dataset.trainset)
+
+        self.trainset = ConcatDataset(self.train_datasets)
+        self.testset = ToolwearWaveletDataset(cutno=13, seq_len=self.seq_len).trainset
+
+class ToolwearWaveletDataset:
+
+    def __init__(self, cutno, seq_len):
+        self.cutno = cutno
+        self.seq_len = seq_len
+
+        excel = ExcelData().excel
+        attr = excel.loc[(excel['cut_no'] == self.cutno) & (excel['kind'] == 'acc')]
+        self.attr = self.attr_fix(attr.copy())
+
+        img_path = Path(f"C:/Users/ugur/Documents/GitHub/ai-framework/src/figures/{self.cutno}/wavelet_{self.cutno}_log_thin.png")
+        cut_path = Path("D:/YandexDisk/machining/data/raw/verilerin_ayiklanmasi.xlsx")
+
+        timeseries = self.read_wavelet_image(img_path)
+        timeseries = self.add_toolwear(timeseries)
+
+        timeseries = self.interp_toolwear(timeseries)
+
+        self.timeseries = self.cut_data(timeseries, cut_path=cut_path)
+        aux = [(self.attr['cutting_speed'].values[0] - 73.)/(73.)]
+
+
+        data = self.timeseries.iloc[:, :-1].values
+        targets = self.timeseries.iloc[:, -1].values
+
+        # normalize targets
+        targets = (targets - targets.min()) / (targets.max() - targets.min())
+
+        self.trainset = ToolwearWaveletInnerDataset(data=data, targets=targets,
+                                                    seq_len=self.seq_len,
+                                                    aux=aux)
+        self.testset = ToolwearWaveletInnerDataset(data=data, targets=targets,
+                                                   seq_len=self.seq_len,
+                                                   aux=aux)
+
+    def read_wavelet_image(self, img_path):
+        img = Image.open(img_path).convert('L')
+        img = np.array(img) / 255
+
+        return pd.DataFrame(img.T)
+
+    def attr_fix(self, attr):
+        attr['feed_rate'] = attr['feed_per_tooth'] * attr['n_flute'] * attr['spindle_speed']
+        attr['cutting_sec'] = 60 * attr['cutting_length'] / attr['feed_rate']
+        attr['cutting_sec'] = attr['cutting_sec'].apply(np.floor)
+        return attr
+
+    def add_toolwear(self, timeseries):
+        cutting_sec = self.attr['cutting_sec'].values
+        toolwear = self.attr['toolwear'].values
+        timeseries['toolwear'] = np.nan
+        # add toolwear 0 for proper interpolation
+        timeseries.loc[0, 'toolwear'] = 0.
+        timeseries.loc[cutting_sec, 'toolwear'] = toolwear
+        return timeseries
+
+    def interp_toolwear(self, timeseries):
+        y = timeseries['toolwear'].dropna()
+        x = timeseries.loc[y.index, :].index
+
+        interp_f = interpolate.interp1d(x.values, y.values,
+                                        kind='cubic',
+                                        fill_value="extrapolate")
+
+        new_x = timeseries.index.values
+        timeseries['toolwear'] = interp_f(new_x)
+        return timeseries
+
+    def cut_data(self, ts, cut_path):
+        cut_excel = pd.read_excel(cut_path, sheet_name='cut')
+        cut_excel = cut_excel.loc[cut_excel['cutno'] == self.cutno]
+
+        for i, (_, start, stop) in cut_excel.iterrows():
+            ts.loc[start:stop] = np.nan
+
+        ts = ts.dropna(axis=0).reset_index(drop=True)
+        return ts
+
+    def plot(self):
+        # x, y = self.trainset[:1000]
+        # y = y[:, -1, :]
+
+        plt.plot(self.trainset.labels, label='y')
+        plt.legend()
+        plt.show()
+
+class ToolwearWaveletInnerDataset(Dataset):
+    def __init__(self, data, targets, aux, seq_len=60):
+        self.data = data
+        self.labels = targets
+        self.seq_len = seq_len
+        self.aux = aux
+
+    def __getitem__(self, ix):
+        seq, target = self.data[ix:ix+self.seq_len], self.labels[ix+self.seq_len]
+        return (torch.from_numpy(seq), # data
+               torch.from_numpy(np.array([target], dtype=float)), # label
+                torch.from_numpy(np.array(self.aux, dtype=float)), # aux
+                )
+
+    def __len__(self):
+        return len(self.data)-self.seq_len
+
+
 def toolwear_class_usage():
     # ======= DATA READ ==========
     NUM_CYCLE = 200
@@ -1104,8 +1223,5 @@ def costly_func(subset):
 
 
 if __name__ == "__main__":
-    for cut_no in range(14, 17):
-        vib = Toolwear.batch_read(fpath=Path('D:/YandexDisk/machining/data/raw'),
-                                  cut_no=cut_no, kind='acc', n_cycle=200)
-
-        vib.static_plot(save=True, fpath=f'results/{cut_no}')
+    dataset = ToolwearWaveletDataset(seq_len=60)
+    print(dataset)

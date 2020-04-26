@@ -23,7 +23,9 @@ class Trainer:
 
         self.hyperparams = hyperparams
         self.params = params
+
         self.device = torch.device('cuda:0' if self.params['device'] == 'cuda' else 'cpu')
+
         self.model = model.to(self.device).double()
         self.dataset = dataset
         self.criterion = criterion or MSELoss()
@@ -42,7 +44,7 @@ class Trainer:
         self.test_loader = DataLoader(self.dataset.testset,
                                       batch_size=self.hyperparams['test_batch_size'],
                                       drop_last=True,
-                                      shuffle=True)
+                                      shuffle=False)
 
         # self.test_loader = Dataloader(self.dataset.testset,
         #                               batch_size=self.hyperparams['test_batch_size'],
@@ -51,6 +53,9 @@ class Trainer:
 
         self.experiment_fpath = Path(f'../experiments/{self.params["experiment_name"]}')
         self.experiment_fpath.mkdir(parents=True, exist_ok=True)
+
+        # Init history to log loss or something
+        self.history = History()
 
         # Resume or not
         if self.params['resume'] or self.params['pretrained']:
@@ -66,8 +71,7 @@ class Trainer:
             self.start_epoch = 1
             print("=> Start training from scratch")
 
-        # Init history to log loss or something
-        self.history = History()
+
 
     def _validate_hyperparams(self, hyperparams):
         raise NotImplementedError()
@@ -77,56 +81,56 @@ class Trainer:
 
     def _on_epoch(self, epoch, train=True):
 
-        # Disable gradient calculations if validation or test period is active.
-        with_grad_or_not = torch.enable_grad if train else torch.no_grad
         loader = self.train_loader if train else self.test_loader
 
         self.model.train(train)  # enable or disable dropout
-        with with_grad_or_not():
 
-            logs = dict()
-            logs['loss'] = list()
-            for batch_ix, (data, targets) in enumerate(loader):
+        logs = dict()
+        logs['loss'] = list()
+        for batch_ix, (data, targets, aux) in enumerate(loader):
 
-                data, targets = data.to(self.device), targets.to(self.device)
+            data, targets = data.to(self.device), targets.to(self.device)
+            aux = aux.to(self.device)
 
-                # Starting each batch, we detach the hidden state from how it was previously produced.
-                # If we didn't, the model would try backpropagating all the way to start of the dataset.
-                # self.model.reset_states()
-                # hidden_ = self.model.repackage_hidden(hidden)
+            # Starting each batch, we detach the hidden state from how it was previously produced.
+            # If we didn't, the model would try backpropagating all the way to start of the dataset.
+            # self.model.reset_states()
+            # hidden_ = self.model.repackage_hidden(hidden)
+
+
+            # Loss
+            # todo: add loss calculations. you can look into encoder_decoder_rnntrainer.py for more info.
+            output = self.model(data, aux)
+            loss = self.criterion(output, targets)
+
+            if train:
                 self.optimizer.zero_grad()  # Pytorch accumulates gradients.
+                loss.backward()
+                # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
+                if self.hyperparams.get('clip', None):  # if clip is given
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.hyperparams['clip'])
+                self.optimizer.step()
 
-                # Loss
-                # todo: add loss calculations. you can look into encoder_decoder_rnntrainer.py for more info.
-                output = self.model(data)
-                loss = self.criterion(output, targets)
-
-                if train:
-                    loss.backward()
-                    # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
-                    if self.hyperparams.get('clip', None):  # if clip is given
-                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.hyperparams['clip'])
-                    self.optimizer.step()
-
-                logs['loss'].append(loss.item())
-
+            if batch_ix % self.params['log_interval'] == 0:
                 print('\t'.join((
-                    f"{'[  Training]' if train else '[Validation]'}",
-                    f"[{batch_ix * len(data)}/{len(loader.dataset)} ({100. * batch_ix / len(loader):.0f} % )]",
-                    f"Loss: {np.array(logs['loss']).mean().item():5.4f}"
+                    f"{'Train' if train else 'Test'}",
+                    f"Epoch: {epoch} [{batch_ix * len(data)}/{len(loader.dataset)} ({100. * batch_ix / len(loader):.0f}%)]",
+                    f"Batch Loss: {loss.item():.6f}",
                 )))
 
-                self.plot_small_data(x=data, y=targets)
 
-            self.history.append(phase='train' if train else 'test',
-                                log_dict={'epoch': epoch,
-                                          'loss': np.mean(logs['loss']),
-                                          })
+            logs['loss'].append(loss.item())
+
+            yield loss
+
+            # self.plot_small_data(x=data, y=targets)
+
+        self.history.append(phase='train' if train else 'test',
+                            log_dict={'epoch': epoch,
+                                      'loss': np.mean(logs['loss']),
+                                      })
 
         self.model.train(not train)
-
-        print(f"[E. {'Training' if train else 'Validation'}] Epoch {epoch:3d} || Loss:{np.mean(logs['loss']):5.4f} |")
-        return np.mean(logs['loss'])
 
     def fit(self):
 
@@ -135,22 +139,24 @@ class Trainer:
 
         # At any point you can hit Ctrl + C to break out of training early.
         try:
-            # # See what the scores are before training
+            # # # See what the scores are before training
             # with torch.no_grad():
             #     for loss in self._on_epoch(train=False, epoch=0):
             #         pass
 
             for epoch in range(self.start_epoch, self.hyperparams['epoch'] + 1):
-                train_loss = self._on_epoch(train=True, epoch=epoch)
-                print(f'[E.   Training] Epoch {epoch:3d} || Loss:{train_loss:5.4f} |')
-                val_loss = self._on_epoch(train=False, epoch=epoch)
-                print(f'[E. Validation] Epoch {epoch:3d} || Loss:{val_loss:5.4f} |')
+                # Training loop
+                for loss in self._on_epoch(train=True, epoch=epoch):
+                    pass
+                # Validation loop
+                with torch.no_grad():
+                    for loss in self._on_epoch(train=False, epoch=epoch):
+                        pass
 
                 if epoch % self.params['save_interval'] == 0:
                     if self.params['save_fig']:
                         # self.callbacks(epoch=epoch)
                         self.save_checkpoint(epoch=epoch)
-
                         self.learning_curve()
 
 
@@ -169,7 +175,8 @@ class Trainer:
                     'model_state_dict': self.model.state_dict(),
                     'optimizer_state_dict': self.optimizer.state_dict(),
                     'hyperparams': self.hyperparams,
-                    'params': self.params},
+                    'params': self.params,
+                    'history': self.history},
                    self.cpt_fpath / 'model-optim.pth')
 
     def load_checkpoint(self, epoch):  # todo: move into generic model
@@ -185,6 +192,7 @@ class Trainer:
         self.start_epoch = checkpoint['epoch'] + 1
         # self.hyperparams = checkpoint['hyperparams']
         # self.params = checkpoint['params']
+        self.history = checkpoint['history']
 
         if self.device.type == 'cuda':
             for state in self.optimizer.state.values():
@@ -201,6 +209,20 @@ class Trainer:
         output = output.detach().cpu().numpy()
         self.model.train(True)
         return output
+
+    def predict_loader(self, dataloader=None):
+        if dataloader is None :
+            dataloader = self.test_loader
+
+        outputs = list()
+        with torch.no_grad():
+            for batch_ix, (data, targets, aux) in enumerate(dataloader):
+                data, targets = data.to(self.device), targets.to(self.device)
+                aux = aux.to(self.device)
+                output = self.model(data, aux)
+                outputs.append(output.detach().cpu().numpy())
+
+        return np.concatenate(outputs)
 
     def plot_small_data(self, x, y):
 
