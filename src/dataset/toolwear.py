@@ -20,7 +20,7 @@ from plotly.subplots import make_subplots
 import plotly.io as pio
 import plotly.tools as tls
 import plotly.express as px
-from ipywidgets import interactive, HBox, VBox, widgets, Output, interact, interact_manual, Layout, Box
+import ipywidgets
 # py.init_notebook_mode(connected=True)
 import matplotlib
 # matplotlib.use('Agg')
@@ -44,27 +44,61 @@ import gc
 import multiprocessing
 import itertools
 
-
 # from utils.plot_utils import camera_ready_matplotlib_style
 
 
 from PIL import Image
+from datetime import datetime
+
+# dask
+import dask
+import dask.dataframe as dd
+import dask.array as da
+
+import datashader as ds
+from datashader import transfer_functions as tf
+
+import colorcet
+import holoviews as hv
+from holoviews import opts
+from holoviews.operation.datashader import datashade, rasterize, shade
+
+import xarray as xr
+
+
+# DASK WAVELET CALCULATIONS
+# Fake wavelet calculation
+@dask.delayed
+def fake_cwt_iter(signal, scales, wavelet, method='conv'):
+    return np.random.rand(N - 1).astype(np.float32)
+
+
+# Wavelet costly part
+@dask.delayed
+def cwt_cost(signal, int_psi_scale, scale):
+    conv = np.convolve(signal, int_psi_scale, mode='same')
+    conv = - np.sqrt(scale) * np.diff(conv)
+    return np.power(np.abs(conv), 2)
 
 
 class ExcelData:
     """
     In order to read cutting dataset excel
     """
-    EXCEL_PATH = Path('D:/YandexDisk/machining/data/raw/Experimental Data Sheet.xlsx')
 
-    def __init__(self):
-        self.excel = pd.read_excel(self.EXCEL_PATH)
+    def __init__(self, root):
+        self.root = root
+        self.excel = pd.read_excel(self.root / 'Experimental Data Sheet.xlsx')
         self.excel = self.excel.drop([0], axis=0).reset_index(drop=True)  # drop mm|m/min like that row
 
     def get_attribute(self, cut_no, slot_no, kind):
         subset = self.excel.loc[
             (self.excel['cut_no'] == cut_no) & (self.excel['slot_no'] == slot_no) & (self.excel['kind'] == kind)]
         attr = subset.iloc[0].to_dict()
+
+        attr['feed_rate'] = attr['feed_per_tooth'] * attr['n_flute'] * attr['spindle_speed']
+        attr['cutting_sec'] = 60 * attr['cutting_length'] / attr['feed_rate']
+        attr['cutting_sec'] = np.floor(attr['cutting_sec'])
         return attr
 
 
@@ -79,42 +113,74 @@ class Toolwear:
     """
     PLOT_TEMPLATE = 'plotly_white'
 
-    def __init__(self, path, attributes, n_cycle=3, start_sec=3, fake=False, add_noise=False):
-        self.path = path
+    def __init__(self, root, attributes, n_cycle=3, start_sec=3, fake=False, add_noise=False):
+
+        self.root = root
         self.attributes = attributes
+
         self.n_cycle = n_cycle
         self.start_sec = start_sec
         self.add_noise = add_noise
+        self.interpolated = False
 
-        if not fake:
-            # read raw tdms data
-            self.reading: pd.DataFrame = TdmsFile(path).as_dataframe()
-            self.reading = self.reading.rename(
-                columns={self.reading.columns[0]: "data"})
+        self.reading = None
+        self.description = None
 
-            self.reading['raw_data'] = self.reading['data'].copy()
+        self.wavelet_path = None
+        self.scales = None
+        self.wavelet_xarr = None
 
-            # add time column
-            self.reading['time'] = np.arange(self.__len__()) * self.T
+        # add ref signal: signal_freq*2 Hz
+        # self.reading['data'] += 0.01*np.sin(2*np.pi*self.expected_tooth_freq*2*self.reading['time'])
 
-            # add cutting_length column
-            self.reading['cutting_length'] = np.nan
-            self.reading['cutting_length'].iloc[-1] = self.attributes['cutting_length']
-
-            # add toolwear column
-            self.reading['toolwear'] = np.nan
-            self.reading['toolwear'].iloc[-1] = self.attributes['toolwear']
-
-            # add ref signal: signal_freq*2 Hz
-            # self.reading['data'] += 0.01*np.sin(2*np.pi*self.expected_tooth_freq*2*self.reading['time'])
-
-            # add ref signal: signal_freq*0.5 Hz
-            # self.reading['data'] += 0.005*np.sin(2*np.pi*self.expected_tooth_freq*0.5*self.reading['time'])
-        else:
-            self.create_fake_data()
+        # add ref signal: signal_freq*0.5 Hz
+        # self.reading['data'] += 0.005*np.sin(2*np.pi*self.expected_tooth_freq*0.5*self.reading['time'])
 
         # create aggregation columns
         # self.apply_aggregation()
+
+    @property
+    def rpm(self):
+        return self.attributes['spindle_speed']
+
+    @property
+    def n_flute(self):
+        return self.attributes['n_flute']
+
+    @property
+    def sampling_freq(self):
+        return self.attributes['sampling_freq']
+
+    @property
+    def sampling_period(self):
+        return 1 / self.attributes['sampling_freq']
+
+    @property
+    def T(self):
+        """
+        T: interval : 1/Fs
+        :return:
+        """
+        return 1 / self.sampling_freq
+
+    @property
+    def expected_tooth_freq(self):
+        return self.n_flute * self.rpm / 60
+
+    @property
+    def dt_tooth(self):
+        return 1 / self.expected_tooth_freq
+
+    @property
+    def num_points_in_one_period(self):
+        """
+        Return the number of data points for 1 revolution.
+        """
+        return int(self.sampling_freq / (self.rpm / 60))
+
+    @property
+    def num_points_per_tooth(self):
+        return self.num_points_in_one_period // self.n_flute
 
     def create_fake_data(self):
         raise Exception("You should fix self.rpm line!")
@@ -150,18 +216,6 @@ class Toolwear:
 
         if self.add_noise:
             self.reading['data'] += np.random.randn(self.reading.shape[0])
-
-    @property
-    def T(self):
-        """
-        T: interval : 1/Fs
-        :return:
-        """
-        return 1 / self.sampling_freq
-
-    @property
-    def dt_tooth(self):
-        return 1 / ((self.rpm / 60) * self.n_flute)
 
     def second2index(self, sec):
         return int(sec * self.sampling_freq)
@@ -363,10 +417,7 @@ class Toolwear:
     def __len__(self):
         return self.reading.shape[0]
 
-    @property
-    def expected_tooth_freq(self):
-        return self.n_flute * self.rpm / 60
-
+    #  PLOT METHODS
     @staticmethod
     def _make_trace(data, colname, mode='lines'):
         return go.Scattergl(name=colname,
@@ -444,17 +495,19 @@ class Toolwear:
         def update_subset(start_sec):
             subset = self.make_subset_after(sec=start_sec)
 
-            @interact(xaxis_range=widgets.FloatRangeSlider(min=subset['time'].iloc[0],
-                                                           max=subset['time'].iloc[-1],
-                                                           step=(
-                                                                        subset['time'].iloc[-1] - subset['time'].iloc[
-                                                                    0]) / self.sampling_freq,
-                                                           description='Time',
-                                                           continuous_update=False,
-                                                           readout=True,
-                                                           readout_format='.3f',
-                                                           layout=Layout(align_items='center',
-                                                                         width='90%', height='80px')))
+            @ipywidgets.interact(xaxis_range=ipywidgets.widgets.FloatRangeSlider(min=subset['time'].iloc[0],
+                                                                                 max=subset['time'].iloc[-1],
+                                                                                 step=(
+                                                                                              subset['time'].iloc[-1] -
+                                                                                              subset['time'].iloc[
+                                                                                                  0]) / self.sampling_freq,
+                                                                                 description='Time',
+                                                                                 continuous_update=False,
+                                                                                 readout=True,
+                                                                                 readout_format='.3f',
+                                                                                 layout=ipywidgets.Layout(
+                                                                                     align_items='center',
+                                                                                     width='90%', height='80px')))
             def update_plot(xaxis_range):
                 if len(fig.data) <= 3:
                     return
@@ -496,29 +549,98 @@ class Toolwear:
         #                                                                               readout=True,
         #                                                                               readout_format='d'))
 
-        control_widget = interactive(update_subset,
-                                     start_sec=widgets.BoundedFloatText(value=subset['time'].iloc[0],  # means start_sec
-                                                                        min=self.reading['time'].iloc[0],
-                                                                        max=self.reading['time'].iloc[-1],
-                                                                        step=0.5,
-                                                                        description='Start Second:',
-                                                                        disabled=False,
-                                                                        layout=Layout(align_items='center',
-                                                                                      width='50%',
-                                                                                      )
-                                                                        ))
+        control_widget = ipywidgets.interactive(update_subset,
+                                                start_sec=ipywidgets.widgets.BoundedFloatText(
+                                                    value=subset['time'].iloc[0],  # means start_sec
+                                                    min=self.reading['time'].iloc[0],
+                                                    max=self.reading['time'].iloc[-1],
+                                                    step=0.5,
+                                                    description='Start Second:',
+                                                    disabled=False,
+                                                    layout=ipywidgets.Layout(align_items='center',
+                                                                             width='50%',
+                                                                             )
+                                                ))
 
-        form = Box((control_widget, fig),
-                   layout=Layout(display='flex',
-                                 flex_flow='column',
-                                 border='solid 2px',
-                                 align_items='stretch',
-                                 width='100%'))
+        form = ipywidgets.Box((control_widget, fig),
+                              layout=ipywidgets.Layout(display='flex',
+                                                       flex_flow='column',
+                                                       border='solid 2px',
+                                                       align_items='stretch',
+                                                       width='100%'))
 
         if save:
             self.save_fig(fig, suffix='signal', kind='plotly')
         # if plot:
         # display(form)
+
+    # @camera_ready_matplotlib_style
+    def plot_3d(self, subsets, kind, plot=True):
+        """
+        :param subsets: should be list containing subsets
+        :param plot:
+        :return:
+        """
+
+        measurement_points = list()
+        rep = list()
+        zmin, zmax = None, None
+
+        for i, subset in enumerate(subsets):
+            if kind == 'fft':
+                fft_data, fft_freqs = self.fft(data=subset, plot=False, save=False)
+                x = fft_freqs
+                y = fft_data
+                xlabel = 'Frequencies [Hz]'
+                ylabel = 'Measurement Point'
+                zlabel = 'Amplitude'
+                xlim = (0, 2500)
+
+
+
+            elif kind == 'signal':
+                y = subset['data'].values
+                x = np.arange(0, y.shape[0])
+                xlabel = 'Time'
+                ylabel = 'Measurement Point'
+                zlabel = 'Amplitude'
+                xlim = (x.min(), x.max())
+
+            else:
+                raise NotImplementedError(f"{kind} not implemented for 3d plot.")
+
+            if zmax is not None:
+                if zmax < y.max():
+                    y.max()
+
+            zmax = y.max() if zmax is None or zmax < y.max() else zmax
+            zmin = y.min() if zmin is None or zmin > y.min() else zmin
+
+            measurement_points.append(subset['time'].iloc[0])
+            rep.append(list(zip(x, y)))
+
+        fig = plt.figure()
+        ax = fig.gca(projection='3d')
+        poly = LineCollection(rep)
+        poly.set_alpha(0.7)
+
+        zs = measurement_points
+        ax.add_collection3d(poly, zs=zs, zdir='y')
+
+        ax.set_xlabel(xlabel)
+        ax.set_xlim3d(*xlim)
+        ax.set_ylabel(ylabel)
+        ax.set_ylim3d(min(zs), max(zs))
+        ax.set_zlabel(zlabel)
+        if zmax == 0:
+            raise ValueError('zmax should be higher than 0.')
+        ax.set_zlim3d(zmin, zmax)
+        return ax
+
+    def plot_toolwear(self):
+        plt.plot(self.reading['cutting_length'], self.reading['toolwear'])
+        plt.xlabel('Cutting Length')
+        plt.ylabel('Toolwear')
 
     def save_fig(self, fig, suffix, kind='plotly', fpath=None):
         # path : 'D:/machining/wear_data/raw/1/acc7000.tdms'
@@ -632,17 +754,6 @@ class Toolwear:
         if plot:
             fig.show()
 
-    @property
-    def num_points_in_one_period(self):
-        """
-        Return the number of data points for 1 revolution.
-        """
-        return int(self.sampling_freq / (self.rpm / 60))
-
-    @property
-    def num_points_per_tooth(self):
-        return self.num_points_in_one_period // self.n_flute
-
     @staticmethod
     def butter_lowpass_filter(data, cutoff, fs, order=5):
         # butter_lowpass
@@ -654,11 +765,12 @@ class Toolwear:
 
     @staticmethod
     def wavelet(subset, wavelet='cmor6-1.5',
-                plot_func='own',
+                plot_func='own',  # plot_func can be 'lib' to use more robust scaleogram plot
                 fpath='wavelet-results',
                 cwt_save=True,
                 plot=True,
-                ):  # plot_func can be 'lib' to use more robust scaleogram plot
+                clim=None,
+                ):
         """
         X-axis: time
         Y-axis: scale - The scale correspond to the signal periodicity to which the transform is sentitive to.
@@ -720,11 +832,11 @@ class Toolwear:
 
             elif plot_func == "lib":
                 scg.cws(cwt,
-                         spectrum='power',
-                         figsize=(12, 6),
-                         yscale='log',
-                         ylabel="Period [seconds]",
-                         xlabel='Time [seconds]',
+                        spectrum='power',
+                        figsize=(12, 6),
+                        yscale='log',
+                        ylabel="Period [seconds]",
+                        xlabel='Time [seconds]',
                         ax=axes[0, 0])
 
                 """
@@ -773,8 +885,9 @@ class Toolwear:
             plt.savefig(f"{fpath}/figures/{output_filename}.jpg")
             plt.close()
 
+        return cwt
 
-
+    # END OF PLOT METHODS
 
     def append(self, other):
 
@@ -804,23 +917,48 @@ class Toolwear:
                     self.attributes[attr_name] = [attr_val, other.attributes[attr_name]]
                 # else continue - if they are same value, no need to do anything           
 
-        # UPDATE PATH
-        # todo: make it correct.
-        self.path = Path(os.path.commonpath((self.path, other.path)))
+    def fix_time(self):
+        self.reading['time'] = np.arange(self.__len__()) * self.T
+        self.reading['time'] = self.reading['time'].astype(np.float32)
+
+    def raw_tdms_data(self, tdms_path):
+        reading: pd.DataFrame = TdmsFile(tdms_path).as_dataframe()
+        reading = reading.rename(
+            columns={reading.columns[0]: "data"})
+
+        reading['data'] = reading['data'].astype(np.float32)
+
+        # add time column
+        reading['time'] = np.arange(len(reading)) * self.T
+        reading['time'] = reading['time'].astype(np.float32)
+
+        # add cutting_length column
+        reading['cutting_length'] = self.attributes['cutting_length']
+        reading['cutting_length'] = reading['cutting_length'].astype(np.float32)
+
+        # add toolwear column
+        reading['toolwear'] = self.attributes['toolwear']
+        reading['toolwear'] = reading['toolwear'].astype(np.float32)
+
+        return reading
 
     @staticmethod
-    def batch_read(fpath, cut_no, kind, n_cycle, interpolate=True):
+    def raw_batch_read(root, cut_no, kind, n_cycle):
 
         # read excel file for attributes
-        exceldata = ExcelData()
+        exceldata = ExcelData(root=root)
 
         vib = None
-        tdms_glob = list((fpath / str(cut_no)).glob(f'{kind}*.tdms'))
+        tdms_glob = list((root / f'raw/{cut_no}').glob(f'{kind}*.tdms'))
         with tqdm(total=len(tdms_glob), desc='Batch File Read') as pbar:
-            for slot_no, path in enumerate(tdms_glob, start=1):
-                vib_current = Toolwear(path=path,
-                                       n_cycle=n_cycle,
-                                       attributes=exceldata.get_attribute(cut_no=cut_no, slot_no=slot_no, kind=kind))
+            for slot_no, tdms_path in enumerate(tdms_glob, start=1):
+                vib_current = Toolwear(root=root,
+                                       attributes=exceldata.get_attribute(cut_no=cut_no,
+                                                                          slot_no=slot_no,
+                                                                          kind=kind),
+                                       n_cycle=n_cycle)
+
+                vib_current.reading = vib_current.raw_tdms_data(tdms_path=tdms_path)
 
                 if vib is None:
                     vib = vib_current
@@ -829,22 +967,70 @@ class Toolwear:
 
                 pbar.update(1)
 
-        if interpolate:
-            vib.interpolate('cutting_length')
-            vib.interpolate('toolwear')
+        # cut nan-valid data
+        cut_excel = pd.read_excel(root / "verilerin_ayiklanmasi.xlsx", sheet_name='cut')
+        cut_excel = cut_excel.loc[cut_excel['cutno'] == cut_no]
+
+        for i, (_, start, stop) in cut_excel.iterrows():
+            if stop == -1:
+                stop = len(vib.reading)
+            vib.reading.iloc[vib.second2index(start):vib.second2index(stop)] = np.nan
+        vib.reading = vib.reading.dropna(axis=0).reset_index(drop=True)
+
+        # fix time-index before interpolating
+        # bacause it uses 'time' index
+        vib.fix_time()
+
+        # custom interpolation
+        vib.interpolate('cutting_length')
+        vib.interpolate('toolwear')
+        vib.interpolated = True
+
+        # calculate dataset description
+        vib.description = vib.reading.describe()
+
+        # save reading to parquet
+        vib.to_parquet()
         return vib
 
-    @property
-    def rpm(self):
-        return self.attributes['spindle_speed']
+    @staticmethod
+    def from_parquet(root, cut_no):
+        parquet_path = root / f'parquet/{cut_no}'
+        with open(parquet_path / 'attributes.pickle', 'rb') as f:
+            attributes = pickle.load(f)
 
-    @property
-    def n_flute(self):
-        return self.attributes['n_flute']
+        with open(parquet_path / 'description.pickle', 'rb') as f:
+            description = pickle.load(f)
 
-    @property
-    def sampling_freq(self):
-        return self.attributes['sampling_freq']
+        vib = Toolwear(root=root,
+                       attributes=attributes)
+        vib.reading = dd.read_parquet(parquet_path)
+        vib.description = description
+
+        wavelet_path = root / f'wavelet/{cut_no}'
+        if os.path.exists(wavelet_path):
+            try:
+                vib.wavelet_path = wavelet_path
+                vib.wavelet_description = pd.read_csv(wavelet_path / 'desc.csv')
+                vib.wavelet_image = Toolwear.read_wavelet_image(wavelet_path / f'wavelet_{cut_no}_log_thin.png')
+                vib.wavelet_label = pd.read_csv(wavelet_path / 'label.csv')['label'].values
+                # toolwear = vib.reading['toolwear'].compute()
+                # inc = toolwear.shape[0] // vib.wavelet_image.shape[0]
+                # ix = np.array([i for i in range(0, toolwear.shape[0] - inc, inc)])
+                # vib.wavelet_label = toolwear[ix].values
+                # pd.Series(vib.wavelet_label, name='label').to_csv(wavelet_path/'label.csv')
+
+                vib.wavelet_aux = vib.attributes['cutting_speed']
+            except:
+                pass
+
+        return vib
+
+    @staticmethod
+    def read_wavelet_image(img_path):
+        img = Image.open(img_path).convert('L')
+        img = np.array(img) / 255
+        return pd.DataFrame(img.T)
 
     def interpolate(self, yname='cutting_length'):
         """ 
@@ -853,37 +1039,206 @@ class Toolwear:
 
         xname = 'time'
 
-        # quick fix for propor interpolation (to not go below 0)
-        self.reading[yname].iloc[0] = 0.
-        self.reading[xname].iloc[0] = 0.
+        # quick fix for proper interpolation (to not go below 0)
+        # below line extract proper interpolation points.
+        from itertools import accumulate
+
+        def successive2impulse(series):
+            # target_indexs = <class 'dict(index, value)'>: {   4633414: 4400.0, 5683199: 8800.0,
+            #                                                   4915199: 13200.0, 5299199: 17600.0,
+            #                                                   4671999: 22000.0, 4953599: 26400.0,
+            #                                                   0: 0}
+            counts = [(series == t).sum() for t in series.unique()]
+            indices = [0] + list(map(lambda x: x - 1, accumulate(counts)))
+            values = [0] + list(series.unique())
+
+            return indices, values
+
+        target_indices, target_values = successive2impulse(self.reading[yname])
+        self.reading[yname] = np.nan
+        self.reading.loc[target_indices, yname] = target_values
 
         y = self.reading[yname].dropna()
         x = self.reading.loc[y.index, xname]
 
-        interp_f = interpolate.interp1d(x.values, y.values, fill_value="extrapolate")
+        interp_f = interpolate.interp1d(x.values, y.values,
+                                        kind='cubic',
+                                        fill_value="extrapolate")
         new_x = self.reading[xname].values
         self.reading[yname] = interp_f(new_x)
 
-    def plot_toolwear(self):
-        plt.plot(self.reading['cutting_length'], self.reading['toolwear'])
-        plt.xlabel('Cutting Length')
-        plt.ylabel('Toolwear')
+    def to_parquet(self):
+        os.makedirs(self.root / 'parquet', exist_ok=True)
+        parquet_path = self.root / f'parquet/{int(self.attributes["cut_no"])}'
+        if os.path.exists(parquet_path):
+            raise Exception(f'{parquet_path} already exists.')
+        os.makedirs(parquet_path, exist_ok=True)
 
-    def to_pickle(self):
-        with open(f'{self.path}/data.pickle', 'wb') as f:
-            pickle.dump(self, f)
-    
-#     def to_csv(self, drop_cols=None):
-#         if drop_cols is not None:
-#             self.reading.drop(drop_cols).to_csv(self.path/'data.csv')
+        # save attributes to pickle
+        with open(parquet_path / 'attributes.pickle', 'wb') as f:
+            pickle.dump(self.attributes, f)
 
-    def to_torch_csv(self):
-        path = f'{self.path}/data-timeseries.csv'
-        self.reading.loc[int(self.reading.shape[0] * 0.):, ['data', 'toolwear']].to_csv(path, index=False)
+        # save description to pickle
+        with open(parquet_path / 'description.pickle', 'wb') as f:
+            pickle.dump(self.description, f)
+
+        chunksize = int(self.sampling_freq * 60)  # 60 sec chunksize
+        dataframe = dd.from_pandas(self.reading.loc[:, ['time', 'data', 'cutting_length', 'toolwear']],
+                                   chunksize=chunksize)
+        # dataframe.set_index('time', sorted=True)
+        print('Saving parquet file...')
+        dataframe.to_parquet(parquet_path, engine='pyarrow')
+
+    def plot_holoviews(self, plot_height, plot_width, xname=None, yname=None, save_path=None):
+        xname = xname or 'time'
+        yname = yname or 'data'
+
+        points = hv.Points(self.reading, kdims=[xname, yname], label=f'Cut {self.attributes["cut_no"]}')
+        img = shade(rasterize(points))
+
+        img.opts(height=plot_height, width=plot_width,
+                 backend='bokeh',
+                 fontsize={'title': 16, 'labels': 14, 'xticks': 12, 'yticks': 12})
+
+        return img
+
+    def plot_datashader(self, plot_height, plot_width, xname=None, yname=None, save_path=None):
+        xname = xname or 'time'
+        yname = yname or 'data'
+
+        canvas = ds.Canvas(plot_height=plot_height, plot_width=plot_width,
+                           x_range=None, y_range=None,
+                           x_axis_type='linear', y_axis_type='linear')
+        points = canvas.points(self.reading, xname, yname)
+
+        img = tf.shade(points, cmap=colorcet.bmy)
+        if save_path is not None:
+            img.to_pil().save(save_path)
+
+        # mpl_image = matplotlib.image.pil_to_array(img.to_pil())
+        # fig, ax = plt.subplots(figsize=(12, 6))
+        # ax.imshow(mpl_image)
+        return img
+
+    def dask_wavelet_init(self, scales=np.arange(1, 129), wavelet='cmor1-25'):
+
+        cut_no = self.attributes['cut_no']
+        self.wavelet_path = self.root / f'wavelet/{int(cut_no)}'
+        os.makedirs(self.wavelet_path, exist_ok=True)
+
+        dataframe = self.reading
+        signal = dataframe['data'].to_dask_array()
+        t = dataframe['time'].to_dask_array()
+
+        # make iterable signal delayed to construct dask pipeline
+        signal = dask.delayed(signal)
+        t = dask.delayed(t)
+
+        self.scales = scales
+
+        powers, frequencies = Toolwear.dask_wavelet_calculation(signal, scales, wavelet, self.sampling_period,
+                                                                shape=(self.description.loc['count', 'data'],))
+        powers = np.log(powers)
+
+        self.wavelet_xarr = xr.DataArray(powers,
+                                         dims=['scales', 'time'],
+                                         coords=[('scales', scales[::-1]),
+                                                 ('time', t.compute()[:-1])],
+                                         # last element dropped because costly function uses np.diff()
+                                         name='wavelet')
+
+        self.wavelet_xarr = self.wavelet_xarr.chunk({'scales': len(scales), 'time': 12800 * 60})
+        return self.wavelet_xarr
+
+    def dask_wavelet_description(self):
+
+        # generate dask dataframe
+        ddf = dd.concat([dd.from_dask_array(da.from_array(c)) for c in [self.wavelet_xarr.mean(dim='time'),
+                                                                        self.wavelet_xarr.std(dim='time'),
+                                                                        self.wavelet_xarr.max(dim='time'),
+                                                                        self.wavelet_xarr.min(dim='time')]], axis=1)
+        # name columns
+        ddf.columns = ['mean', 'std', 'max', 'min']
+
+        dff = ddf.compute()
+
+        dff.to_csv(self.wavelet_path / 'desc.csv')
+
+        return dff
+
+    def dask_wavelet_compute_and_plot(self):
+        cut_no = self.attributes['cut_no']
+        plot_height = len(self.scales)
+        plot_width = int(self.description.loc['count', 'data'] // self.sampling_period)
+        canvas = ds.Canvas(plot_height=plot_height, plot_width=plot_width)
+        # raster maps all input points to canvas pixels.
+        # computed because after this point, created array will be very small in size.
+        rastered = canvas.raster(self.wavelet_xarr).compute()
+
+        # ! quadmesh does not support dask objects.
+        # qmesh = canvas.quadmesh(xarr, x='time', y='scales', agg=ds.max('wavelet'))
+        wavelet_img = tf.shade(rastered, cmap=matplotlib.cm.jet, how='linear')
+        wavelet_img.to_pil().save(self.wavelet_path / f'wavelet_{cut_no}_log_thin.png')
+
+        timeseries_img = self.plot_datashader(plot_height=plot_height, plot_width=plot_width)
+        timeseries_img.to_pil().save(self.wavelet_path / f'timeseries_{cut_no}_thin.png')
+
+        return tf.Images(*[wavelet_img, timeseries_img]).cols(1)
 
     @staticmethod
-    def from_pickle(path):
-        return pickle.load(open(path, 'rb'))
+    def dask_wavelet_calculation(signal, scales, wavelet, sampling_period, shape):
+
+        wavelet = pywt.DiscreteContinuousWavelet(wavelet)
+        int_psi, x = pywt.integrate_wavelet(wavelet, precision=10)
+        int_psi = np.conj(int_psi)
+        # convert int_psi, x to the same precision as the data
+        int_psi = int_psi.astype(np.complex64)
+        x = x.astype(np.float32)
+
+        frequencies = pywt.scale2frequency(wavelet, scales, 10) / sampling_period
+
+        int_psi_scales = list()
+        for i, scale in enumerate(scales):
+            step = x[1] - x[0]
+            j = np.arange(scale * (x[-1] - x[0]) + 1) / (scale * step)
+            j = j.astype(int)  # floor
+            if j[-1] >= int_psi.size:
+                j = dask.delayed(np.extract)(j < int_psi.size, j)
+            int_psi_scale = int_psi[j][::-1]
+            int_psi_scales.append(int_psi_scale)
+
+        powers = list()
+        for i, int_psi_scale in enumerate(int_psi_scales):
+            # costly part called here!
+            power = cwt_cost(signal, int_psi_scale, scales[i])
+
+            # change it to array, we know shape of N
+            power = da.from_delayed(power, shape=(shape[0] - 1,), dtype=np.float32)
+            powers.append(power)
+        powers = da.stack(powers)
+        return powers, frequencies
+
+    def timeseries_matplotlib_image(self, datashader_img, start=0, stop=None):
+        stop = stop or self.description.loc['count', 'data']
+        mpl_image = matplotlib.image.pil_to_array(datashader_img.to_pil())
+        fig, ax = plt.subplots(figsize=(12, 6))
+
+        ts = start // self.sampling_freq  # tick start
+        te = stop // self.sampling_freq  # tick end
+        td = (te - ts) / 8  # tick interval
+        ax.set_xticklabels(np.arange(ts - td, te + 2 * td, td).astype(np.int))
+
+        _min = self.description.loc['min', 'data']
+        _max = self.description.loc['max', 'data']
+        ts = -max(abs(_min), _max)
+        te = max(abs(_min), _max)
+        td = 2 * te / 5
+
+        print(ts, te, td)
+        print([f"{2 * labelf:.2f}" for labelf in np.arange(ts - td, te + 2 * td, td)[::-1]])
+        ax.set_yticklabels([f"{2 * labelf:.2f}" for labelf in np.arange(ts - td, te + 2 * td, td)[::-1]])
+        ax.imshow(mpl_image)
+        return ax
 
     def __str__(self):
         return f"""
@@ -902,239 +1257,217 @@ class Toolwear:
                 
                 """
 
-    # @camera_ready_matplotlib_style
-    def plot_3d(self, subsets, kind, plot=True):
-        """
-        :param subsets: should be list containing subsets
-        :param plot:
-        :return:
-        """
 
-        measurement_points = list()
-        rep = list()
-        zmin, zmax = None, None
+class ToolwearBag:
+    def __init__(self, root):
+        self.root = root
+        self.root_parquet_path = self.root / 'parquet'
 
-        for i, subset in enumerate(subsets):
-            if kind == 'fft':
-                fft_data, fft_freqs = self.fft(data=subset, plot=False, save=False)
-                x = fft_freqs
-                y = fft_data
-                xlabel = 'Frequencies [Hz]'
-                ylabel = 'Measurement Point'
-                zlabel = 'Amplitude'
-                xlim = (0, 2500)
+        self.cut_nos = [int(file) for file in os.listdir(self.root_parquet_path) if
+                        os.path.isdir(self.root_parquet_path / file)]
 
+        self.parquet_paths = [self.root_parquet_path / str(cut_no) for cut_no in self.cut_nos]
 
+        self.datasets = {cut_no: Toolwear.from_parquet(root=self.root, cut_no=cut_no)
+                         for cut_no in self.cut_nos}
 
-            elif kind == 'signal':
-                y = subset['data'].values
-                x = np.arange(0, y.shape[0])
-                xlabel = 'Time'
-                ylabel = 'Measurement Point'
-                zlabel = 'Amplitude'
-                xlim = (x.min(), x.max())
+    def __getitem__(self, key):
+        return self.datasets[key]
 
-            else:
-                raise NotImplementedError(f"{kind} not implemented for 3d plot.")
+    def plot_toolwear(self):
+        fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(12, 6), squeeze=False)
+        for i, (cut_no, dataset) in enumerate(self.datasets.items()):
+            axes[0, 0].plot(dataset.attributes['cutting_length'], dataset.attributes['toolwear'], '-*',
+                            label=f'Cut No {cut_no} - Cutting Speed: {dataset.attributes["cutting_speed"]}')
+            axes[0, 0].legend()
 
-            if zmax is not None:
-                if zmax < y.max():
-                    y.max()
+    def plot_holoviews(self):
+        images = dict()
+        for i, (cut_no, dataset) in enumerate(self.datasets.items()):
+            img = dataset.plot_holoviews(plot_height=300, plot_width=800,
+                                         xname='cutting_length', yname='data')
 
-            zmax = y.max() if zmax is None or zmax < y.max() else zmax
-            zmin = y.min() if zmin is None or zmin > y.min() else zmin
+            images[cut_no] = img
 
-            measurement_points.append(subset['time'].iloc[0])
-            rep.append(list(zip(x, y)))
+        return (images[13] + images[14] + images[15] + images[16]).cols(1)
 
-        fig = plt.figure()
-        ax = fig.gca(projection='3d')
-        poly = LineCollection(rep)
-        poly.set_alpha(0.7)
+    def to_torch_wavelet_dataset(self, seq_len):
 
-        zs = measurement_points
-        ax.add_collection3d(poly, zs=zs, zdir='y')
+        images                  = {cut_no: dataset.wavelet_image        for cut_no, dataset in self.datasets.items() if cut_no != 14}
+        labels                  = {cut_no: dataset.wavelet_label        for cut_no, dataset in self.datasets.items() if cut_no != 14}
+        auxs                    = {cut_no: dataset.wavelet_aux          for cut_no, dataset in self.datasets.items() if cut_no != 14}
+        wavelet_descriptions    = {cut_no: dataset.wavelet_description  for cut_no, dataset in self.datasets.items() if cut_no != 14}
 
-        ax.set_xlabel(xlabel)
-        ax.set_xlim3d(*xlim)
-        ax.set_ylabel(ylabel)
-        ax.set_ylim3d(min(zs), max(zs))
-        ax.set_zlabel(zlabel)
-        if zmax == 0:
-            raise ValueError('zmax should be higher than 0.')
-        ax.set_zlim3d(zmin, zmax)
-        return ax
+        return ToolwearWaveletDataset(root=self.root,
+                                      data={
+                                          'train_cut_no': [15, 16],
+                                          'test_cut_no': 13,
+                                          'images': images,
+                                          'labels': labels,
+                                          'auxs': auxs,
+                                          'wavelet_description': wavelet_descriptions
+                                      },
+                                      seq_len=seq_len)
 
 
-class ToolwearTorchInnerDataset(Dataset):
-    def __init__(self, vibration, toolwear, seq_len):
-        self.data = vibration.reshape(-1, 1)
-        self.labels = toolwear.reshape(-1, 1)
-        self.seq_len = seq_len
-
-    def __len__(self):
-        return self.data.shape[0] - self.seq_len
-
-    def __getitem__(self, ix):
-        # x : [batch, seq, feature]
-        # y : [batch, seq]
-
-        if isinstance(ix, slice):
-            xs, ys = [], []
-            for ii in range(*ix.indices(len(self))):  # *ix.indices(len(self)): (start, stop, step)
-                x, y = self[ii]
-                xs.append(x)
-                ys.append(y)
-            return torch.stack(xs), torch.stack(ys)
-        return (torch.DoubleTensor(self.data[ix:ix + self.seq_len, :]),
-                torch.DoubleTensor(self.labels[ix + self.seq_len, :]))
-
-
-class ToolwearTorchDataset:
-    PATH = Path("D:/YandexDisk/machining/data/raw/1/data-timeseries.csv")
-
-    def __init__(self, seq_length, train_split, cut_lim=None):
-        self.seq_length = seq_length
-        self.train_split = train_split
-
-        timeseries = pd.read_csv(self.PATH).values
-
-        # sub-sample some data
-        if cut_lim is None:
-            bottom, top = (0.650, 0.660)
-        else:
-            bottom, top = cut_lim
-        timeseries = timeseries[int(timeseries.shape[0] * bottom):int(timeseries.shape[0] * top), :]
-
-        self.scaler = MinMaxScaler()
-        self.scaler.fit(timeseries)
-
-        timeseries = self.transform(timeseries)
-
-        print(timeseries.max(), timeseries.min())
-
-        self.train_size = int(timeseries.shape[0] * self.train_split)
-        self.test_size = timeseries.shape[0] - self.train_size
-
-        self.trainset = ToolwearTorchInnerDataset(vibration=timeseries[:self.train_size, 0],
-                                                  toolwear=timeseries[:self.train_size, 1],
-                                                  seq_len=self.seq_length)
-        self.testset = ToolwearTorchInnerDataset(vibration=timeseries[self.train_size:, 0],
-                                                 toolwear=timeseries[self.train_size:, 1],
-                                                 seq_len=self.seq_length)
-
-    def plot(self):
-        # x, y = self.trainset[:1000]
-        # y = y[:, -1, :]
-
-        plt.plot(self.trainset.labels, label='y')
-        plt.legend()
-        plt.show()
-
-    def transform(self, x):
-        return self.scaler.transform(x)
-
-    def inverse_transform(self, x):
-        return self.scaler.inverse_transform(x)
+# class ToolwearTorchInnerDataset(Dataset):
+#     def __init__(self, vibration, toolwear, seq_len):
+#         self.data = vibration.reshape(-1, 1)
+#         self.labels = toolwear.reshape(-1, 1)
+#         self.seq_len = seq_len
+#
+#     def __len__(self):
+#         return self.data.shape[0] - self.seq_len
+#
+#     def __getitem__(self, ix):
+#         # x : [batch, seq, feature]
+#         # y : [batch, seq]
+#
+#         if isinstance(ix, slice):
+#             xs, ys = [], []
+#             for ii in range(*ix.indices(len(self))):  # *ix.indices(len(self)): (start, stop, step)
+#                 x, y = self[ii]
+#                 xs.append(x)
+#                 ys.append(y)
+#             return torch.stack(xs), torch.stack(ys)
+#         return (torch.DoubleTensor(self.data[ix:ix + self.seq_len, :]),
+#                 torch.DoubleTensor(self.labels[ix + self.seq_len, :]))
 
 
-class ToolwearWaveletConcatDataset:
-    def __init__(self, seq_len):
-        self.seq_len = seq_len
+# class ToolwearTorchDataset:
+#     PATH = Path("D:/YandexDisk/machining/data/raw/1/data-timeseries.csv")
+#
+#     def __init__(self, seq_length, train_split, cut_lim=None):
+#         self.seq_length = seq_length
+#         self.train_split = train_split
+#
+#         timeseries = pd.read_csv(self.PATH).values
+#
+#         # sub-sample some data
+#         if cut_lim is None:
+#             bottom, top = (0.650, 0.660)
+#         else:
+#             bottom, top = cut_lim
+#         timeseries = timeseries[int(timeseries.shape[0] * bottom):int(timeseries.shape[0] * top), :]
+#
+#         self.scaler = MinMaxScaler()
+#         self.scaler.fit(timeseries)
+#
+#         timeseries = self.transform(timeseries)
+#
+#         print(timeseries.max(), timeseries.min())
+#
+#         self.train_size = int(timeseries.shape[0] * self.train_split)
+#         self.test_size = timeseries.shape[0] - self.train_size
+#
+#         self.trainset = ToolwearTorchInnerDataset(vibration=timeseries[:self.train_size, 0],
+#                                                   toolwear=timeseries[:self.train_size, 1],
+#                                                   seq_len=self.seq_length)
+#         self.testset = ToolwearTorchInnerDataset(vibration=timeseries[self.train_size:, 0],
+#                                                  toolwear=timeseries[self.train_size:, 1],
+#                                                  seq_len=self.seq_length)
+#
+#     def plot(self):
+#         # x, y = self.trainset[:1000]
+#         # y = y[:, -1, :]
+#
+#         plt.plot(self.trainset.labels, label='y')
+#         plt.legend()
+#         plt.show()
+#
+#     def transform(self, x):
+#         return self.scaler.transform(x)
+#
+#     def inverse_transform(self, x):
+#         return self.scaler.inverse_transform(x)
 
-        self.train_datasets = list()
-        for cutno in [14,15,16]:
-            dataset = ToolwearWaveletDataset(cutno=cutno, seq_len=self.seq_len)
-            self.train_datasets.append(dataset.trainset)
 
-        self.trainset = ConcatDataset(self.train_datasets)
-        self.testset = ToolwearWaveletDataset(cutno=13, seq_len=self.seq_len).trainset
+# class ToolwearWaveletConcatDataset:
+#     def __init__(self, seq_len):
+#         self.seq_len = seq_len
+#
+#         self.train_datasets = list()
+#         for cutno in [14, 15, 16]:
+#             dataset = ToolwearWaveletDataset(cutno=cutno, seq_len=self.seq_len)
+#             self.train_datasets.append(dataset.trainset)
+#
+#         self.trainset = ConcatDataset(self.train_datasets)
+#         self.testset = ToolwearWaveletDataset(cutno=13, seq_len=self.seq_len).trainset
+
 
 class ToolwearWaveletDataset:
 
-    def __init__(self, cutno, seq_len):
-        self.cutno = cutno
+    def __init__(self, root, data, seq_len):
+        self.root = root
+
+        self.train_cut_nos = data['train_cut_no']
+        self.test_cut_no = data['test_cut_no']
+        self.cut_nos = self.train_cut_nos + [self.test_cut_no]
+
         self.seq_len = seq_len
+        self.images = data['images']
+        self.labels = data['labels']
+        self.auxs = data['auxs']
+        self.wavelet_descriptions = data['wavelet_description']
 
-        excel = ExcelData().excel
-        attr = excel.loc[(excel['cut_no'] == self.cutno) & (excel['kind'] == 'acc')]
-        self.attr = self.attr_fix(attr.copy())
+        self.transformed_images = dict()
+        for cut_no in self.cut_nos:
+            transform_arr = self.wavelet_descriptions[cut_no]
+            img = self.images[cut_no]
+            self.transformed_images[cut_no] = self.transform(img, transform_arr)  # todo:look pytorch style
 
-        img_path = Path(f"C:/Users/ugur/Documents/GitHub/ai-framework/src/figures/{self.cutno}/wavelet_{self.cutno}_log_thin.png")
-        cut_path = Path("D:/YandexDisk/machining/data/raw/verilerin_ayiklanmasi.xlsx")
+        self.transformed_labels = dict()
+        for cut_no, lbl in self.labels.items():
+            self.transformed_labels[cut_no] = self.target_transform(lbl)  # todo:look pytorch style
 
-        timeseries = self.read_wavelet_image(img_path)
-        timeseries = self.add_toolwear(timeseries)
+        # timeseries = img
+        # aux = [(self.attr['cutting_speed'].values[0] - 73.) / (73.)]
 
-        timeseries = self.interp_toolwear(timeseries)
+        self.train_datasets = list()
+        for cut_no in self.train_cut_nos:
+            img = self.images[cut_no]
+            label = self.images[cut_no]
+            aux = self.auxs[cut_no]
 
-        self.timeseries = self.cut_data(timeseries, cut_path=cut_path)
-        aux = [(self.attr['cutting_speed'].values[0] - 73.)/(73.)]
+            dataset = ToolwearWaveletInnerDataset(data=img, targets=label,
+                                                  seq_len=self.seq_len,
+                                                  aux=aux)
+            self.train_datasets.append(dataset)
 
+        self.trainset = ConcatDataset(self.train_datasets)
 
-        data = self.timeseries.iloc[:, :-1].values
-        targets = self.timeseries.iloc[:, -1].values
-
-        # normalize targets
-        targets = (targets - targets.min()) / (targets.max() - targets.min())
-
-        self.trainset = ToolwearWaveletInnerDataset(data=data, targets=targets,
-                                                    seq_len=self.seq_len,
-                                                    aux=aux)
-        self.testset = ToolwearWaveletInnerDataset(data=data, targets=targets,
+        self.testset = ToolwearWaveletInnerDataset(data=self.images[self.test_cut_no],
+                                                   targets=self.labels[self.test_cut_no],
                                                    seq_len=self.seq_len,
-                                                   aux=aux)
+                                                   aux=self.auxs[self.test_cut_no])
 
-    def read_wavelet_image(self, img_path):
-        img = Image.open(img_path).convert('L')
-        img = np.array(img) / 255
+    def transform(self, img, transform_arr):
+        _max = transform_arr['max']
+        _min = transform_arr['min']
+        return (img - _min) / (_max - _min)
 
-        return pd.DataFrame(img.T)
-
-    def attr_fix(self, attr):
-        attr['feed_rate'] = attr['feed_per_tooth'] * attr['n_flute'] * attr['spindle_speed']
-        attr['cutting_sec'] = 60 * attr['cutting_length'] / attr['feed_rate']
-        attr['cutting_sec'] = attr['cutting_sec'].apply(np.floor)
-        return attr
-
-    def add_toolwear(self, timeseries):
-        cutting_sec = self.attr['cutting_sec'].values
-        toolwear = self.attr['toolwear'].values
-        timeseries['toolwear'] = np.nan
-        # add toolwear 0 for proper interpolation
-        timeseries.loc[0, 'toolwear'] = 0.
-        timeseries.loc[cutting_sec, 'toolwear'] = toolwear
-        return timeseries
-
-    def interp_toolwear(self, timeseries):
-        y = timeseries['toolwear'].dropna()
-        x = timeseries.loc[y.index, :].index
-
-        interp_f = interpolate.interp1d(x.values, y.values,
-                                        kind='cubic',
-                                        fill_value="extrapolate")
-
-        new_x = timeseries.index.values
-        timeseries['toolwear'] = interp_f(new_x)
-        return timeseries
-
-    def cut_data(self, ts, cut_path):
-        cut_excel = pd.read_excel(cut_path, sheet_name='cut')
-        cut_excel = cut_excel.loc[cut_excel['cutno'] == self.cutno]
-
-        for i, (_, start, stop) in cut_excel.iterrows():
-            ts.loc[start:stop] = np.nan
-
-        ts = ts.dropna(axis=0).reset_index(drop=True)
-        return ts
+    def target_transform(self, label):
+        return label
 
     def plot(self):
         # x, y = self.trainset[:1000]
         # y = y[:, -1, :]
 
-        plt.plot(self.trainset.labels, label='y')
-        plt.legend()
+        fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(24, 16))
+        axes[0, 0].imshow(self.images[13].T)
+        axes[0, 1].imshow(self.transformed_images[13].T)
+        axes[0, 2].plot(self.labels[13], label='Toolwear 13'); axes[0, 2].legend()
+
+        axes[1, 0].imshow(self.images[15].T)
+        axes[1, 1].imshow(self.transformed_images[15].T)
+        axes[1, 2].plot(self.labels[15], label='Toolwear 15'); axes[1, 2].legend()
+
+        axes[2, 0].imshow(self.images[16].T)
+        axes[2, 1].imshow(self.transformed_images[16].T)
+        axes[2, 2].plot(self.labels[16], label='Toolwear 16'); axes[2, 2].legend()
+
         plt.show()
+
 
 class ToolwearWaveletInnerDataset(Dataset):
     def __init__(self, data, targets, aux, seq_len=60):
@@ -1144,14 +1477,14 @@ class ToolwearWaveletInnerDataset(Dataset):
         self.aux = aux
 
     def __getitem__(self, ix):
-        seq, target = self.data[ix:ix+self.seq_len], self.labels[ix+self.seq_len]
-        return (torch.from_numpy(seq), # data
-               torch.from_numpy(np.array([target], dtype=float)), # label
-                torch.from_numpy(np.array(self.aux, dtype=float)), # aux
+        seq, target = self.data[ix:ix + self.seq_len].values, self.labels[ix + self.seq_len]
+        return (torch.from_numpy(seq),  # data
+                torch.from_numpy(np.array([target], dtype=float)),  # label
+                torch.from_numpy(np.array([self.aux], dtype=float)),  # aux
                 )
 
     def __len__(self):
-        return len(self.data)-self.seq_len
+        return len(self.data) - self.seq_len
 
 
 def toolwear_class_usage():
@@ -1208,12 +1541,6 @@ def toolwear_class_usage():
     # ax, cwt = vib.wavelet(data=subset, wavelet='cgau5', save=False)
 
 
-def pytorch_dataset_usage():
-    # ======= PYTORCH DATASET ===========
-    dataset = ToolwearTorchDataset(seq_length=8000, train_split=0.95)
-    print()
-
-
 def costly_func(subset):
     denoised_data = Toolwear.denoise(subsets=subset, method='envelope',
                                      threshold_epsilon=0.1, threshold_mul=1.,
@@ -1223,5 +1550,9 @@ def costly_func(subset):
 
 
 if __name__ == "__main__":
-    dataset = ToolwearWaveletDataset(seq_len=60)
-    print(dataset)
+    for cut_no in [16]:
+        vib = Toolwear.raw_batch_read(root=Path('D:/YandexDisk/machining/data'),
+                                      cut_no=cut_no, kind='acc', n_cycle=200)
+
+    # vib = Toolwear.from_parquet(root=Path('D:/YandexDisk/machining/data'), cut_no=15)
+    # print()
