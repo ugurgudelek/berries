@@ -943,7 +943,11 @@ class Toolwear:
         return reading
 
     @staticmethod
-    def raw_batch_read(root, cut_no, kind, n_cycle):
+    def raw_batch_read(root, cut_no, kind, n_cycle, 
+    cut=True,
+    cut_dropping_seq=True,
+    interpolate=True,
+    save_parquet=True):
 
         # read excel file for attributes
         exceldata = ExcelData(root=root)
@@ -967,30 +971,38 @@ class Toolwear:
 
                 pbar.update(1)
 
-        # cut nan-valid data
-        cut_excel = pd.read_excel(root / "verilerin_ayiklanmasi.xlsx", sheet_name='cut')
-        cut_excel = cut_excel.loc[cut_excel['cutno'] == cut_no]
+        if cut:
+            # cut nan-valid data
+            cut_excel = pd.read_excel(root / "verilerin_ayiklanmasi.xlsx", sheet_name='cut')
+            cut_excel = cut_excel.loc[cut_excel['cutno'] == cut_no]
 
-        for i, (_, start, stop) in cut_excel.iterrows():
-            if stop == -1:
-                stop = len(vib.reading)
-            vib.reading.iloc[vib.second2index(start):vib.second2index(stop)] = np.nan
-        vib.reading = vib.reading.dropna(axis=0).reset_index(drop=True)
+            for i, (_, start, stop) in cut_excel.iterrows():
+                if stop == -1:
+                    # for machine learning model, cut_dropping_seq should be True.
+                    # this will used for plot only
+                    if not cut_dropping_seq:
+                        continue
+                    stop = len(vib.reading)
+                vib.reading.iloc[vib.second2index(start):vib.second2index(stop)] = np.nan
+            vib.reading = vib.reading.dropna(axis=0).reset_index(drop=True)
 
-        # fix time-index before interpolating
-        # bacause it uses 'time' index
-        vib.fix_time()
+            # fix time-index before interpolating
+            # bacause it uses 'time' index
+            vib.fix_time()
 
-        # custom interpolation
-        vib.interpolate('cutting_length')
-        vib.interpolate('toolwear')
-        vib.interpolated = True
+        if interpolate:
+            # custom interpolation
+            vib.interpolate('cutting_length')
+            vib.interpolate('toolwear')
+            vib.interpolated = True
 
-        # calculate dataset description
-        vib.description = vib.reading.describe()
+
 
         # save reading to parquet
-        vib.to_parquet()
+        if save_parquet:
+            # calculate dataset description
+            vib.description = vib.reading.describe()
+            vib.to_parquet()
         return vib
 
     @staticmethod
