@@ -25,7 +25,7 @@ if __name__ == "__main__":
     torch.multiprocessing.freeze_support()
 
     hyperparams = dict(lr=0.001, train_batch_size=8, test_batch_size=8, epoch=200, train_shuffle=True, test_shuffle=False)
-    params = dict(log_interval=10, result_path='../results/chatter_cnn_images')
+    params = dict(log_interval=10, result_path='../results/chatter_cnn_images_proper_shuffle')
 
     dataset = ChatterImage(root='D:/YandexDisk/machining/chatter_cnn_images/Chatter_cnn',
                            transform=transforms.Compose([transforms.ToTensor()]),
