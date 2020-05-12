@@ -15,6 +15,7 @@ class LSTM(nn.Module):
 
     def __init__(self, input_size, hidden_size, output_size=1,
                  num_layers=2, batch_size=64, aux_input_size=0,
+                 bidirectional=False,
                  stateful=False,
                  hidden_reset_period=None,
                  problem_type='many-to-many'):
@@ -25,6 +26,7 @@ class LSTM(nn.Module):
         self.num_layers = num_layers
         self.batch_size = batch_size  # todo: check this
         self.aux_input_size = aux_input_size
+        self.bidirectional =bidirectional
         self.problem_type = problem_type
 
         self.stateful = stateful  # todo: check this
@@ -48,14 +50,14 @@ class LSTM(nn.Module):
                             num_layers=self.num_layers,
                             bias=True,
                             dropout=0.,  # default:0 means no probability
-                            bidirectional=False,
+                            bidirectional=self.bidirectional,
                             batch_first=True
                             )
 
         # Define the output layer
         self.classifier = nn.Sequential(nn.Linear(in_features=self.hidden_size+self.aux_input_size,
                                                   out_features=self.output_size),
-                                        nn.Sigmoid())
+                                        nn.Sigmoid())  # ! be careful. output cannot exceed 1.
 
         self.hidden = self._init_hidden()
         self._init_weights()
