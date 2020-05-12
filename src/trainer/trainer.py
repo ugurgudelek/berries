@@ -38,12 +38,12 @@ class Trainer:
 
         self.train_loader = DataLoader(self.dataset.trainset,
                                        batch_size=self.hyperparams['train_batch_size'],
-                                       drop_last=True,
-                                       shuffle=False)  # todo: output.view(batch_size, -1) needs this!
+                                       drop_last=False,
+                                       shuffle=True)  # todo: output.view(batch_size, -1) needs this!
 
         self.test_loader = DataLoader(self.dataset.testset,
                                       batch_size=self.hyperparams['test_batch_size'],
-                                      drop_last=True,
+                                      drop_last=False,
                                       shuffle=False)
 
         # self.test_loader = Dataloader(self.dataset.testset,
@@ -87,6 +87,7 @@ class Trainer:
 
         logs = dict()
         logs['loss'] = list()
+        seen_item = 0
         for batch_ix, (data, targets, aux) in enumerate(loader):
 
             data, targets = data.to(self.device), targets.to(self.device)
@@ -111,10 +112,11 @@ class Trainer:
                     torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.hyperparams['clip'])
                 self.optimizer.step()
 
+            seen_item += len(data)
             if batch_ix % self.params['log_interval'] == 0:
                 print('\t'.join((
                     f"{'Train' if train else 'Test'}",
-                    f"Epoch: {epoch} [{batch_ix * len(data)}/{len(loader.dataset)} ({100. * batch_ix / len(loader):.0f}%)]",
+                    f"Epoch: {epoch} [{seen_item}/{len(loader.dataset)} ({100. * batch_ix / len(loader):.0f}%)]",
                     f"Batch Loss: {loss.item():.6f}",
                 )))
 
@@ -158,6 +160,7 @@ class Trainer:
                         # self.callbacks(epoch=epoch)
                         self.save_checkpoint(epoch=epoch)
                         self.learning_curve()
+                        self.plot_prediction(epoch=epoch)
 
 
         except KeyboardInterrupt:
@@ -329,4 +332,24 @@ class Trainer:
         save_dir = self.experiment_fpath / 'figures'
         save_dir.mkdir(parents=True, exist_ok=True)
         plt.savefig(save_dir / 'lr.png')
+        plt.close()
+
+    def plot_prediction(self, epoch):
+        prediction = self.predict_loader()
+        indices = list(range(len(prediction)))
+
+        fig, axes = plt.subplots(nrows=2)
+
+        axes[0].scatter(indices, prediction, label='prediction', s=1, c='r')
+        axes[0].plot(indices, self.dataset.testset.targets[indices], label='true')
+        axes[0].legend()
+
+        axes[0].set_xlim(indices[0], indices[-1])
+
+        axes[1].imshow(self.dataset.testset.data.T[:, indices])
+        plt.suptitle('Test')
+
+        save_dir = self.experiment_fpath / 'figures'
+        save_dir.mkdir(parents=True, exist_ok=True)
+        plt.savefig(save_dir / f'prediction-{epoch}.png')
         plt.close()
