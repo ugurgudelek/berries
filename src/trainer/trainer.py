@@ -142,9 +142,9 @@ class Trainer:
         # At any point you can hit Ctrl + C to break out of training early.
         try:
             # # # See what the scores are before training
-            # with torch.no_grad():
-            #     for loss in self._on_epoch(train=False, epoch=0):
-            #         pass
+            with torch.no_grad():
+                for loss in self._on_epoch(train=False, epoch=0):
+                    pass
 
             for epoch in range(self.start_epoch, self.hyperparams['epoch'] + 1):
                 # Training loop
@@ -160,7 +160,24 @@ class Trainer:
                         # self.callbacks(epoch=epoch)
                         self.save_checkpoint(epoch=epoch)
                         self.learning_curve()
-                        self.plot_prediction(epoch=epoch)
+
+
+                        for i in range(len(self.dataset.train_datasets)):
+                            self.plot_prediction(dataloader=DataLoader(self.dataset.train_datasets[i],
+                                                          batch_size=self.hyperparams['test_batch_size'],
+                                                          drop_last=False,
+                                                          shuffle=False),
+                                                 img=self.dataset.train_datasets[i].data.T,
+
+                                                 name=f'prediction-{epoch}-[train{i}]')
+
+                        self.plot_prediction(dataloader=DataLoader(self.dataset.testset,
+                                                                   batch_size=self.hyperparams['test_batch_size'],
+                                                                   drop_last=False,
+                                                                   shuffle=False),
+                                             img=self.dataset.testset.data.T,
+
+                                             name=f'prediction-{epoch}-[test]')
 
 
         except KeyboardInterrupt:
@@ -213,19 +230,19 @@ class Trainer:
         self.model.train(True)
         return output
 
-    def predict_loader(self, dataloader=None):
-        if dataloader is None :
-            dataloader = self.test_loader
-
+    def predict_loader(self, dataloader):
         outputs = list()
+        targets = list()
         with torch.no_grad():
-            for batch_ix, (data, targets, aux) in enumerate(dataloader):
-                data, targets = data.to(self.device), targets.to(self.device)
+            for batch_ix, (data, target, aux) in enumerate(dataloader):
+                data, target = data.to(self.device), target.to(self.device)
                 aux = aux.to(self.device)
                 output = self.model(data, aux)
-                outputs.append(output.detach().cpu().numpy())
 
-        return np.concatenate(outputs)
+                outputs.append(output.detach().cpu().numpy())
+                targets.append(target.detach().cpu().numpy())
+
+        return np.concatenate(outputs), np.concatenate(targets)
 
     def plot_small_data(self, x, y):
 
@@ -334,22 +351,22 @@ class Trainer:
         plt.savefig(save_dir / 'lr.png')
         plt.close()
 
-    def plot_prediction(self, epoch):
-        prediction = self.predict_loader()
+    def plot_prediction(self, dataloader, img, name):
+        prediction, targets = self.predict_loader(dataloader=dataloader)
         indices = list(range(len(prediction)))
 
         fig, axes = plt.subplots(nrows=2)
 
         axes[0].scatter(indices, prediction, label='prediction', s=1, c='r')
-        axes[0].plot(indices, self.dataset.testset.targets[indices], label='true')
+        axes[0].plot(indices, targets, label='true')
         axes[0].legend()
 
         axes[0].set_xlim(indices[0], indices[-1])
 
-        axes[1].imshow(self.dataset.testset.data.T[:, indices])
+        axes[1].imshow(img[:, indices])
         plt.suptitle('Test')
 
         save_dir = self.experiment_fpath / 'figures'
         save_dir.mkdir(parents=True, exist_ok=True)
-        plt.savefig(save_dir / f'prediction-{epoch}.png')
+        plt.savefig(save_dir / f'{name}.png')
         plt.close()

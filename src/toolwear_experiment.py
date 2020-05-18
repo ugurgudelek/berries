@@ -29,7 +29,7 @@ def experiment(train_cut_nos, test_cut_no):
               'device': 'cuda' if torch.cuda.is_available() else 'cpu',
               'resume': False,
               'pretrained': False,
-              'experiment_name': f'toolwear_std_train({"-".join(map(str,train_cut_nos))})_test({test_cut_no})',
+              'experiment_name': f'toolwear_normalized({"-".join(map(str,train_cut_nos))})_test({test_cut_no})',
               'save_interval': 10,
               'log_interval': 10,
               'save_fig': True,
@@ -52,7 +52,7 @@ def experiment(train_cut_nos, test_cut_no):
     torch.cuda.manual_seed(params['seed'])
     np.random.seed(params['seed'])
 
-    dataset = ToolwearBag(root=Path('D:/YandexDisk/machining/data')) \
+    dataset = ToolwearBag(root=Path('D:/YandexDisk/machining/data'), kind='mic') \
         .to_torch_wavelet_dataset(seq_len=hyperparams['seq_len'],
                                   train_cuts=train_cut_nos,
                                   test_cut=test_cut_no)
@@ -72,17 +72,17 @@ def experiment(train_cut_nos, test_cut_no):
 if __name__ == "__main__":
     with tqdm() as pbar:
         for train_cut_nos, test_cut_no in [
-            [[13],13],
-            [[14],14],
-            [[15],15],
-            [[16],16],
+            # [[13],13],
+            # [[14],14],
+            # [[15],15],
+            # [[16],16],
             [[14], 16],
-            [[14], 15],
-            [[14], 13],
-            [[13,14,15], 16],
-            [[14,15,16], 13],
-            [[15,16,13], 14],
-            [[16,13,14], 15]
+            [[16], 14],
+            # [[14], 13],
+            # [[13, 14], 16],
+            # [[16, 13], 14],
+            # [[14, 16], 13],
+
         ]:
             experiment(train_cut_nos, test_cut_no)
             pbar.update(1)
