@@ -9,18 +9,21 @@ from torch.optim import Adam
 import os
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
 from history.history import History
+from plot.plotter import Plotter
+
+from collections import defaultdict
 
 
 class Trainer:
-    def __init__(self, model, dataset, hyperparams, params, optimizer=None, criterion=None):
+    def __init__(self, root, model, dataset, metrics, hyperparams, params, logger, optimizer=None, criterion=None):
         # self._validate_hyperparams(hyperparams)
         # self._validate_params(params)
 
+        self.root = root
         self.hyperparams = hyperparams
         self.params = params
 
@@ -30,48 +33,60 @@ class Trainer:
         self.dataset = dataset
         self.criterion = criterion or MSELoss()
         self.optimizer = optimizer or Adam(params=model.parameters(),
-                                           lr=self.hyperparams['lr'],
-                                           weight_decay=self.hyperparams['weight_decay'])
+                                           lr=self.hyperparams.get('lr', 0.001),
+                                           weight_decay=self.hyperparams.get('weight_decay', 0))
 
-        # self.loader_kwargs = {'num_workers': 1, 'pin_memory': True} if self.use_cuda else {}
-        # self.loader_kwargs = {'drop_last': False, 'shuffle': False}
+        self.metrics = metrics
+
+        self.experiment_fpath = self.root / 'projects' / params['project_name'] / params['experiment_name']
 
         self.train_loader = DataLoader(self.dataset.trainset,
                                        batch_size=self.hyperparams['train_batch_size'],
                                        drop_last=False,
-                                       shuffle=True)  # todo: output.view(batch_size, -1) needs this!
+                                       shuffle=True,  # todo: output.view(batch_size, -1) needs this!
+                                       num_workers=1,
+                                       pin_memory=self.on_cuda)  # True if cuda else otherwise
 
         self.test_loader = DataLoader(self.dataset.testset,
                                       batch_size=self.hyperparams['test_batch_size'],
                                       drop_last=False,
-                                      shuffle=False)
+                                      shuffle=False,
+                                      num_workers=1,
+                                      pin_memory=self.on_cuda)  # True if cuda else otherwise
 
-        # self.test_loader = Dataloader(self.dataset.testset,
-        #                               batch_size=self.hyperparams['test_batch_size'],
-        #                                         seq_len=self.hyperparams['seq_len'],
-        #                               **self.loader_kwargs)
+        self.logger = logger
 
-        self.experiment_fpath = Path(f'../experiments/{self.params["experiment_name"]}')
-        self.experiment_fpath.mkdir(parents=True, exist_ok=True)
-
-        # Init history to log loss or something
-        self.history = History()
+        # Initialize plotter
+        self.plotter = Plotter()
 
         # Resume or not
         if self.params['resume'] or self.params['pretrained']:
-            print("=> loading checkpoint ")
+            print("Loading checkpoint...")
             cpt_path = self.experiment_fpath / 'checkpoints'
             if not cpt_path.exists():
                 raise Exception(
-                    "You do not have any checkpoint to resume\n if you want to start over. Make sure --resume and --pretrained is False")
+                    """
+                    You do not have any checkpoint to resume.
+                    If you want to start over, make sure --resume and --pretrained is False.
+                    """
+                )
             last_epoch = sorted(list(map(int, os.listdir(cpt_path))))[-1]  # todo: change with Path
             self.load_checkpoint(epoch=last_epoch)
-            print("=> loaded checkpoint")
+            print(f"Checkpoint is loaded from {last_epoch}")
         else:
             self.start_epoch = 1
-            print("=> Start training from scratch")
+            print("Starting training from epoch 1")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.logger.stop()
 
 
+    @property
+    def on_cuda(self):
+        return self.device.type == 'cuda'
 
     def _validate_hyperparams(self, hyperparams):
         raise NotImplementedError()
@@ -83,11 +98,10 @@ class Trainer:
 
         loader = self.train_loader if train else self.test_loader
 
-        self.model.train(train)  # enable or disable dropout
+        self.model.train(train)  # enable or disable dropout or batch norm
 
-        logs = dict()
-        logs['loss'] = list()
         seen_item = 0
+        # todo: add aux into data
         for batch_ix, (data, targets, aux) in enumerate(loader):
 
             data, targets = data.to(self.device), targets.to(self.device)
@@ -97,7 +111,6 @@ class Trainer:
             # If we didn't, the model would try backpropagating all the way to start of the dataset.
             # self.model.reset_states()
             # hidden_ = self.model.repackage_hidden(hidden)
-
 
             # Loss
             # todo: add loss calculations. you can look into encoder_decoder_rnntrainer.py for more info.
@@ -120,19 +133,20 @@ class Trainer:
                     f"Batch Loss: {loss.item():.6f}",
                 )))
 
-
-            logs['loss'].append(loss.item())
-
-            yield loss
-
-            # self.plot_small_data(x=data, y=targets)
-
-        self.history.append(phase='train' if train else 'test',
-                            log_dict={'epoch': epoch,
-                                      'loss': np.mean(logs['loss']),
-                                      })
+            yield loss, output, targets
 
         self.model.train(not train)
+
+    def _log_metrics(self, phase, epoch, container):
+        for metric_key, metric_val in container.items():
+            self.logger.log_metric(log_name=f'{phase}_{metric_key}',
+                                   x=epoch,
+                                   y=np.mean(metric_val))
+
+    def _calculate_metrics(self, yhat, y, container):
+        for metric_fn in self.metrics:
+            container[metric_fn.__name__].append(metric_fn()(yhat, y))
+        return container
 
     def fit(self):
 
@@ -141,43 +155,48 @@ class Trainer:
 
         # At any point you can hit Ctrl + C to break out of training early.
         try:
-            # # # See what the scores are before training
+
+            # See what the scores are before training
             with torch.no_grad():
-                for loss in self._on_epoch(train=False, epoch=0):
-                    pass
+                loss_container = list()
+                metric_container = defaultdict(list)
+                for loss, output, target in self._on_epoch(train=False, epoch=0):
+                    loss_container.append(loss.item())
+                    metric_container = self._calculate_metrics(yhat=output, y=target, container=metric_container)
+                self.logger.log_metric(log_name='validation_loss', x=0, y=np.mean(loss_container))
+                self._log_metrics(phase='validation', epoch=0, container=metric_container)
 
             for epoch in range(self.start_epoch, self.hyperparams['epoch'] + 1):
                 # Training loop
-                for loss in self._on_epoch(train=True, epoch=epoch):
-                    pass
+                loss_container = list()
+                metric_container = defaultdict(list)
+                for loss, output, target in self._on_epoch(train=True, epoch=epoch):
+                    loss_container.append(loss.item())
+                    metric_container = self._calculate_metrics(yhat=output, y=target, container=metric_container)
+                self.logger.log_metric(log_name='training_loss', x=epoch, y=np.mean(loss_container))
+                self._log_metrics(phase='training', epoch=epoch, container=metric_container)
+
                 # Validation loop
+                loss_container = list()
+                metric_container = defaultdict(list)
                 with torch.no_grad():
-                    for loss in self._on_epoch(train=False, epoch=epoch):
-                        pass
+                    for loss, output, target in self._on_epoch(train=False, epoch=epoch):
+                        loss_container.append(loss.item())
+                        metric_container = self._calculate_metrics(yhat=output, y=target, container=metric_container)
+                self.logger.log_metric(log_name='validation_loss', x=epoch, y=np.mean(loss_container))
+                self._log_metrics(phase='validation', epoch=epoch, container=metric_container)
 
                 if epoch % self.params['save_interval'] == 0:
-                    if self.params['save_fig']:
-                        # self.callbacks(epoch=epoch)
-                        self.save_checkpoint(epoch=epoch)
-                        self.learning_curve()
+                    self.callbacks(epoch=epoch)
+                    self.save_checkpoint(epoch=epoch)
+
+                    self.logger.save()
+
+                    # todo: add into logger
+                    self.plotter.learning_curve(read_dir=self.experiment_fpath,
+                                                save_dir=self.experiment_fpath / 'figures')
 
 
-                        for i in range(len(self.dataset.train_datasets)):
-                            self.plot_prediction(dataloader=DataLoader(self.dataset.train_datasets[i],
-                                                          batch_size=self.hyperparams['test_batch_size'],
-                                                          drop_last=False,
-                                                          shuffle=False),
-                                                 img=self.dataset.train_datasets[i].data.T,
-
-                                                 name=f'prediction-{epoch}-[train{i}]')
-
-                        self.plot_prediction(dataloader=DataLoader(self.dataset.testset,
-                                                                   batch_size=self.hyperparams['test_batch_size'],
-                                                                   drop_last=False,
-                                                                   shuffle=False),
-                                             img=self.dataset.testset.data.T,
-
-                                             name=f'prediction-{epoch}-[test]')
 
 
         except KeyboardInterrupt:
@@ -193,10 +212,7 @@ class Trainer:
         # save model
         torch.save({'epoch': epoch,
                     'model_state_dict': self.model.state_dict(),
-                    'optimizer_state_dict': self.optimizer.state_dict(),
-                    'hyperparams': self.hyperparams,
-                    'params': self.params,
-                    'history': self.history},
+                    'optimizer_state_dict': self.optimizer.state_dict()},
                    self.cpt_fpath / 'model-optim.pth')
 
     def load_checkpoint(self, epoch):  # todo: move into generic model
@@ -212,7 +228,7 @@ class Trainer:
         self.start_epoch = checkpoint['epoch'] + 1
         # self.hyperparams = checkpoint['hyperparams']
         # self.params = checkpoint['params']
-        self.history = checkpoint['history']
+        # self.history = checkpoint['history']
 
         if self.device.type == 'cuda':
             for state in self.optimizer.state.values():
@@ -221,7 +237,6 @@ class Trainer:
                         state[k] = v.cuda()
 
     def predict(self, x):
-
         self.model.train(False)
         with torch.no_grad():
             output = self.model(x.to(self.device))
@@ -244,129 +259,34 @@ class Trainer:
 
         return np.concatenate(outputs), np.concatenate(targets)
 
-    def plot_small_data(self, x, y):
-
-            prediction = self.predict(x)
-            # prediction's shape: [batch, seq, feature]
-
-            # many output part
-            # x = x[-1, :, :].cpu().numpy()
-            # y = y[-1, :, :].cpu().numpy()
-            # prediction = prediction[-1, :, :]
-            # one output part
-            x = x[:, 0, :].cpu().numpy()
-            y = y[:, :].cpu().numpy()
-
-            t_xy = self.dataset.inverse_transform(np.hstack((x, y)))
-            prediction = self.dataset.inverse_transform(np.hstack((x, prediction)))[:, 1].reshape(-1, 1)
-
-            t_xyp = np.hstack((t_xy, prediction))
-
-            # return t_xyp[:, 0], t_xyp[:, 1], t_xyp[:, 2],  # [x, y, prediction]
-
-            x,y,p = t_xyp[:, 0], t_xyp[:, 1], t_xyp[:, 2]
-            fig, axs = plt.subplots(nrows=2, ncols=1, sharex=True, squeeze=False)
-            axs[0, 0].plot(x, label='x')
-            axs[0, 0].legend()
-
-            axs[1, 0].plot(y, label='y')
-            axs[1, 0].plot(p, label='prediction')
-            axs[1, 0].legend()
-
-
-
-            plt.show()
-
-
-
-
     def callbacks(self, epoch, train=False):
+        # Training prediction images
+        for cut_no, dataset in self.dataset.train_datasets.items():
+            prediction, targets = self.predict_loader(dataloader=DataLoader(self.dataset.train_datasets[cut_no],
+                                                                            batch_size=self.hyperparams[
+                                                                                'test_batch_size'],
+                                                                            drop_last=False,
+                                                                            shuffle=False))
+            img = self.plotter.plot_prediction(prediction, targets,
+                                         wavelet_img=self.dataset.train_datasets[cut_no].data.T,
+                                         title=f'Prediction of Cut: {cut_no} at Epoch: {epoch} and Phase: Training')
 
+            self.logger.log_image(log_name=f'cutno-{cut_no}.phase-training',
+                                  x=epoch, y=img,
+                                  image_name=f'epoch-{epoch}.cutno-{cut_no}.phase-training')
 
-
-        plot_container = None
-        loader = DataLoader(self.dataset.trainset,
-                                       batch_size=self.hyperparams['train_batch_size'],
-                                       drop_last=True,
-                                       shuffle=False)
-        with tqdm(total=len(loader)) as pbar:
-            for x, y in loader:
-                prediction = self.predict(x)
-                # prediction's shape: [batch, seq, feature]
-
-                x = x[:, -1, :].cpu().numpy()
-                y = y[:, -1, :].cpu().numpy()
-                prediction = prediction[:, -1, :]
-
-                t_xy = self.dataset.inverse_transform(np.hstack((x, y)))
-                prediction = self.dataset.inverse_transform(np.hstack((x, prediction)))[:, 1].reshape(-1, 1)
-
-                t_xyp = np.hstack((t_xy, prediction))
-                if plot_container is None:
-                    plot_container = t_xyp
-                else:
-                    plot_container = np.vstack((plot_container, t_xyp))
-                pbar.update(x.shape[0])
-
-        x, y, p = plot_container[:, 0], plot_container[:, 1], plot_container[:, 2]
-
-        fig, axs = plt.subplots(nrows=3, ncols=1, sharex=True, squeeze=False)
-
-        axs[0, 0].plot(x, label='x')
-        axs[0, 0].legend()
-
-        axs[1, 0].plot(y, label='y')
-        axs[1, 0].legend()
-
-        axs[2, 0].plot(p, label='prediction')
-        axs[2, 0].legend()
-
-        plt.show()
-
+        # Test prediction images
+        prediction, targets = self.predict_loader(DataLoader(self.dataset.testset,
+                                                             batch_size=self.hyperparams['test_batch_size'],
+                                                             drop_last=False,
+                                                             shuffle=False))
+        img = self.plotter.plot_prediction(prediction, targets,
+                                     wavelet_img=self.dataset.testset.data.T,
+                                     title=f'Prediction of Cut: {self.dataset.test_cut_no} at Epoch: {epoch} and Phase: Test')
+        self.logger.log_image(log_name=f'cutno-{self.dataset.test_cut_no}.phase-test',
+                              x=epoch, y=img,
+                              image_name=f'epoch-{epoch}.cutno-{self.dataset.test_cut_no}.phase-test')
 
     @staticmethod
-    def proba(output):
-        return torch.nn.functional.softmax(output.detach(), dim=1).cpu().numpy()
-
-    def predict_log_proba(self):
-        raise NotImplementedError()
-
-    def predict_proba(self):
-        raise NotImplementedError()
-
-    def learning_curve(self):
-        train_df, test_df = self.history.to_dataframe(phase='both')
-        fig, ax = plt.subplots(2, 1, sharex=True)
-        ax[0].plot(train_df['epoch'], train_df['loss'], label='training loss', color='orange')
-        ax[0].set_ylabel('Magnitude')
-        ax[0].legend(loc='upper right')
-
-        ax[1].plot(test_df['epoch'], test_df['loss'], label='test loss', color='blue')
-        ax[1].set_ylabel('Magnitude')
-        ax[1].legend(loc='upper right')
-        ax[1].set_xlabel('Epoch')
-
-        save_dir = self.experiment_fpath / 'figures'
-        save_dir.mkdir(parents=True, exist_ok=True)
-        plt.savefig(save_dir / 'lr.png')
-        plt.close()
-
-    def plot_prediction(self, dataloader, img, name):
-        prediction, targets = self.predict_loader(dataloader=dataloader)
-        indices = list(range(len(prediction)))
-
-        fig, axes = plt.subplots(nrows=2)
-
-        axes[0].scatter(indices, prediction, label='prediction', s=1, c='r')
-        axes[0].plot(indices, targets, label='true')
-        axes[0].legend()
-
-        axes[0].set_xlim(indices[0], indices[-1])
-
-        axes[1].imshow(img[:, indices])
-        plt.suptitle('Test')
-
-        save_dir = self.experiment_fpath / 'figures'
-        save_dir.mkdir(parents=True, exist_ok=True)
-        plt.savefig(save_dir / f'{name}.png')
-        plt.close()
+    def proba(x):
+        return torch.nn.functional.softmax(x.detach(), dim=1).cpu().numpy()

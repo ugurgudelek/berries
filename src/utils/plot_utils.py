@@ -9,6 +9,9 @@ import numpy as np
 from matplotlib import rc
 from matplotlib.ticker import MultipleLocator
 from sklearn.metrics import confusion_matrix
+from PIL import Image
+
+import io
 
 def plot_confusion_matrix(y_true, y_pred, classes,
                           save_path=None,
@@ -122,3 +125,13 @@ def camera_ready_matplotlib_style(plot_func):
         return ax
 
     return wrapper
+
+
+def mpl2pillow(fig):
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png')
+    buf.seek(0)
+    img = Image.open(buf)
+    # buf.close()
+    plt.close(fig)
+    return img

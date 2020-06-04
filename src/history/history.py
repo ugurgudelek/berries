@@ -80,6 +80,7 @@ class History:
 
 
 
+
 if __name__ == "__main__":
     h = History()
     h.append(phase='train', log_dict={'epoch': 0,

@@ -100,14 +100,7 @@ class ClassifierTrainer:
     # def accuracy(output, targets):
     #     return torch.mean((torch.argmax(output.detach(), dim=1) == targets).float()).item()
 
-    @staticmethod
-    def accuracy(output, targets):
-        y_pred_tag = torch.round(torch.sigmoid(output))
 
-        correct_results_sum = (y_pred_tag == targets).sum().float()
-        acc = correct_results_sum / targets.shape[0]
-        acc = torch.round(acc * 100)
-        return acc.cpu().numpy()
 
     @staticmethod
     def proba(output):

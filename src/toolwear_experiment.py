@@ -17,42 +17,55 @@ from sklearn.preprocessing import MinMaxScaler
 from model.lstm import LSTM
 from dataset.toolwear import Toolwear, ToolwearBag
 from trainer.trainer import Trainer
+from logger.logger import MultiLogger
+import metric
 
 from pathlib import Path
 from tqdm import tqdm
+
+from itertools import combinations, cycle
+
+
+# import IPython; IPython.embed(); exit(1)
 
 
 def experiment(train_cut_nos, test_cut_no):
     torch.multiprocessing.freeze_support()
 
-    params = {'seed': 42,
+    params = {'project_name': 'machining',
+              'experiment_name': f'toolwear_({"-".join(map(str, train_cut_nos))})_test({test_cut_no})',
+              'train_cut_nos': train_cut_nos,
+              'test_cut_no': test_cut_no,
+              'seed': 42,
+              'normalized': True,
+
               'device': 'cuda' if torch.cuda.is_available() else 'cpu',
               'resume': False,
               'pretrained': False,
-              'experiment_name': f'toolwear_normalized({"-".join(map(str,train_cut_nos))})_test({test_cut_no})',
-              'save_interval': 10,
-              'log_interval': 10,
-              'save_fig': True,
+              'save_interval': 5,
+              'log_interval': 5,
               'problem_type': 'many-to-one'}
 
     hyperparams = {'lr': 0.001,
                    'weight_decay': 0.,
-                   'epoch': 200,
-                   'train_batch_size': 100,
-                   'test_batch_size': 100,
-                   'seq_len': 60,
+                   'epoch': 50,
+                   'train_batch_size': 128,
+                   'test_batch_size': 128,
+                   'seq_len': 300,
                    'input_size': 128,
-                   'hidden_size': 10,
+                   'hidden_size': 4,
                    'num_layers': 1,
                    'output_size': 1,
-                   'aux_input_size': 1  # cutting speed
+                   'aux_input_size': 4,  # [cutting speed, tool diameter, Fs, tool brand]
+                   'stateful': False,
+                   'hidden_reset_period': None,
                    }
 
     torch.manual_seed(params['seed'])
     torch.cuda.manual_seed(params['seed'])
     np.random.seed(params['seed'])
 
-    dataset = ToolwearBag(root=Path('D:/YandexDisk/machining/data'), kind='mic') \
+    dataset = ToolwearBag(root=Path('D:/YandexDisk/machining/data'), kind='acc') \
         .to_torch_wavelet_dataset(seq_len=hyperparams['seq_len'],
                                   train_cuts=train_cut_nos,
                                   test_cut=test_cut_no)
@@ -62,32 +75,35 @@ def experiment(train_cut_nos, test_cut_no):
                  output_size=hyperparams['output_size'], num_layers=hyperparams['num_layers'],
                  batch_size=hyperparams['train_batch_size'],
                  aux_input_size=hyperparams['aux_input_size'],
-                 stateful=False, hidden_reset_period=None,
+                 stateful=hyperparams['stateful'], hidden_reset_period=hyperparams['hidden_reset_period'],
                  problem_type=params['problem_type'])
-    trainer = Trainer(model=model, dataset=dataset, hyperparams=hyperparams,
-                      params=params)
 
-    trainer.fit()
+    with Trainer(root=Path('C:/Users/ugur/Documents/GitHub/ai-framework'),
+                 model=model, dataset=dataset,
+                 metrics=[metric.MAE, metric.MSE, metric.MAPE, metric.RMSE],
+                 hyperparams=hyperparams, params=params,
+                 logger=MultiLogger(
+                     root=Path('C:/Users/ugur/Documents/GitHub/ai-framework'),
+                     project_name=params['project_name'],
+                     experiment_name=params['experiment_name'],
+                     params=params,
+                     hyperparams=hyperparams)) as trainer:
+        trainer.fit()
+
 
 if __name__ == "__main__":
-    with tqdm() as pbar:
-        for train_cut_nos, test_cut_no in [
-            # [[13],13],
-            # [[14],14],
-            # [[15],15],
-            # [[16],16],
-            [[14], 16],
-            [[16], 14],
-            # [[14], 13],
-            # [[13, 14], 16],
-            # [[16, 13], 14],
-            # [[14, 16], 13],
+    AVAILABLE_CUT_NOS = [3, 4, 13, 14, 15, 16]
 
-        ]:
+    train_cut_nos_list = list(combinations(AVAILABLE_CUT_NOS, len(AVAILABLE_CUT_NOS) - 1))
+    test_cut_no_list = [set(AVAILABLE_CUT_NOS).difference(set(train_cut_nos)).pop() for train_cut_nos in
+                        train_cut_nos_list]
+
+
+
+    with tqdm() as pbar:
+        for train_cut_nos, test_cut_no in zip(train_cut_nos_list, test_cut_no_list):
             experiment(train_cut_nos, test_cut_no)
             pbar.update(1)
-
-
 
     # # Train plot
     # prediction = trainer.predict_loader(trainer.train_loader)
@@ -104,4 +120,3 @@ if __name__ == "__main__":
     # axes[1].imshow(dataset.train_datasets[0].data.T.loc[:, indices])
     # plt.suptitle('Train')
     # plt.show()
-

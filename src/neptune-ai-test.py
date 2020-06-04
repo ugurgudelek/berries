@@ -19,7 +19,7 @@ neptune.init('ugurgudelek/sandbox')
 #
 # neptune.log_metric('AUC', 0.96)
 
-
+neptune.log_metric('loss', 0.95**i)
 
 
 # Define parameters

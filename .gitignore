@@ -4,6 +4,7 @@ input/energy/*
 input/MNIST/*
 input/nyc_taxi/*
 src/libs/*
+projects/*
 
 *.pyc
 *.pth
