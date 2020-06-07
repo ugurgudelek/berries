@@ -33,7 +33,7 @@ def experiment(train_cut_nos, test_cut_no):
     torch.multiprocessing.freeze_support()
 
     params = {'project_name': 'machining',
-              'experiment_name': f'toolwear_({"-".join(map(str, train_cut_nos))})_test({test_cut_no})',
+              'experiment_name': f'toolwear_6_7_20_({"-".join(map(str, train_cut_nos))})_test({test_cut_no})',
               'train_cut_nos': train_cut_nos,
               'test_cut_no': test_cut_no,
               'seed': 42,
@@ -92,7 +92,7 @@ def experiment(train_cut_nos, test_cut_no):
 
 
 if __name__ == "__main__":
-    AVAILABLE_CUT_NOS = [3, 4, 13, 14, 15, 16]
+    AVAILABLE_CUT_NOS = [1, 2, 3, 4, 13, 14, 15, 16]
 
     train_cut_nos_list = list(combinations(AVAILABLE_CUT_NOS, len(AVAILABLE_CUT_NOS) - 1))
     test_cut_no_list = [set(AVAILABLE_CUT_NOS).difference(set(train_cut_nos)).pop() for train_cut_nos in
@@ -102,6 +102,22 @@ if __name__ == "__main__":
 
     with tqdm() as pbar:
         for train_cut_nos, test_cut_no in zip(train_cut_nos_list, test_cut_no_list):
+            experiment(train_cut_nos, test_cut_no)
+            pbar.update(1)
+
+    with tqdm() as pbar:
+        for train_cut_nos, test_cut_no in zip([[13, 14, 15],  # scenario 1
+                                               [14, 15, 16],
+                                               [15, 16, 13],
+                                               [16, 13, 14],
+
+                                               [1, 2, 3],  # scenario 2
+                                               [2, 3, 4],
+                                               [3, 4, 1],
+                                               [4, 1, 2],
+
+                                               [13,14,15,16,4],
+                                               [13,14,15,16,4]],[16,13,14,15, 4, 1,2,3, 3,2]):
             experiment(train_cut_nos, test_cut_no)
             pbar.update(1)
 

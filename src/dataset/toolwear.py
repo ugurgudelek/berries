@@ -124,10 +124,10 @@ class Toolwear:
         # self.wavelet_xarr = None
 
         # add ref signal: signal_freq*2 Hz
-        # self.reading['data'] += 0.01*np.sin(2*np.pi*self.expected_tooth_freq*2*self.reading['time'])
+        # self.reading['data'] += 0.01*np.sin(2*np.pi*self.tooth_freq*2*self.reading['time'])
 
         # add ref signal: signal_freq*0.5 Hz
-        # self.reading['data'] += 0.005*np.sin(2*np.pi*self.expected_tooth_freq*0.5*self.reading['time'])
+        # self.reading['data'] += 0.005*np.sin(2*np.pi*self.tooth_freq*0.5*self.reading['time'])
 
         # create aggregation columns
         # self.apply_aggregation()
@@ -146,23 +146,15 @@ class Toolwear:
 
     @property
     def sampling_period(self):
-        return 1 / self.attributes['sampling_freq']
-
-    @property
-    def T(self):
-        """
-        T: interval : 1/Fs
-        :return:
-        """
         return 1 / self.sampling_freq
 
     @property
-    def expected_tooth_freq(self):
+    def tooth_freq(self):
         return self.n_flute * self.rpm / 60
 
     @property
     def dt_tooth(self):
-        return 1 / self.expected_tooth_freq
+        return 1 / self.tooth_freq
 
     @property
     def num_points_in_one_period(self):
@@ -196,8 +188,8 @@ class Toolwear:
         skip_sin = 9  # number of skip sine wave
 
         steps = np.linspace(0, 10, 10 * self.sampling_freq)
-        #             orig = np.sin(2*np.pi*self.expected_tooth_freq*steps)
-        s = np.sin(2 * np.pi * self.expected_tooth_freq * steps)
+        #             orig = np.sin(2*np.pi*self.tooth_freq*steps)
+        s = np.sin(2 * np.pi * self.tooth_freq * steps)
         for i in range(0, len(steps), (skip_sin + 1) * (self.num_points_per_tooth)):
             s[i:i + self.num_points_per_tooth * (skip_sin)] = 0.
         s[s < 0] = 0.
@@ -860,23 +852,20 @@ class Toolwear:
 
                 """
                 text = ax.annotate("found freq",
-                                   xy=(time[100], 1 / \
-                                       self.expected_tooth_freq),
+                                   xy=(time[100], 1 / self.tooth_freq),
                                    xytext=None,
                                    bbox=dict(boxstyle="round",
                                              facecolor="y", edgecolor="0.5"),
                                    arrowprops=dict(facecolor='yellow', shrink=0.05))
 
-                text = ax.annotate(f"Ref freq x2.0:{self.expected_tooth_freq * 2}",
-                                   xy=(time[100], 1 / \
-                                       (self.expected_tooth_freq * 2)),
+                text = ax.annotate(f"Ref freq x2.0:{self.tooth_freq * 2}",
+                                   xy=(time[100], 1 / (self.tooth_freq * 2)),
                                    xytext=None,
                                    bbox=dict(boxstyle="round",
                                              facecolor="y", edgecolor="0.5"),
                                    arrowprops=dict(facecolor='yellow', shrink=0.05))
-                text = ax.annotate(f"Ref freq x0.5:{self.expected_tooth_freq * 0.5}",
-                                   xy=(time[100], 1 / \
-                                       (self.expected_tooth_freq * 0.5)),
+                text = ax.annotate(f"Ref freq x0.5:{self.tooth_freq * 0.5}",
+                                   xy=(time[100], 1 / (self.tooth_freq * 0.5)),
                                    xytext=None,
                                    bbox=dict(boxstyle="round",
                                              facecolor="y", edgecolor="0.5"),
@@ -948,7 +937,7 @@ class Toolwear:
                 # else continue - if they are same value, no need to do anything
 
     def fix_time(self):
-        self.reading['time'] = np.arange(self.__len__()) * self.T
+        self.reading['time'] = np.arange(self.__len__()) * self.sampling_period
         self.reading['time'] = self.reading['time'].astype(np.float32)
 
     def raw_tdms_data(self, tdms_path):
@@ -959,7 +948,7 @@ class Toolwear:
         reading['data'] = reading['data'].astype(np.float32)
 
         # add time column
-        reading['time'] = np.arange(len(reading)) * self.T
+        reading['time'] = np.arange(len(reading)) * self.sampling_period
         reading['time'] = reading['time'].astype(np.float32)
 
         # add cutting_length column
@@ -1105,12 +1094,6 @@ class Toolwear:
 
         return vib
 
-    # @staticmethod
-    # def read_wavelet_image(img_path):
-    #     img = Image.open(img_path).convert('L')
-    #     img = np.array(img) / 255
-    #     return pd.DataFrame(img.T)
-
     @staticmethod
     def read_wavelet_data(data_path):
         return pd.read_csv(data_path, index_col=0)
@@ -1145,9 +1128,7 @@ class Toolwear:
         y = self.reading[yname].dropna()
         x = self.reading.loc[y.index, xname]
 
-        interp_f = interpolate.interp1d(x.values, y.values,
-                                        kind='cubic',
-                                        fill_value="extrapolate")
+        interp_f = interpolate.Akima1DInterpolator(x.values, y.values)
         new_x = self.reading[xname].values
         self.reading[yname] = interp_f(new_x)
 
@@ -1411,9 +1392,9 @@ class Toolwear:
                 Sampling Frequency:{self.sampling_freq}
                 Number of Cycle:{self.n_cycle}
                 Number of Point in 1 Cycle:{self.num_points_in_one_period}
-                T:{self.T}
+                T:{self.sampling_period}
                 dt tooth: {self.dt_tooth * 1000} ms
-                expected_tooth_freq : {self.expected_tooth_freq} Hz
+                tooth_freq : {self.tooth_freq} Hz
                 -----------------------------------------
                 Shape/Sampling Frequency =?: Elapsed Time -> {self.reading.shape[0] / self.sampling_freq} =? {self.reading['time'].iloc[-1]}
 
@@ -1769,7 +1750,7 @@ if __name__ == "__main__":
     from dask.distributed import Client, LocalCluster, Worker
 
     cluster = LocalCluster(processes=False,
-                           n_workers=1,
+                           n_workers=4,
                            threads_per_worker=4,
                            silence_logs='error',
                            #                        memory_limit='5GB',
@@ -1786,16 +1767,15 @@ if __name__ == "__main__":
     #     # except:
     #     #     continue
 
-    # for cut_no in [1, 2, 3, 4, 10, 11, 13, 14, 15, 16]:
-    #     vib = Toolwear.raw_batch_read(root=Path('D:/YandexDisk/machining/data'), kind='acc', cut_no=cut_no, n_cycle=200)
+    for cut_no in [3, 4]:
+        vib = Toolwear.raw_batch_read(root=Path('D:/YandexDisk/machining/data'), kind='acc', cut_no=cut_no, n_cycle=200)
 
-    for cut_no in [1, 2, 3, 4, 10, 11, 13, 14, 15, 16]:
+    for cut_no in [3, 4]:
         # try:
         vib = Toolwear.from_parquet(root=Path('D:/YandexDisk/machining/data'),
                                     cut_no=cut_no, kind='acc', client=client)
         vib.dask_wavelet_compute()
-        # except:
-        #     continue
+
 
     # dataset = ToolwearBag(root=Path('D:/YandexDisk/machining/data/'), kind='mic')
     # torch_dataset = dataset.to_torch_wavelet_dataset(seq_len=60)
