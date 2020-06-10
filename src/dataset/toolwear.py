@@ -1086,8 +1086,9 @@ class Toolwear:
 
                 vib.wavelet_aux = {'cutting_speed': vib.attributes['cutting_speed'],
                                    'tool_diameter': vib.attributes['tool_diameter'],
-                                   'sampling_freq': vib.attributes['sampling_freq'],
-                                   'tool_brand': vib.attributes['tool_brand']}
+                                   # 'sampling_freq': vib.attributes['sampling_freq'],
+                                   # 'tool_brand': vib.attributes['tool_brand']
+                                   }
 
             except:
                 pass
