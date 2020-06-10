@@ -29,11 +29,11 @@ from itertools import combinations, cycle
 # import IPython; IPython.embed(); exit(1)
 
 
-def experiment(train_cut_nos, test_cut_no):
+def experiment(pre_exp_name, train_cut_nos, test_cut_no):
     torch.multiprocessing.freeze_support()
 
     params = {'project_name': 'machining',
-              'experiment_name': f'toolwear_scenarios_({"-".join(map(str, train_cut_nos))})_test({test_cut_no})',
+              'experiment_name': f'{pre_exp_name}-({"-".join(map(str, train_cut_nos))})-({test_cut_no})',
               'train_cut_nos': train_cut_nos,
               'test_cut_no': test_cut_no,
               'seed': 42,
@@ -92,27 +92,44 @@ def experiment(train_cut_nos, test_cut_no):
 
 
 if __name__ == "__main__":
-    AVAILABLE_CUT_NOS = [1, 2, 3, 4, 13, 14, 15, 16]
-
+    # AVAILABLE_CUT_NOS = [1, 2, 3, 4, 13, 14, 15, 16]
     # train_cut_nos_list = list(combinations(AVAILABLE_CUT_NOS, len(AVAILABLE_CUT_NOS) - 1))
     # test_cut_no_list = [set(AVAILABLE_CUT_NOS).difference(set(train_cut_nos)).pop() for train_cut_nos in
     #                     train_cut_nos_list]
-    #
-    #
-    #
-    # with tqdm() as pbar:
-    #     for train_cut_nos, test_cut_no in zip(train_cut_nos_list, test_cut_no_list):
-    #         experiment(train_cut_nos, test_cut_no)
-    #         pbar.update(1)
+
+
+    SCENARIOS=(
+        ('all-10-I', (13, 14, 15), 16),
+        ('all-10-II', (16, 13, 14), 15),
+        ('all-10-III', (15, 16, 13), 14),
+        ('all-10-IV', (14, 15, 16), 13),
+
+        ('all-12-I', (1, 2, 3), 4),
+        ('all-12-II', (4, 1, 2), 3),
+        ('all-12-III', (3, 4, 1), 2),
+        ('all-12-IV', (2, 3, 4), 1),
+
+        ('same-dia-add-affect-I', (13, 14, 15, 16), 1),
+        ('same-dia-add-affect-I', (13, 14, 15, 16, 2), 1),
+        ('same-dia-add-affect-I', (13, 14, 15, 16, 2, 3), 1),
+        ('same-dia-add-affect-I', (13, 14, 15, 16, 2, 3, 4), 1),
+
+        ('same-dia-add-affect-II', (1, 2, 3, 4), 16),
+        ('same-dia-add-affect-II', (1, 2, 3, 4, 13), 16),
+        ('same-dia-add-affect-II', (1, 2, 3, 4, 13, 14), 16),
+        ('same-dia-add-affect-II', (1, 2, 3, 4, 13, 14, 15), 16),
+
+        ('same-speed-add-affect-I', (3, 4, 13, 14, 15, 16), 1),
+        ('same-speed-add-affect-I', (3, 4, 13, 14, 15, 16, 2), 1),
+
+        ('same-speed-add-affect-II', (1, 2, 13, 14, 15), 16),
+        ('same-speed-add-affect-II', (1, 2, 13, 14, 15, 3), 16),
+        ('same-speed-add-affect-II', (1, 2, 13, 14, 15, 3, 4), 16),
+    )
 
     with tqdm() as pbar:
-        for train_cut_nos, test_cut_no in zip([[13, 14, 15],  # scenario 1
-
-                                               [1, 2, 3],  # scenario 2
-
-                                               [13,14,15,16,4],
-                                               [13,14,15,16,4]],[16, 4, 3,2]):
-            experiment(train_cut_nos, test_cut_no)
+        for pre_exp_name, train_cut_nos, test_cut_no in SCENARIOS:
+            experiment(pre_exp_name, train_cut_nos, test_cut_no)
             pbar.update(1)
 
     # # Train plot
