@@ -1,0 +1,9 @@
+conda install -c pytorch pytorch 
+pip install tqdm
+conda install pandas
+pip install tensorboardx
+conda install matplotlib
+pip install torchvision
+pip install scikit-learn
+pip install statsmodels
+conda install -c conda-forge tensorflow
