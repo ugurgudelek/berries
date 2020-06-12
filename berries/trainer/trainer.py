@@ -17,7 +17,13 @@ from ..plot import Plotter
 
 
 class Trainer:
-    def __init__(self, root, model, dataset, metrics, hyperparams, params, logger, optimizer=None, criterion=None):
+    def __init__(self,
+                 root,
+                 model, dataset, metrics,
+                 hyperparams, params,
+                 logger,
+                 optimizer=None, criterion=None):
+
         # self._validate_hyperparams(hyperparams)
         # self._validate_params(params)
 
@@ -27,7 +33,7 @@ class Trainer:
 
         self.device = torch.device('cuda:0' if self.params['device'] == 'cuda' else 'cpu')
 
-        self.model = model.to(self.device).double()
+        self.model = model.to(self.device).float()
         self.dataset = dataset
         self.criterion = criterion or MSELoss()
         self.optimizer = optimizer or Adam(params=model.parameters(),
@@ -44,6 +50,7 @@ class Trainer:
                                        shuffle=True,  # todo: output.view(batch_size, -1) needs this!
                                        num_workers=1,
                                        pin_memory=self.on_cuda)  # True if cuda else otherwise
+        # about pin_memory: https://stackoverflow.com/a/55564072
 
         self.test_loader = DataLoader(self.dataset.testset,
                                       batch_size=self.hyperparams['test_batch_size'],
@@ -101,10 +108,14 @@ class Trainer:
 
         seen_item = 0
         # todo: add aux into data
-        for batch_ix, (data, targets, aux) in enumerate(loader):
+        for batch_ix, item in enumerate(loader):
+            data = item['data']['x']
+            targets = item['target']
+            aux = item['data'].get('aux', None)
 
             data, targets = data.to(self.device), targets.to(self.device)
-            aux = aux.to(self.device)
+            if aux is not None:
+                aux = aux.to(self.device)
 
             # Starting each batch, we detach the hidden state from how it was previously produced.
             # If we didn't, the model would try backpropagating all the way to start of the dataset.
@@ -113,7 +124,10 @@ class Trainer:
 
             # Loss
             # todo: add loss calculations. you can look into encoder_decoder_rnntrainer.py for more info.
-            output = self.model(data, aux)
+            if aux is None:
+                output = self.model(data)
+            else:
+                output = self.model(data, aux)
             loss = self.criterion(output, targets)
 
             if train:
@@ -125,7 +139,7 @@ class Trainer:
                 self.optimizer.step()
 
             seen_item += len(data)
-            if batch_ix % self.params['log_interval'] == 0:
+            if batch_ix % self.params['stdout_interval'] == 0:
                 print('\t'.join((
                     f"{'Train' if train else 'Test'}",
                     f"Epoch: {epoch} [{seen_item}/{len(loader.dataset)} ({100. * batch_ix / len(loader):.0f}%)]",
@@ -135,17 +149,6 @@ class Trainer:
             yield loss, output, targets
 
         self.model.train(not train)
-
-    def _log_metrics(self, phase, epoch, container):
-        for metric_key, metric_val in container.items():
-            self.logger.log_metric(log_name=f'{phase}_{metric_key}',
-                                   x=epoch,
-                                   y=np.mean(metric_val))
-
-    def _calculate_metrics(self, yhat, y, container):
-        for metric_fn in self.metrics:
-            container[metric_fn.__name__].append(metric_fn()(yhat, y))
-        return container
 
     def fit(self):
 
@@ -185,7 +188,7 @@ class Trainer:
                 self.logger.log_metric(log_name='validation_loss', x=epoch, y=np.mean(loss_container))
                 self._log_metrics(phase='validation', epoch=epoch, container=metric_container)
 
-                if epoch % self.params['save_interval'] == 0:
+                if epoch % self.params['log_interval'] == 0:
                     self.run_callbacks(epoch=epoch)
                     self.save_checkpoint(epoch=epoch)
 
@@ -200,6 +203,17 @@ class Trainer:
 
         except KeyboardInterrupt:
             print('Exiting from training early')
+
+    def _log_metrics(self, phase, epoch, container):
+        for metric_key, metric_val in container.items():
+            self.logger.log_metric(log_name=f'{phase}_{metric_key}',
+                                   x=epoch,
+                                   y=np.mean(metric_val))
+
+    def _calculate_metrics(self, yhat, y, container):
+        for metric_fn in self.metrics:
+            container[metric_fn.__name__].append(metric_fn()(yhat, y))
+        return container
 
     def save_checkpoint(self, epoch):  # todo: move into generic model
         # Save the model if the validation loss is the best we've seen so far.
@@ -245,18 +259,27 @@ class Trainer:
         return output
 
     def predict_loader(self, dataloader):
-        outputs = list()
-        targets = list()
+        output_list = list()
+        target_list = list()
         with torch.no_grad():
-            for batch_ix, (data, target, aux) in enumerate(dataloader):
-                data, target = data.to(self.device), target.to(self.device)
-                aux = aux.to(self.device)
-                output = self.model(data, aux)
+            for batch_ix, item in enumerate(dataloader):
+                data = item['data']['x']
+                targets = item['target']
+                aux = item['data'].get('aux', None)
 
-                outputs.append(output.detach().cpu().numpy())
-                targets.append(target.detach().cpu().numpy())
+                data, targets = data.to(self.device), targets.to(self.device)
+                if aux is not None:
+                    aux = aux.to(self.device)
 
-        return np.concatenate(outputs), np.concatenate(targets)
+                if aux is None:
+                    output = self.model(data)
+                else:
+                    output = self.model(data, aux)
+
+                output_list.append(output.detach().cpu().numpy())
+                target_list.append(targets.detach().cpu().numpy())
+
+        return np.concatenate(output_list), np.concatenate(target_list)
 
     def attach_callback(self, callback_fn):
         self._callback_fns.append(callback_fn)
