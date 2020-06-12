@@ -81,7 +81,10 @@ class LocalLogger(GenericLogger):
         try:
             self.experiment_fpath.mkdir(parents=True)
         except FileExistsError:
-            raise FileExistsError(f"Did you change experiment name? : {self.experiment_fpath}")
+            if 'debug' in str(self.experiment_fpath):
+                print("Logger running because of debug keyword.")
+            else:
+                raise FileExistsError(f"Did you change experiment name? : {self.experiment_fpath}")
 
         # save params and hyperparams
         with open(self.experiment_fpath / 'params.yaml', 'w') as file:

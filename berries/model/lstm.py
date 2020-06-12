@@ -97,14 +97,14 @@ class LSTM(nn.Module):
                 torch.Tensor(
                     self.num_layers,
                     batch_size,
-                    self.hidden_size).type(torch.DoubleTensor)), requires_grad=False).to(self.device)
+                    self.hidden_size).float()), requires_grad=False).to(self.device)
 
         c0 = nn.Parameter(
             nn.init.xavier_uniform_(
                 torch.Tensor(
                     self.num_layers,
                     batch_size,
-                    self.hidden_size).type(torch.DoubleTensor)), requires_grad=False).to(self.device)
+                    self.hidden_size).float()), requires_grad=False).to(self.device)
 
         return h0, c0
 

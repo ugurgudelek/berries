@@ -167,7 +167,8 @@ class MNISTInner(Dataset):
         if self.target_transform is not None:
             target = self.target_transform(target)
 
-        return img, target
+        return {'data': {'x': img},
+                'target': target, }
 
     def __len__(self):
         return len(self.data)

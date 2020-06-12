@@ -5,4 +5,6 @@
 # @File   : __init__.py
 
 
+from .logger import LocalLogger
+from .logger import NeptuneLogger
 from .logger import MultiLogger
