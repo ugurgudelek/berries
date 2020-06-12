@@ -55,11 +55,7 @@ class Accuracy(nn.Module):
         super().__init__()
 
     def forward(self, yhat, y):
-        y_pred_tag = torch.round(torch.sigmoid(yhat.detach()))
-        correct_results_sum = (y_pred_tag == y).sum().float()
-        acc = correct_results_sum / y.shape[0]
-        acc = torch.round(acc * 100)
-        return acc.cpu().numpy().item()
+        return 100*torch.mean((torch.argmax(yhat.detach(), dim=1) == y).float()).cpu().numpy().item()
 
 
 class R2(nn.Module):
