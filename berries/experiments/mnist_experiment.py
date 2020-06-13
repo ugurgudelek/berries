@@ -40,7 +40,8 @@ class MNISTExperiment:
 
         self.dataset = MNIST(root='../../input/', transform=transforms.Compose([transforms.ToTensor(),
                                                                                 transforms.Normalize((0.1307,),
-                                                                                                     (0.3081,))]))
+                                                                                                     (0.3081,))]),
+                             download=True)
 
         self.logger = LocalLogger(
             root=self.params['root'],
