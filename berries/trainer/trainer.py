@@ -198,9 +198,6 @@ class Trainer:
                     self.plotter.learning_curve(read_dir=self.experiment_fpath,
                                                 save_dir=self.experiment_fpath / 'figures')
 
-
-
-
         except KeyboardInterrupt:
             print('Exiting from training early')
 
@@ -284,9 +281,9 @@ class Trainer:
     def attach_callback(self, callback_fn):
         self._callback_fns.append(callback_fn)
 
-    def run_callbacks(self, epoch, train=False):
+    def run_callbacks(self, epoch):
         for callback_fn in self._callback_fns:
-            callback_fn(instance=self, epoch=epoch, train=train)
+            callback_fn(instance=self, epoch=epoch)
 
     @staticmethod
     def proba(x):

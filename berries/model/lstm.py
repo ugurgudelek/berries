@@ -17,7 +17,7 @@ class LSTM(nn.Module):
                  bidirectional=False,
                  stateful=False,
                  hidden_reset_period=None,
-                 problem_type='many-to-many'):
+                 return_sequences=False):
         super(LSTM, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -26,7 +26,7 @@ class LSTM(nn.Module):
         self.batch_size = batch_size  # todo: check this
         self.aux_input_size = aux_input_size
         self.bidirectional =bidirectional
-        self.problem_type = problem_type
+        self.return_sequences = return_sequences
 
         self.stateful = stateful  # todo: check this
         self.step = 0
@@ -56,7 +56,8 @@ class LSTM(nn.Module):
         # Define the output layer
         self.classifier = nn.Sequential(nn.Linear(in_features=self.hidden_size+self.aux_input_size,
                                                   out_features=self.output_size),
-                                        nn.Sigmoid())  # ! be careful. output cannot exceed 1.
+                                        # nn.Sigmoid(),   # ! be careful. output cannot exceed 1.
+                                        )
 
         self.hidden = self._init_hidden()
         self._init_weights()
@@ -138,19 +139,19 @@ class LSTM(nn.Module):
         last_seq_out = lstm_out[:, -1, :]  # all_batch, last_seq, all_hidden
 
 
-        if self.problem_type == 'many-to-many':
-            fc_out = self.classifier(lstm_out)  # iterate over all hidden dim
+
+        if self.return_sequences:
+            raise NotImplementedError()
+            fc_in = lstm_out
             # fc_out shape: [batch_size, seq_len, output_size]
 
-        elif self.problem_type == 'many-to-one':
+        else:
             fc_in = last_seq_out
             if aux is not None:  # concat aux data
                 fc_in = torch.cat((last_seq_out, aux), dim=1)
             # tensor containing the output features (h_t) from the last layer of the LSTM
-            fc_out = self.classifier(fc_in)
 
-        else:
-            raise ValueError(f"Wrong 'problem_type':{self.problem_type}")
+        fc_out = self.classifier(fc_in)
 
         # detach hidden, otherwise retain_graph=True is necessary if stateful=True.
         self.hidden = (self.hidden[0].detach_(), self.hidden[1].detach_())

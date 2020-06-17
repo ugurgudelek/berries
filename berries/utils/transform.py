@@ -9,6 +9,7 @@ class Normalizer():
     def fit(self, data):
         self.min = data.min()
         self.max = data.max()
+        return self
 
     def transform(self, data):
         return (data - self.min) / (self.max - self.min)
