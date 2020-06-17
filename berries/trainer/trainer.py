@@ -48,15 +48,15 @@ class Trainer:
                                        batch_size=self.hyperparams['train_batch_size'],
                                        drop_last=False,
                                        shuffle=True,  # todo: output.view(batch_size, -1) needs this!
-                                       num_workers=1,
+                                       num_workers=0,
                                        pin_memory=self.on_cuda)  # True if cuda else otherwise
         # about pin_memory: https://stackoverflow.com/a/55564072
 
         self.test_loader = DataLoader(self.dataset.testset,
                                       batch_size=self.hyperparams['test_batch_size'],
                                       drop_last=False,
-                                      shuffle=False,
-                                      num_workers=1,
+                                      shuffle=True,
+                                      num_workers=0,
                                       pin_memory=self.on_cuda)  # True if cuda else otherwise
 
         self.logger = logger
