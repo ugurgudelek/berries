@@ -28,6 +28,8 @@ class LSTM(nn.Module):
         self.bidirectional =bidirectional
         self.return_sequences = return_sequences
 
+        self.num_directions = 2 if self.bidirectional else 1
+
         self.stateful = stateful  # todo: check this
         self.step = 0
         if self.stateful and hidden_reset_period is None:
@@ -54,7 +56,7 @@ class LSTM(nn.Module):
                             )
 
         # Define the output layer
-        self.classifier = nn.Sequential(nn.Linear(in_features=self.hidden_size+self.aux_input_size,
+        self.classifier = nn.Sequential(nn.Linear(in_features=self.hidden_size*self.num_directions+self.aux_input_size,
                                                   out_features=self.output_size),
                                         # nn.Sigmoid(),   # ! be careful. output cannot exceed 1.
                                         )
@@ -96,14 +98,14 @@ class LSTM(nn.Module):
         h0 = nn.Parameter(
             nn.init.xavier_uniform_(
                 torch.Tensor(
-                    self.num_layers,
+                    self.num_layers*self.num_directions,
                     batch_size,
                     self.hidden_size).float()), requires_grad=False).to(self.device)
 
         c0 = nn.Parameter(
             nn.init.xavier_uniform_(
                 torch.Tensor(
-                    self.num_layers,
+                    self.num_layers*self.num_directions,
                     batch_size,
                     self.hidden_size).float()), requires_grad=False).to(self.device)
 
