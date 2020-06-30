@@ -47,7 +47,7 @@ class Trainer:
         self.train_loader = DataLoader(self.dataset.trainset,
                                        batch_size=self.hyperparams['train_batch_size'],
                                        drop_last=False,
-                                       shuffle=True,  # todo: output.view(batch_size, -1) needs this!
+                                       shuffle=self.hyperparams.get('train_shuffle', True),  # todo: output.view(batch_size, -1) needs this!
                                        num_workers=0,
                                        pin_memory=self.on_cuda)  # True if cuda else otherwise
         # about pin_memory: https://stackoverflow.com/a/55564072
@@ -55,7 +55,7 @@ class Trainer:
         self.test_loader = DataLoader(self.dataset.testset,
                                       batch_size=self.hyperparams['test_batch_size'],
                                       drop_last=False,
-                                      shuffle=True,
+                                      shuffle=self.hyperparams.get('test_shuffle', True),
                                       num_workers=0,
                                       pin_memory=self.on_cuda)  # True if cuda else otherwise
 
@@ -68,11 +68,12 @@ class Trainer:
 
         # Resume or not
         if self.params['resume'] or self.params['pretrained']:
-            print("Loading checkpoint...")
+
             cpt_path = self.experiment_fpath / 'checkpoints'
+            # print(f"Loading checkpoint...{cpt_path}")
             if not cpt_path.exists():
                 raise Exception(
-                    """
+                    f"""
                     You do not have any checkpoint to resume.
                     If you want to start over, make sure --resume and --pretrained is False.
                     """
