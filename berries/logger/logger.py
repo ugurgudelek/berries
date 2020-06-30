@@ -43,17 +43,19 @@ class GenericLogger(metaclass=ABCMeta):
 
 
 class MultiLogger(GenericLogger):
-    def __init__(self, root, project_name, experiment_name, params, hyperparams):
+    def __init__(self, root, project_name, experiment_name, params, hyperparams, offline=False):
         super(MultiLogger, self).__init__(root, project_name, experiment_name, params, hyperparams)
         self.project_name = project_name
         self.experiment_name = experiment_name
         self.params = params
         self.hyperparams = hyperparams
+        self.offline = offline
 
         self.loggers = [
             LocalLogger(root, project_name, experiment_name, params, hyperparams),
-            NeptuneLogger(root, project_name, experiment_name, params, hyperparams),
         ]
+        if not offline:
+            self.loggers.append(NeptuneLogger(root, project_name, experiment_name, params, hyperparams))
 
     def log_metric(self, log_name, x, y, timestamp=None):
         for logger in self.loggers:
@@ -83,6 +85,8 @@ class LocalLogger(GenericLogger):
         except FileExistsError:
             if 'debug' in str(self.experiment_fpath):
                 print("Logger running because of debug keyword.")
+            elif params['pretrained'] or params['resume']:
+                print("Logger starting from existing directory because of pretrained or resume keyword.")
             else:
                 raise FileExistsError(f"Did you change experiment name? : {self.experiment_fpath}")
 

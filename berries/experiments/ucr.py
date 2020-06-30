@@ -26,7 +26,7 @@ class UCRExperiment(Experiment):
         super(UCRExperiment, self).__init__()
 
         self.params = {'project_name': 'debug',
-                       'experiment_name': 'Crop-2',
+                       'experiment_name': 'NonInvasiveFetalECGThorax1',
                        'device': 'cuda' if torch.cuda.is_available() else 'cpu',
                        'resume': False,
                        'pretrained': False,
@@ -35,16 +35,16 @@ class UCRExperiment(Experiment):
                        'root': Path('../../'),
                        }
 
-        self.hyperparams = {'lr': 0.001,
+        self.hyperparams = {'lr': 0.0005,
                             'weight_decay': 0.,
                             'epoch': 2000,
-                            'train_batch_size': 1000,
-                            'test_batch_size': 1000,
-                            'seq_len': 46,
+                            'train_batch_size': 300,
+                            'test_batch_size': 300,
+                            'seq_len': 750,
                             'input_size': 1,
-                            'hidden_size': 200,
+                            'hidden_size': 100,
                             'num_layers': 1,
-                            'output_size': 24,
+                            'output_size': 42,
                             'aux_input_size': 0,
                             'bidirectional': False,
                             'stateful': False,
@@ -52,7 +52,7 @@ class UCRExperiment(Experiment):
                             'return_sequences': False,
                             }
 
-        self.dataset = BerriesUEAUCRDataset(name='Crop', kind='univariate')
+        self.dataset = BerriesUEAUCRDataset(name='NonInvasiveFetalECGThorax1', kind='univariate')
 
         self.set_logger(backend=LocalLogger)
 

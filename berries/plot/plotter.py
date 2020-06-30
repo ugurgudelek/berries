@@ -14,7 +14,29 @@ class Plotter():
         pass
 
     @staticmethod
-    def plot_prediction(prediction, targets, wavelet_img, title):
+    def plot_prediction(prediction, targets, title):
+        indices = list(range(len(prediction)))
+
+        fig, ax = plt.subplots(nrows=1)
+
+        ax.scatter(indices, prediction, label='Prediction', s=1, c='r')
+        ax.plot(indices, targets, label='Target', linestyle='dashed')
+        ax.set_ylabel('Amplitude')
+        ax.legend(frameon=True, loc='upper left')
+
+        ax.set_xlim(indices[0], indices[-1])
+        # ax.set_ylim(0, ax.get_ylim()[1])
+
+        ax.set_xlabel('Time (sec)')
+        ax.set_ylabel(r'Tool wear ($\mu{m}$)')
+
+        # plt.title(title)
+
+        # return mpl2pillow(fig)
+        return ax
+
+    @staticmethod
+    def plot_prediction_and_wavelet(prediction, targets, wavelet_img, title):
         indices = list(range(len(prediction)))
 
         fig, axes = plt.subplots(nrows=2)
