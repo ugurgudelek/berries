@@ -4,7 +4,7 @@
 # @Email  : ugurgudelek@gmail.com
 # @File   : logger.py
 
-import neptune
+
 from pathlib import Path
 import pandas as pd
 import yaml
@@ -44,7 +44,8 @@ class GenericLogger(metaclass=ABCMeta):
 
 class MultiLogger(GenericLogger):
     def __init__(self, root, project_name, experiment_name, params, hyperparams, offline=False):
-        super(MultiLogger, self).__init__(root, project_name, experiment_name, params, hyperparams)
+        super(MultiLogger, self).__init__(
+            root, project_name, experiment_name, params, hyperparams)
         self.project_name = project_name
         self.experiment_name = experiment_name
         self.params = params
@@ -52,10 +53,12 @@ class MultiLogger(GenericLogger):
         self.offline = offline
 
         self.loggers = [
-            LocalLogger(root, project_name, experiment_name, params, hyperparams),
+            LocalLogger(root, project_name, experiment_name,
+                        params, hyperparams),
         ]
         if not offline:
-            self.loggers.append(NeptuneLogger(root, project_name, experiment_name, params, hyperparams))
+            self.loggers.append(NeptuneLogger(
+                root, project_name, experiment_name, params, hyperparams))
 
     def log_metric(self, log_name, x, y, timestamp=None):
         for logger in self.loggers:
@@ -63,7 +66,8 @@ class MultiLogger(GenericLogger):
 
     def log_image(self, log_name, x, y, image_name=None, description=None, timestamp=None):
         for logger in self.loggers:
-            logger.log_image(log_name, x, y, image_name, description, timestamp)
+            logger.log_image(log_name, x, y, image_name,
+                             description, timestamp)
 
     def log_text(self, log_name, x, y, timestamp=None):
         for logger in self.loggers:
@@ -76,7 +80,8 @@ class MultiLogger(GenericLogger):
 
 class LocalLogger(GenericLogger):
     def __init__(self, root, project_name, experiment_name, params, hyperparams):
-        super(LocalLogger, self).__init__(root, project_name, experiment_name, params, hyperparams)
+        super(LocalLogger, self).__init__(
+            root, project_name, experiment_name, params, hyperparams)
 
         self.experiment_fpath = self.root / 'projects' / project_name / experiment_name
 
@@ -86,20 +91,24 @@ class LocalLogger(GenericLogger):
             if 'debug' in str(self.experiment_fpath):
                 print("Logger running because of debug keyword.")
             elif params['pretrained'] or params['resume']:
-                print("Logger starting from existing directory because of pretrained or resume keyword.")
+                print(
+                    "Logger starting from existing directory because of pretrained or resume keyword.")
             else:
-                raise FileExistsError(f"Did you change experiment name? : {self.experiment_fpath}")
+                raise FileExistsError(
+                    f"Did you change experiment name? : {self.experiment_fpath}")
 
         # save params and hyperparams
         with open(self.experiment_fpath / 'params.yaml', 'w') as file:
-            yaml.dump({**params, **hyperparams}, file, default_flow_style=False, sort_keys=False)
+            yaml.dump({**params, **hyperparams}, file,
+                      default_flow_style=False, sort_keys=False)
 
         self.container = {'metric': defaultdict(list),
                           'image': defaultdict(list),
                           'text': defaultdict(list)}
 
     def log_metric(self, log_name, x, y, timestamp=None):
-        self.container['metric'][log_name].append({'x': x, 'y': y, 'timestamp': timestamp})
+        self.container['metric'][log_name].append(
+            {'x': x, 'y': y, 'timestamp': timestamp})
 
     def log_image(self, log_name, x, y, image_name=None, description=None, timestamp=None):
         self.container['image'][log_name].append({'x': x, 'y': y,
@@ -108,7 +117,8 @@ class LocalLogger(GenericLogger):
                                                   'timestamp': timestamp})
 
     def log_text(self, log_name, x, y, timestamp=None):
-        self.container['text'][log_name].append({'x': x, 'y': y, 'timestamp': timestamp})
+        self.container['text'][log_name].append(
+            {'x': x, 'y': y, 'timestamp': timestamp})
 
     def save(self):
         for type_key, type_dict in self.container.items():
@@ -116,28 +126,34 @@ class LocalLogger(GenericLogger):
             tpath.mkdir(parents=True, exist_ok=True)
             if type_key == 'metric':
                 for metric_name, metric_list in type_dict.items():
-                    pd.DataFrame(metric_list).to_csv(tpath / f"{metric_name}.csv", index=False)
+                    pd.DataFrame(metric_list).to_csv(
+                        tpath / f"{metric_name}.csv", index=False)
             if type_key == 'image':
                 for log_name, image_list in type_dict.items():
                     ipath = (tpath / log_name)
                     ipath.mkdir(parents=True, exist_ok=True)
                     for image_dict in image_list:
-                        image_dict['y'].save(ipath / f"{image_dict['image_name']}.png")
+                        image_dict['y'].save(
+                            ipath / f"{image_dict['image_name']}.png")
                 # drop image container after successful save operation
                 self.container['image'] = defaultdict(list)
             if type_key == 'text':
                 for log_name, text_list in type_dict.items():
-                    pd.DataFrame(text_list).to_csv(tpath / f"{log_name}.csv", index=False)
+                    pd.DataFrame(text_list).to_csv(
+                        tpath / f"{log_name}.csv", index=False)
 
 
 class NeptuneLogger(GenericLogger):
     def __init__(self, root, project_name, experiment_name, params, hyperparams):
-        super(NeptuneLogger, self).__init__(root, project_name, experiment_name, params, hyperparams)
+        import neptune
+        super(NeptuneLogger, self).__init__(
+            root, project_name, experiment_name, params, hyperparams)
 
         neptune.init(project_qualified_name=f'ugurgudelek/{project_name}',
                      backend=neptune.HostedNeptuneBackend())
         self.experiment = neptune.create_experiment(name=experiment_name,
-                                                    params={**params, **hyperparams},
+                                                    params={
+                                                        **params, **hyperparams},
                                                     upload_stdout=False,
                                                     send_hardware_metrics=False)
 
@@ -145,7 +161,8 @@ class NeptuneLogger(GenericLogger):
         self.experiment.log_metric(log_name, x, y, timestamp)
 
     def log_image(self, log_name, x, y, image_name=None, description=None, timestamp=None):
-        self.experiment.log_image(log_name, x, y, image_name, description, timestamp)
+        self.experiment.log_image(
+            log_name, x, y, image_name, description, timestamp)
 
     def log_text(self, log_name, x, y, timestamp=None):
         self.experiment.log_text(log_name, x, y, timestamp)
@@ -155,6 +172,7 @@ class NeptuneLogger(GenericLogger):
 
     def stop(self):
         self.experiment.stop()
+
 
 class WandBLogger(GenericLogger):
     pass
