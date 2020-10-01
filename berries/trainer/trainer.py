@@ -31,23 +31,28 @@ class Trainer:
         self.hyperparams = hyperparams
         self.params = params
 
-        self.device = torch.device('cuda:0' if self.params['device'] == 'cuda' else 'cpu')
+        self.device = torch.device(
+            'cuda:0' if self.params['device'] == 'cuda' else 'cpu')
 
         self.model = model.to(self.device).float()
         self.dataset = dataset
         self.criterion = criterion or MSELoss()
         self.optimizer = optimizer or Adam(params=model.parameters(),
-                                           lr=self.hyperparams.get('lr', 0.001),
+                                           lr=self.hyperparams.get(
+                                               'lr', 0.001),
                                            weight_decay=self.hyperparams.get('weight_decay', 0))
 
         self.metrics = metrics
 
-        self.experiment_fpath = self.root / 'projects' / params['project_name'] / params['experiment_name']
+        self.experiment_fpath = self.root / 'projects' / \
+            params['project_name'] / params['experiment_name']
 
         self.train_loader = DataLoader(self.dataset.trainset,
                                        batch_size=self.hyperparams['train_batch_size'],
                                        drop_last=False,
-                                       shuffle=self.hyperparams.get('train_shuffle', True),  # todo: output.view(batch_size, -1) needs this!
+                                       # todo: output.view(batch_size, -1) needs this!
+                                       shuffle=self.hyperparams.get(
+                                           'train_shuffle', True),
                                        num_workers=0,
                                        pin_memory=self.on_cuda)  # True if cuda else otherwise
         # about pin_memory: https://stackoverflow.com/a/55564072
@@ -55,7 +60,8 @@ class Trainer:
         self.test_loader = DataLoader(self.dataset.testset,
                                       batch_size=self.hyperparams['test_batch_size'],
                                       drop_last=False,
-                                      shuffle=self.hyperparams.get('test_shuffle', True),
+                                      shuffle=self.hyperparams.get(
+                                          'test_shuffle', True),
                                       num_workers=0,
                                       pin_memory=self.on_cuda)  # True if cuda else otherwise
 
@@ -78,7 +84,8 @@ class Trainer:
                     If you want to start over, make sure --resume and --pretrained is False.
                     """
                 )
-            last_epoch = sorted(list(map(int, os.listdir(cpt_path))))[-1]  # todo: change with Path
+            # todo: change with Path
+            last_epoch = sorted(list(map(int, os.listdir(cpt_path))))[-1]
             self.load_checkpoint(epoch=last_epoch)
             print(f"Checkpoint is loaded from {last_epoch}")
         else:
@@ -108,7 +115,6 @@ class Trainer:
         self.model.train(train)  # enable or disable dropout or batch norm
 
         seen_item = 0
-        # todo: add aux into data
         for batch_ix, item in enumerate(loader):
             data = item['data']['x']
             targets = item['target']
@@ -136,7 +142,8 @@ class Trainer:
                 loss.backward()
                 # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
                 if self.hyperparams.get('clip', None):  # if clip is given
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.hyperparams['clip'])
+                    torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(), self.hyperparams['clip'])
                 self.optimizer.step()
 
             seen_item += len(data)
@@ -152,6 +159,7 @@ class Trainer:
         self.model.train(not train)
 
     def fit(self):
+        # todo: add dataset param. remove all dataset process from __init__()
 
         if self.params['pretrained']:
             raise Exception("-You can not use fit with --pretrained=True")
@@ -165,9 +173,12 @@ class Trainer:
                 metric_container = defaultdict(list)
                 for loss, output, target in self._on_epoch(train=False, epoch=0):
                     loss_container.append(loss.item())
-                    metric_container = self._calculate_metrics(yhat=output, y=target, container=metric_container)
-                self.logger.log_metric(log_name='validation_loss', x=0, y=np.mean(loss_container))
-                self._log_metrics(phase='validation', epoch=0, container=metric_container)
+                    metric_container = self._calculate_metrics(
+                        yhat=output, y=target, container=metric_container)
+                self.logger.log_metric(
+                    log_name='validation_loss', x=0, y=np.mean(loss_container))
+                self._log_metrics(phase='validation', epoch=0,
+                                  container=metric_container)
 
             for epoch in range(self.start_epoch, self.hyperparams['epoch'] + 1):
                 # Training loop
@@ -175,9 +186,12 @@ class Trainer:
                 metric_container = defaultdict(list)
                 for loss, output, target in self._on_epoch(train=True, epoch=epoch):
                     loss_container.append(loss.item())
-                    metric_container = self._calculate_metrics(yhat=output, y=target, container=metric_container)
-                self.logger.log_metric(log_name='training_loss', x=epoch, y=np.mean(loss_container))
-                self._log_metrics(phase='training', epoch=epoch, container=metric_container)
+                    metric_container = self._calculate_metrics(
+                        yhat=output, y=target, container=metric_container)
+                self.logger.log_metric(
+                    log_name='training_loss', x=epoch, y=np.mean(loss_container))
+                self._log_metrics(phase='training', epoch=epoch,
+                                  container=metric_container)
 
                 # Validation loop
                 loss_container = list()
@@ -185,9 +199,12 @@ class Trainer:
                 with torch.no_grad():
                     for loss, output, target in self._on_epoch(train=False, epoch=epoch):
                         loss_container.append(loss.item())
-                        metric_container = self._calculate_metrics(yhat=output, y=target, container=metric_container)
-                self.logger.log_metric(log_name='validation_loss', x=epoch, y=np.mean(loss_container))
-                self._log_metrics(phase='validation', epoch=epoch, container=metric_container)
+                        metric_container = self._calculate_metrics(
+                            yhat=output, y=target, container=metric_container)
+                self.logger.log_metric(
+                    log_name='validation_loss', x=epoch, y=np.mean(loss_container))
+                self._log_metrics(phase='validation',
+                                  epoch=epoch, container=metric_container)
 
                 if epoch % self.params['log_interval'] == 0:
                     self.run_callbacks(epoch=epoch)
@@ -289,3 +306,9 @@ class Trainer:
     @staticmethod
     def proba(x):
         return torch.nn.functional.softmax(x.detach(), dim=1).cpu().numpy()
+
+    def fit_transform(self, dataset):
+        raise NotImplementedError()
+
+    def transform(self, dataset):
+        raise NotImplementedError()

@@ -5,3 +5,4 @@ from .lstm import LSTM
 from .ae import AE
 from .vae import VAE
 from .pca import PCA
+from .vrae import VRAE

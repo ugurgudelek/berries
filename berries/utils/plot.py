@@ -10,16 +10,24 @@ from matplotlib import rc
 from matplotlib.ticker import MultipleLocator
 from sklearn.metrics import confusion_matrix
 from PIL import Image
+from sklearn.manifold import TSNE
+from sklearn.decomposition import TruncatedSVD
+import numpy as np
+from random import randint
+import os
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 
+from plotly.graph_objs import *
+import plotly
 import io
+
 
 def plot_confusion_matrix(y_true, y_pred, classes,
                           save_path=None,
                           title='Confusion matrix',
                           cmap=plt.get_cmap('Blues')
                           ):
-
-
     """
     This function prints and plots the confusion matrix.
     Normalization can be applied by setting `normalize=True`.
@@ -33,7 +41,6 @@ def plot_confusion_matrix(y_true, y_pred, classes,
     # classes = classes[unique_labels(y_true, y_pred)]
 
     cm_norm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-
 
     fig, ax = plt.subplots()
     im = ax.imshow(cm, interpolation='nearest', cmap=cmap)
@@ -68,6 +75,7 @@ def plot_confusion_matrix(y_true, y_pred, classes,
         plt.savefig(save_path)
     return ax
 
+
 def image_folder_to_gif(fpath, glob=None):
     import imageio
     from pathlib import Path
@@ -75,16 +83,17 @@ def image_folder_to_gif(fpath, glob=None):
     from tqdm import tqdm
     fpath = Path(fpath)
     filenames = list(fpath.glob(glob or '*.jpg'))
-    with imageio.get_writer(fpath/'animated.gif', mode='I') as writer:
+    with imageio.get_writer(fpath / 'animated.gif', mode='I') as writer:
         with tqdm(total=len(filenames), desc='Reading images..') as pbar:
             for filename in filenames:
                 image = imageio.imread(filename)
                 writer.append_data(image)
                 pbar.update(1)
-    optimize(source=str(fpath)+'/animated.gif',
-             destination=str(fpath)+'/optimized.gif',
+    optimize(source=str(fpath) + '/animated.gif',
+             destination=str(fpath) + '/optimized.gif',
              colors=10,
              options=["--verbose"])
+
 
 def camera_ready_matplotlib_style(plot_func):
     def wrapper(*args, **kwargs):
@@ -136,3 +145,108 @@ def mpl2pillow(fig):
     # buf.close()
     plt.close(fig)
     return img
+
+
+def plot_clustering(z_run, labels, engine='plotly', title_postfix='z', download=False, folder_name='clustering'):
+    """
+    Given latent variables for all timeseries, and output of k-means, run PCA and tSNE on latent vectors and color the points using cluster_labels.
+    :param z_run: Latent vectors for all input tensors
+    :param labels: Cluster labels for all input tensors
+    :param engine: plotly/matplotlib
+    :param download: If true, it will download plots in `folder_name`
+    :param folder_name: Download folder to dump plots
+    :return:
+    """
+    def plot_clustering_plotly(z_run, labels):
+
+        labels = labels[:z_run.shape[0]]  # because of weird batch_size
+
+        hex_colors = []
+        for _ in np.unique(labels):
+            hex_colors.append('#%06X' % randint(0, 0xFFFFFF))
+
+        colors = [hex_colors[int(i)] for i in labels]
+
+        z_run_pca = TruncatedSVD(n_components=3).fit_transform(z_run)
+        z_run_tsne = TSNE(perplexity=80, min_grad_norm=1E-12,
+                          n_iter=3000).fit_transform(z_run)
+
+        trace = Scatter(
+            x=z_run_pca[:, 0],
+            y=z_run_pca[:, 1],
+            mode='markers',
+            marker=dict(color=colors)
+        )
+        data = Data([trace])
+        layout = Layout(
+            title='PCA on z_run',
+            showlegend=False
+        )
+        fig = Figure(data=data, layout=layout)
+        plotly.offline.iplot(fig)
+
+        trace = Scatter(
+            x=z_run_tsne[:, 0],
+            y=z_run_tsne[:, 1],
+            mode='markers',
+            marker=dict(color=colors)
+        )
+        data = Data([trace])
+        layout = Layout(
+            title='tSNE on z_run',
+            showlegend=False
+        )
+        fig = Figure(data=data, layout=layout)
+        plotly.offline.iplot(fig)
+
+    def plot_clustering_matplotlib(z_run, labels, title_postfix, download, folder_name):
+
+        labels = labels[:z_run.shape[0]]  # because of weird batch_size
+
+        hex_colors = ['tab:blue', 'tab:orange', 'tab:green']
+        patches = [mpatches.Patch(color='tab:blue', label='Class 0'),
+                   mpatches.Patch(color='tab:orange', label='Class 1'),
+                   mpatches.Patch(color='tab:green', label='Class 2')]
+        # for _ in np.unique(labels):
+        #     hex_colors.append('#%06X' % randint(0, 0xFFFFFF))
+
+        colors = [hex_colors[int(i)] for i in labels]
+
+        z_run_pca = TruncatedSVD(n_components=3).fit_transform(z_run)
+        z_run_tsne = TSNE(perplexity=80, min_grad_norm=1E-12,
+                          n_iter=3000).fit_transform(z_run)
+
+        plt.scatter(z_run_pca[:, 0], z_run_pca[:, 1],
+                    c=colors, marker='.', linewidths=0)
+
+        plt.legend(handles=patches)
+        plt.title(f'PCA on {title_postfix}')
+        if download:
+            if os.path.exists(folder_name):
+                pass
+            else:
+                os.makedirs(folder_name, exist_ok=True)
+            plt.savefig(folder_name + "/pca.png")
+
+        plt.show()
+
+        plt.scatter(z_run_tsne[:, 0], z_run_tsne[:, 1],
+                    c=colors, marker='.', linewidths=0)
+        plt.legend(handles=patches)
+        plt.title(f'tSNE on {title_postfix}')
+        if download:
+            if os.path.exists(folder_name):
+                pass
+            else:
+                os.makedirs(folder_name, exist_ok=True)
+            plt.savefig(folder_name + "/tsne.png")
+
+        plt.show()
+
+    if (download == False) & (engine == 'plotly'):
+        plot_clustering_plotly(z_run, labels)
+    if (download) & (engine == 'plotly'):
+        print("Can't download plotly plots")
+    if engine == 'matplotlib':
+        plot_clustering_matplotlib(
+            z_run, labels, title_postfix, download, folder_name)
