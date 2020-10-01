@@ -13,8 +13,6 @@ from PIL import Image
 from functools import reduce
 
 
-
-
 class MNIST:
     """Placeholder class for MNISTInner
     `MNIST <http://yann.lecun.com/exdb/mnist/>`_ Dataset.
@@ -36,10 +34,16 @@ class MNIST:
         'http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz',
     ]
 
-    classes = ['0 - zero', '1 - one', '2 - two', '3 - three', '4 - four',
-               '5 - five', '6 - six', '7 - seven', '8 - eight', '9 - nine']
+    classes = [
+        '0 - zero', '1 - one', '2 - two', '3 - three', '4 - four', '5 - five',
+        '6 - six', '7 - seven', '8 - eight', '9 - nine'
+    ]
 
-    def __init__(self, root, transform=None, target_transform=None, download=False):
+    def __init__(self,
+                 root,
+                 transform=None,
+                 target_transform=None,
+                 download=False):
         self.root = Path(root)
         self.transform = transform
         self.target_transform = target_transform
@@ -52,13 +56,17 @@ class MNIST:
             raise RuntimeError('Dataset not found.' +
                                ' You can use download=True to download it')
 
-        train_data, train_targets = torch.load(self.processed_folder / self.training_file)
-        test_data, test_targets = torch.load(self.processed_folder / self.test_file)
+        train_data, train_targets = torch.load(self.processed_folder /
+                                               self.training_file)
+        test_data, test_targets = torch.load(self.processed_folder /
+                                             self.test_file)
 
-        self.trainset = MNISTInner(data=train_data, targets=train_targets,
+        self.trainset = MNISTInner(data=train_data,
+                                   targets=train_targets,
                                    transform=self.transform,
                                    target_transform=self.target_transform)
-        self.testset = MNISTInner(data=test_data, targets=test_targets,
+        self.testset = MNISTInner(data=test_data,
+                                  targets=test_targets,
                                   transform=self.transform,
                                   target_transform=self.target_transform)
 
@@ -83,16 +91,16 @@ class MNIST:
         return data, targets
 
     def _check_exists(self, *args):
-        return reduce(lambda a, b: os.path.exists(a) and
-                                   os.path.exists(b), args)
+        return reduce(lambda a, b: os.path.exists(a) and os.path.exists(b),
+                      args)
 
     def download(self):
         """Download the MNIST data if it doesn't exist in processed_folder already."""
         from six.moves import urllib
         import gzip
 
-        if self._check_exists(self.processed_folder/self.training_file,
-                              self.processed_folder/self.test_file):
+        if self._check_exists(self.processed_folder / self.training_file,
+                              self.processed_folder / self.test_file):
             return
 
         # download files
@@ -112,21 +120,22 @@ class MNIST:
             file_path = self.raw_folder / filename
             with open(file_path, 'wb') as f:
                 f.write(data.read())
-            with open(str(file_path).replace('.gz', ''), 'wb') as out_f, gzip.GzipFile(file_path) as zip_f:
+            with open(str(file_path).replace('.gz', ''),
+                      'wb') as out_f, gzip.GzipFile(file_path) as zip_f:
                 out_f.write(zip_f.read())
             os.unlink(file_path)
 
         # process and save as torch files
         print('Processing...')
 
-        training_set = (
-            read_image_file(self.raw_folder / 'train-images-idx3-ubyte'),
-            read_label_file(self.raw_folder / 'train-labels-idx1-ubyte')
-        )
-        test_set = (
-            read_image_file(self.raw_folder / 't10k-images-idx3-ubyte'),
-            read_label_file(self.raw_folder / 't10k-labels-idx1-ubyte')
-        )
+        training_set = (read_image_file(self.raw_folder /
+                                        'train-images-idx3-ubyte'),
+                        read_label_file(self.raw_folder /
+                                        'train-labels-idx1-ubyte'))
+        test_set = (read_image_file(self.raw_folder /
+                                    't10k-images-idx3-ubyte'),
+                    read_label_file(self.raw_folder /
+                                    't10k-labels-idx1-ubyte'))
         with open(self.processed_folder / self.training_file, 'wb') as f:
             torch.save(training_set, f)
         with open(self.processed_folder / self.test_file, 'wb') as f:
@@ -140,7 +149,6 @@ class MNISTInner(Dataset):
     Actual MNIST class to work with.
     Normalization should be implemented here!
     """
-
     def __init__(self, data, targets, transform, target_transform):
         self.data = data
         self.targets = targets
@@ -167,8 +175,10 @@ class MNISTInner(Dataset):
         if self.target_transform is not None:
             target = self.target_transform(target)
 
-        return {'data': {'x': img},
-                'target': target, }
+        return {
+            'data': img,
+            'target': target,
+        }
 
     def __len__(self):
         return len(self.data)
