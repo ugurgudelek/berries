@@ -22,8 +22,8 @@ from abc import abstractmethod
 class Meta(type):
     def __call__(cls, *args, **kwargs):
         print('start Meta.__call__')
-        instance = super().__call__()
-        instance.initialize()
+        instance = super().__call__(*args, **kwargs)  # Child class init
+        instance.initialize(kwargs.get('trainer_params'))
         print('end Meta.__call__')
         return instance
 
@@ -31,19 +31,9 @@ class Meta(type):
 class BaseModel(nn.Module, metaclass=Meta):
     def __init__(self):
         print("Base.__init__()")
-        super().__init__()
+        super().__init__()  # nn.Module init
 
-    def my_rebind_function(self):
-        print("Base.my_rebind_function()")
-        pass
-
-    def initialize(self,
-                   model,
-                   metrics,
-                   hyperparams,
-                   params,
-                   optimizer=None,
-                   criterion=None) -> None:
+    def initialize(self, **kwargs) -> None:
 
         print("Base.initialize()")
 
@@ -58,7 +48,7 @@ class BaseModel(nn.Module, metaclass=Meta):
 
         model = model.to(model.device).float()
         model.criterion = criterion or MSELoss()
-        model.optimizer = optimizer or Adam(
+        model.optimizer = Adam(
             params=model.parameters(),
             lr=model.hyperparams.get('lr', 0.001),
             weight_decay=model.hyperparams.get('weight_decay', 0))
@@ -293,8 +283,10 @@ class BaseModel(nn.Module, metaclass=Meta):
 
 class CNN(BaseModel):
     """Basic Pytorch CNN implementation"""
-    def __init__(self, in_channels, out_channels, input_dim, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+
+    def __init__(self, in_channels, out_channels, input_dim,
+                 trainer_params):
+        super().__init__()  # Baseclass init
         print("Child.__init__()")
         self.feature_extractor = nn.Sequential(
             nn.Conv2d(in_channels=in_channels,
@@ -348,7 +340,11 @@ if __name__ == "__main__":
     model = CNN(in_channels=1,
                 out_channels=10,
                 input_dim=(1, 28, 28),
-                metrics=[metrics.Accuracy],
-                hyperparams=hyperparams,
-                params=params,
-                criterion=torch.nn.CrossEntropyLoss())
+                trainer_params={
+                    'metrics': [metrics.Accuracy],
+                    'hyperparams': hyperparams,
+                    'params': params,
+                    'criterion': torch.nn.CrossEntropyLoss(),
+                }
+
+                )
