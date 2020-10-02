@@ -19,17 +19,13 @@ UEA_UCR_DATA_DIR = os.environ.get('UEA_UCR_DATA_DIR', DEFAULT_DATA_DIR)
 if UEA_UCR_DATA_DIR == DEFAULT_DATA_DIR:
     warnings.warn(
         'Using default data path "{}". You can change this by setting '
-        'the environment variable "UEA_UCR_DATA_DIR".'
-        .format(DEFAULT_DATA_DIR),
-        DataPathWarning
-    )
-
+        'the environment variable "UEA_UCR_DATA_DIR".'.format(
+            DEFAULT_DATA_DIR), DataPathWarning)
 
 if not os.path.exists(UEA_UCR_DATA_DIR):
     warnings.warn(
         'The data path "{}" does not exist. All funcitons in this module will '
-        'likely fail'.format(UEA_UCR_DATA_DIR)
-    )
+        'likely fail'.format(UEA_UCR_DATA_DIR))
 
 
 def _build_UEA_UCR_data_path(name, kind, train):
@@ -56,7 +52,6 @@ def list_datasets():
 
 class UEAUCRDataset(Sequence):
     """Datasets from the UCR time series archiv."""
-
     def __init__(self, name, kind, train=True):
         """Datasets from the UCR time series archiv.
 
@@ -120,16 +115,19 @@ class UEAUCRDataset(Sequence):
 
 
 class TensorUEAUCRDataset(UEAUCRDataset):
-    def __init__(self,  name, kind, train=True):
+    def __init__(self, name, kind, train=True):
         super(TensorUEAUCRDataset, self).__init__(name, kind, train)
 
     def __getitem__(self, ix):
-        instance_x, instance_y = super(TensorUEAUCRDataset, self).__getitem__(ix)
-        return {'data': {'x': torch.from_numpy(instance_x).float()},
-                'target': torch.tensor(instance_y).long()}
+        instance_x, instance_y = super(TensorUEAUCRDataset,
+                                       self).__getitem__(ix)
+        return {
+            'data': torch.from_numpy(instance_x).float(),
+            'target': torch.tensor(instance_y).long()
+        }
+
 
 class BerriesUEAUCRDataset:
-
     def __init__(self, name, kind):
         self.trainset = TensorUEAUCRDataset(name=name, kind=kind, train=True)
         self.testset = TensorUEAUCRDataset(name=name, kind=kind, train=False)
