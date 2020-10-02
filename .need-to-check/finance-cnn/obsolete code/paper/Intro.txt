@@ -1,3 +1,0 @@
-The remainder of the paper is organized as follows. Section 2
-introduces EPCNN. In Section 3, input variables for the forecasting model are discussed and the implementation of EPCNN is de- scribed. In Section 4, the empirical results are summarized and dis- cussed. In Section 5, conclusions are presented.
-2.

@@ -1,8 +1,0 @@
-results
-*.iml
-*.xml
-*.pyc
-*.rar
-input/preprocessed_data
-*.tdms
-*.tdms_index

@@ -1,2 +1,0 @@
-# machining-vibration
- 

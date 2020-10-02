@@ -1,2 +1,0 @@
-# cnn-chatter-detection
- 
