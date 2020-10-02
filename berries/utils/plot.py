@@ -23,11 +23,12 @@ import plotly
 import io
 
 
-def plot_confusion_matrix(y_true, y_pred, classes,
+def plot_confusion_matrix(y_true,
+                          y_pred,
+                          classes,
                           save_path=None,
                           title='Confusion matrix',
-                          cmap=plt.get_cmap('Blues')
-                          ):
+                          cmap=plt.get_cmap('Blues')):
     """
     This function prints and plots the confusion matrix.
     Normalization can be applied by setting `normalize=True`.
@@ -46,16 +47,20 @@ def plot_confusion_matrix(y_true, y_pred, classes,
     im = ax.imshow(cm, interpolation='nearest', cmap=cmap)
     ax.figure.colorbar(im, ax=ax)
     # We want to show all ticks...
-    ax.set(xticks=np.arange(cm.shape[1]),
-           yticks=np.arange(cm.shape[0]),
-           # ... and label them with the respective list entries
-           xticklabels=classes, yticklabels=classes,
-           title=title,
-           ylabel='True label',
-           xlabel='Predicted label')
+    ax.set(
+        xticks=np.arange(cm.shape[1]),
+        yticks=np.arange(cm.shape[0]),
+        # ... and label them with the respective list entries
+        xticklabels=classes,
+        yticklabels=classes,
+        title=title,
+        ylabel='True label',
+        xlabel='Predicted label')
 
     # Rotate the tick labels and set their alignment.
-    plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
+    plt.setp(ax.get_xticklabels(),
+             rotation=45,
+             ha="right",
              rotation_mode="anchor")
 
     # Loop over data dimensions and create text annotations.
@@ -63,8 +68,11 @@ def plot_confusion_matrix(y_true, y_pred, classes,
     thresh = cm.max() / 2.
     for i in range(cm.shape[0]):
         for j in range(cm.shape[1]):
-            ax.text(j, i, f'{cm[i, j]}\n{cm_norm[i, j]:.2f}',
-                    ha="center", va="center",
+            ax.text(j,
+                    i,
+                    f'{cm[i, j]}\n{cm_norm[i, j]:.2f}',
+                    ha="center",
+                    va="center",
                     color="white" if cm[i, j] > thresh else "black")
 
     # Commented section fixes a bug on some matplotlib version
@@ -147,7 +155,121 @@ def mpl2pillow(fig):
     return img
 
 
-def plot_clustering(z_run, labels, engine='plotly', title_postfix='z', download=False, folder_name='clustering'):
+def plot_clustering(z_run,
+                    labels,
+                    engine='plotly',
+                    title_postfix='z',
+                    download=False,
+                    folder_name='clustering'):
+    """
+    Given latent variables for all timeseries, and output of k-means, run PCA and tSNE on latent vectors and color the points using cluster_labels.
+    :param z_run: Latent vectors for all input tensors
+    :param labels: Cluster labels for all input tensors
+    :param engine: plotly/matplotlib
+    :param download: If true, it will download plots in `folder_name`
+    :param folder_name: Download folder to dump plots
+    :return:
+    """
+    def plot_clustering_plotly(z_run, labels):
+
+        labels = labels[:z_run.shape[0]]  # because of weird batch_size
+
+        hex_colors = []
+        for _ in np.unique(labels):
+            hex_colors.append('#%06X' % randint(0, 0xFFFFFF))
+
+        print(len(hex_colors))
+        colors = [hex_colors[int(i)] for i in labels]
+
+        z_run_pca = TruncatedSVD(n_components=3).fit_transform(z_run)
+        z_run_tsne = TSNE(perplexity=80, min_grad_norm=1E-12,
+                          n_iter=3000).fit_transform(z_run)
+
+        trace = Scatter(x=z_run_pca[:, 0],
+                        y=z_run_pca[:, 1],
+                        mode='markers',
+                        marker=dict(color=colors))
+        data = Data([trace])
+        layout = Layout(title='PCA on z_run', showlegend=False)
+        fig = Figure(data=data, layout=layout)
+        plotly.offline.iplot(fig)
+
+        trace = Scatter(x=z_run_tsne[:, 0],
+                        y=z_run_tsne[:, 1],
+                        mode='markers',
+                        marker=dict(color=colors))
+        data = Data([trace])
+        layout = Layout(title='tSNE on z_run', showlegend=False)
+        fig = Figure(data=data, layout=layout)
+        plotly.offline.iplot(fig)
+
+    def plot_clustering_matplotlib(z_run, labels, title_postfix, download,
+                                   folder_name):
+
+        labels = labels[:z_run.shape[0]]  # because of weird batch_size
+
+        hex_colors = ['tab:blue', 'tab:orange', 'tab:green']
+        patches = [
+            mpatches.Patch(color='tab:blue', label='Class 0'),
+            mpatches.Patch(color='tab:orange', label='Class 1'),
+            mpatches.Patch(color='tab:green', label='Class 2')
+        ]
+        # for _ in np.unique(labels):
+        #     hex_colors.append('#%06X' % randint(0, 0xFFFFFF))
+
+        colors = [hex_colors[int(i)] for i in labels]
+
+        z_run_pca = TruncatedSVD(n_components=3).fit_transform(z_run)
+        z_run_tsne = TSNE(perplexity=80, min_grad_norm=1E-12,
+                          n_iter=3000).fit_transform(z_run)
+
+        plt.scatter(z_run_pca[:, 0],
+                    z_run_pca[:, 1],
+                    c=colors,
+                    marker='.',
+                    linewidths=0)
+
+        plt.legend(handles=patches)
+        plt.title(f'PCA on {title_postfix}')
+        if download:
+            if os.path.exists(folder_name):
+                pass
+            else:
+                os.makedirs(folder_name, exist_ok=True)
+            plt.savefig(folder_name + "/pca.png")
+
+        plt.show()
+
+        plt.scatter(z_run_tsne[:, 0],
+                    z_run_tsne[:, 1],
+                    c=colors,
+                    marker='.',
+                    linewidths=0)
+        plt.legend(handles=patches)
+        plt.title(f'tSNE on {title_postfix}')
+        if download:
+            if os.path.exists(folder_name):
+                pass
+            else:
+                os.makedirs(folder_name, exist_ok=True)
+            plt.savefig(folder_name + "/tsne.png")
+
+        plt.show()
+
+    if (download == False) & (engine == 'plotly'):
+        plot_clustering_plotly(z_run, labels)
+    if (download) & (engine == 'plotly'):
+        print("Can't download plotly plots")
+    if engine == 'matplotlib':
+        plot_clustering_matplotlib(z_run, labels, title_postfix, download,
+                                   folder_name)
+
+
+def plot_clustering_legacy(z_run,
+                           labels,
+                           engine='plotly',
+                           download=False,
+                           folder_name='clustering'):
     """
     Given latent variables for all timeseries, and output of k-means, run PCA and tSNE on latent vectors and color the points using cluster_labels.
     :param z_run: Latent vectors for all input tensors
@@ -171,44 +293,31 @@ def plot_clustering(z_run, labels, engine='plotly', title_postfix='z', download=
         z_run_tsne = TSNE(perplexity=80, min_grad_norm=1E-12,
                           n_iter=3000).fit_transform(z_run)
 
-        trace = Scatter(
-            x=z_run_pca[:, 0],
-            y=z_run_pca[:, 1],
-            mode='markers',
-            marker=dict(color=colors)
-        )
+        trace = Scatter(x=z_run_pca[:, 0],
+                        y=z_run_pca[:, 1],
+                        mode='markers',
+                        marker=dict(color=colors))
         data = Data([trace])
-        layout = Layout(
-            title='PCA on z_run',
-            showlegend=False
-        )
+        layout = Layout(title='PCA on z_run', showlegend=False)
         fig = Figure(data=data, layout=layout)
         plotly.offline.iplot(fig)
 
-        trace = Scatter(
-            x=z_run_tsne[:, 0],
-            y=z_run_tsne[:, 1],
-            mode='markers',
-            marker=dict(color=colors)
-        )
+        trace = Scatter(x=z_run_tsne[:, 0],
+                        y=z_run_tsne[:, 1],
+                        mode='markers',
+                        marker=dict(color=colors))
         data = Data([trace])
-        layout = Layout(
-            title='tSNE on z_run',
-            showlegend=False
-        )
+        layout = Layout(title='tSNE on z_run', showlegend=False)
         fig = Figure(data=data, layout=layout)
         plotly.offline.iplot(fig)
 
-    def plot_clustering_matplotlib(z_run, labels, title_postfix, download, folder_name):
+    def plot_clustering_matplotlib(z_run, labels, download, folder_name):
 
         labels = labels[:z_run.shape[0]]  # because of weird batch_size
 
-        hex_colors = ['tab:blue', 'tab:orange', 'tab:green']
-        patches = [mpatches.Patch(color='tab:blue', label='Class 0'),
-                   mpatches.Patch(color='tab:orange', label='Class 1'),
-                   mpatches.Patch(color='tab:green', label='Class 2')]
-        # for _ in np.unique(labels):
-        #     hex_colors.append('#%06X' % randint(0, 0xFFFFFF))
+        hex_colors = []
+        for _ in np.unique(labels):
+            hex_colors.append('#%06X' % randint(0, 0xFFFFFF))
 
         colors = [hex_colors[int(i)] for i in labels]
 
@@ -216,37 +325,39 @@ def plot_clustering(z_run, labels, engine='plotly', title_postfix='z', download=
         z_run_tsne = TSNE(perplexity=80, min_grad_norm=1E-12,
                           n_iter=3000).fit_transform(z_run)
 
-        plt.scatter(z_run_pca[:, 0], z_run_pca[:, 1],
-                    c=colors, marker='.', linewidths=0)
-
-        plt.legend(handles=patches)
-        plt.title(f'PCA on {title_postfix}')
+        plt.scatter(z_run_pca[:, 0],
+                    z_run_pca[:, 1],
+                    c=colors,
+                    marker='*',
+                    linewidths=0)
+        plt.title('PCA on z_run')
         if download:
             if os.path.exists(folder_name):
                 pass
             else:
-                os.makedirs(folder_name, exist_ok=True)
+                os.mkdir(folder_name)
             plt.savefig(folder_name + "/pca.png")
+        else:
+            plt.show()
 
-        plt.show()
-
-        plt.scatter(z_run_tsne[:, 0], z_run_tsne[:, 1],
-                    c=colors, marker='.', linewidths=0)
-        plt.legend(handles=patches)
-        plt.title(f'tSNE on {title_postfix}')
+        plt.scatter(z_run_tsne[:, 0],
+                    z_run_tsne[:, 1],
+                    c=colors,
+                    marker='*',
+                    linewidths=0)
+        plt.title('tSNE on z_run')
         if download:
             if os.path.exists(folder_name):
                 pass
             else:
-                os.makedirs(folder_name, exist_ok=True)
+                os.mkdir(folder_name)
             plt.savefig(folder_name + "/tsne.png")
-
-        plt.show()
+        else:
+            plt.show()
 
     if (download == False) & (engine == 'plotly'):
         plot_clustering_plotly(z_run, labels)
     if (download) & (engine == 'plotly'):
         print("Can't download plotly plots")
     if engine == 'matplotlib':
-        plot_clustering_matplotlib(
-            z_run, labels, title_postfix, download, folder_name)
+        plot_clustering_matplotlib(z_run, labels, download, folder_name)
