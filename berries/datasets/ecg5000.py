@@ -17,7 +17,7 @@ class ECG5000Inner(nn.Module):
         self.targets = targets
 
     def __getitem__(self, ix):
-        return {'data': self.timeseries[ix], 'target': self.timeseries[ix]}
+        raise NotImplementedError()
 
     def __len__(self):
         return len(self.timeseries)
@@ -26,8 +26,32 @@ class ECG5000Inner(nn.Module):
         return self.targets
 
 
+class ECG5000InnerforVAE(ECG5000Inner):
+    def __init__(self, timeseries, targets):
+        super().__init__(timeseries, targets)
+
+    def __getitem__(self, ix):
+        return {
+            'data': torch.as_tensor(self.timeseries[ix], dtype=torch.float32),
+            'target': torch.as_tensor(self.timeseries[ix], dtype=torch.float32)
+        }
+
+
+class ECG5000InnerforClassification(ECG5000Inner):
+    def __init__(self, timeseries, targets):
+        super().__init__(timeseries, targets)
+
+    def __getitem__(self, ix):
+        return {
+            'data': torch.as_tensor(self.timeseries[ix], dtype=torch.float32),
+            'target': torch.as_tensor(self.targets[ix], dtype=torch.float32)
+        }
+
+
 class ECG5000:
-    def __init__(self):
+    def __init__(self, forVAE=True):
+        self.forVAE = forVAE
+
         X_train, X_val, y_train, y_val = open_data('./input', ratio_train=0.9)
 
         num_classes = len(np.unique(y_train))
@@ -36,8 +60,15 @@ class ECG5000:
             y_train -= base
         y_val -= base
 
-        self.trainset = ECG5000Inner(timeseries=X_train, targets=y_train)
-        self.testset = ECG5000Inner(timeseries=X_val, targets=y_val)
+        if self.forVAE:
+            self.trainset = ECG5000InnerforVAE(timeseries=X_train,
+                                               targets=y_train)
+            self.testset = ECG5000InnerforVAE(timeseries=X_val, targets=y_val)
+        else:
+            self.trainset = ECG5000InnerforClassification(timeseries=X_train,
+                                                          targets=y_train)
+            self.testset = ECG5000InnerforClassification(timeseries=X_val,
+                                                         targets=y_val)
 
 
 if __name__ == "__main__":
