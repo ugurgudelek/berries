@@ -95,7 +95,7 @@ class BaseTrainer():
                     """)
             # todo: change with Path
             last_epoch = sorted(list(map(int, os.listdir(cpt_path))))[-1]
-            self._load_checkpoint(epoch=last_epoch)
+            self._load_checkpoint_from_epoch(epoch=last_epoch)
             print(f"Checkpoint is loaded from {last_epoch}")
         else:
             self.start_epoch = 1
@@ -116,7 +116,8 @@ class BaseTrainer():
                 'optimizer_state_dict': self.optimizer.state_dict()
             }, self.cpt_fpath / 'model-optim.pth')
 
-    def _load_checkpoint(self, epoch):  # todo: move into generic model
+    def _load_checkpoint_from_epoch(self,
+                                    epoch):  # todo: move into generic model
         # load model
         map_location = f"{self.device.type}:{self.device.index}"
         if self.device.type == 'cpu':
@@ -144,7 +145,7 @@ class BaseTrainer():
                                    x=epoch,
                                    y=np.mean(metric_val))
 
-    def _handle_batch(self, batch):
+    def handle_batch(self, batch):
         data = batch['data']
         target = batch['target']
 
@@ -175,7 +176,7 @@ class BaseTrainer():
 
         self._set_grad_enabled(train)
 
-        data, target = self._handle_batch(batch)
+        data, target = self.handle_batch(batch)
         output = self.forward(data)
         loss = self.compute_loss(output, target)
 
@@ -262,6 +263,8 @@ class BaseTrainer():
                     # self.run_callbacks(epoch=epoch)
                     self._save_checkpoint(epoch=epoch)
                     self.logger.save()
+
+                self._save_checkpoint(epoch=epoch)
 
             self.is_fitted = True
 

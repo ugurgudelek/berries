@@ -1,5 +1,6 @@
 from sklearn.base import BaseEstimator as SklearnBaseEstimator
 from torch import nn
+import torch
 
 
 class BaseEstimator(SklearnBaseEstimator):
@@ -18,3 +19,14 @@ def _assert_no_grad(tensor):
 class BaseModel(nn.Module):
     def __init__(self):
         super().__init__()
+
+    def load_model_from_path(self, path, device):
+        # load model
+        map_location = f"{device.type}:{device.index}"
+        if device.type == 'cpu':
+            map_location = device.type
+
+        checkpoint = torch.load(path, map_location=map_location)
+        self.load_state_dict(checkpoint['model_state_dict'])
+
+        return self
