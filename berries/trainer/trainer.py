@@ -85,3 +85,30 @@ class VAETrainer(BaseTrainer):
 
     def encode(self, dataset):
         return self._encode(dataset).cpu().detach().numpy()
+
+
+class VAEClassifierTrainer(BaseTrainer):
+    def __init__(self,
+                 model,
+                 compressor,
+                 metrics,
+                 hyperparams,
+                 params,
+                 optimizer=None,
+                 criterion=None,
+                 logger=None):
+        super().__init__(model, metrics, hyperparams, params, optimizer,
+                         criterion, logger)
+
+        self.compressor = compressor
+
+    def handle_batch(self, batch):
+        data = batch['data']
+        target = batch['target'].squeeze().long()
+
+        # cast data to a device
+        data, target = data.to(self.device), target.to(self.device)
+
+        # compress the information into
+        latent = self.compressor.latent(data).detach()
+        return latent, target
