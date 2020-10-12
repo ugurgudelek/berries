@@ -83,7 +83,8 @@ class LocalLogger(GenericLogger):
         super(LocalLogger, self).__init__(
             root, project_name, experiment_name, params, hyperparams)
 
-        self.experiment_fpath = self.root / 'projects' / project_name / experiment_name
+        self.experiment_fpath = self.root.absolute() / 'projects' / \
+            project_name / experiment_name
 
         try:
             self.experiment_fpath.mkdir(parents=True)
