@@ -11,7 +11,7 @@ from berries.utils.data import open_data
 from torch import nn
 
 
-class ECG5000Inner(nn.Module):
+class ECG5000Inner(Dataset):
     def __init__(self, timeseries, targets):
         self.timeseries = torch.from_numpy(timeseries).float()
         self.targets = targets

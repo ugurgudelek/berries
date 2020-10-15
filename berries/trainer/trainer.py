@@ -76,7 +76,7 @@ class VAETrainer(BaseTrainer):
             latents = []
             self._set_grad_enabled(False)
             for batch_ix, batch in enumerate(loader):
-                data, target = self._handle_batch(batch)
+                data, target = self.handle_batch(batch)
                 latent = self.model.latent(data)
                 latents.append(latent)
             latents = torch.cat(latents, axis=0)
