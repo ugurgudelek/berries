@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader
 
 
 class BaseTrainer():
+
     def __init__(self, model, metrics, hyperparams, params, optimizer,
                  criterion, logger) -> None:
         # self._validate_hyperparams(hyperparams)
@@ -26,16 +27,18 @@ class BaseTrainer():
                                    'cuda' else 'cpu')
 
         self.model = model.to(self.device).float()
-        self.optimizer = optimizer or Adam(
-            params=self.model.parameters(),
-            lr=self.hyperparams.get('lr', 0.001),
-            weight_decay=self.hyperparams.get('weight_decay', 0))
+        self.optimizer = optimizer or Adam(params=self.model.parameters(),
+                                           lr=self.hyperparams.get('lr', 0.001),
+                                           weight_decay=self.hyperparams.get(
+                                               'weight_decay', 0))
         self.criterion = criterion or MSELoss()
         self.logger = logger or self._contruct_logger(backend=LocalLogger)
 
         self.metrics = metrics
 
         self.batch_size = self.hyperparams.get('batch_size', 16)
+        self.validation_batch_size = self.hyperparams.get(
+            'validation_batch_size', 16)
 
         # Initialize plotter
         self.plotter = Plotter()
@@ -201,16 +204,12 @@ class BaseTrainer():
 
         seen_item = 0
         for batch_ix, batch in enumerate(loader):
+            self.before_each_batch(loader, seen_item, batch_ix, batch, epoch,
+                                   train)
             loss, output, data, target = self._fit_one_batch(batch, train)
-
             seen_item += len(data)
-            if batch_ix % self.params['stdout_interval'] == 0:
-                print('\t'.join((
-                    f"{'Train' if train else 'Test'}",
-                    f"Epoch: {epoch or 'NA'} [{seen_item}/{len(loader.dataset)} ({100. * batch_ix / len(loader):.0f}%)]",
-                    f"Batch Loss: {loss.item():.6f}",
-                )))
-
+            self.after_each_batch(loader, seen_item, batch_ix, batch, epoch,
+                                  train, loss, output, data, target)
             yield loss, output, data, target
 
     def _log_metrics(self, phase, epoch, container):
@@ -224,43 +223,64 @@ class BaseTrainer():
             container[metric_fn.__name__].append(metric_fn()(yhat, y))
         return container
 
-    def fit(self, dataset):
+    def fit(self, dataset, validation_dataset):
         if self.params['pretrained']:
             raise Exception("-You can not use fit with --pretrained=True")
         # At any point you can hit Ctrl + C to break out of training early.
         try:
+            self.dataset = dataset
+            self.validation_dataset = validation_dataset
 
             train_loader = DataLoader(dataset=dataset,
                                       batch_size=self.batch_size,
                                       shuffle=True,
-                                      drop_last=True,
+                                      drop_last=False,
                                       num_workers=0,
                                       pin_memory=self.on_cuda)
 
-            for epoch in range(self.start_epoch,
-                               self.hyperparams['epoch'] + 1):
+            validation_loader = DataLoader(
+                dataset=validation_dataset,
+                batch_size=self.validation_batch_size,
+                shuffle=False,
+                drop_last=False,
+                num_workers=0,
+                pin_memory=self.on_cuda)
 
-                self.before_each_epoch()
+            for epoch in range(self.start_epoch, self.hyperparams['epoch'] + 1):
 
-                metric_container = defaultdict(list)
-                for loss, output, data, target in self._fit_one_epoch(
-                        loader=train_loader, epoch=epoch, train=True):
+                self.before_each_epoch(epoch)
 
-                    # Store loss
-                    metric_container['loss'].append(loss.item())
+                for phase in ['training', 'validation']:
 
-                    # Store other metrics
-                    metric_container = self._calculate_metrics(
-                        yhat=output, y=target, container=metric_container)
+                    self.before_each_phase(phase)
 
-                    self._log_metrics(phase='training',
-                                      epoch=epoch,
-                                      container=metric_container)
+                    metric_container = defaultdict(list)
+                    for loss, output, data, target in self._fit_one_epoch(
+                            loader=train_loader
+                            if phase == 'training' else validation_loader,
+                            epoch=epoch,
+                            train=True if phase == 'training' else False):
 
-                self.after_each_epoch()
+                        # Store loss
+                        metric_container['loss'].append(loss.item())
+
+                        # Store other metrics
+                        metric_container = self._calculate_metrics(
+                            yhat=output, y=target, container=metric_container)
+
+                    self._log_metrics(
+                        phase=phase,
+                        epoch=epoch,
+                        container={
+                            key: np.array(values).mean()
+                            for key, values in metric_container.items()
+                        })
+
+                    self.after_each_phase(phase, metric_container)
+
+                self.after_each_epoch(epoch)
 
                 if epoch % self.params['log_interval'] == 0:
-                    # self.run_callbacks(epoch=epoch)
                     self._save_checkpoint(epoch=epoch)
                     self.logger.save()
 
@@ -271,9 +291,9 @@ class BaseTrainer():
         except KeyboardInterrupt:
             print('Exiting from training early')
 
-    def _transform(self, dataset):
+    def _transform(self, dataset, batch_size=None):
         loader = DataLoader(dataset=dataset,
-                            batch_size=self.batch_size,
+                            batch_size=batch_size or self.validation_batch_size,
                             shuffle=False,
                             drop_last=True,
                             num_workers=0,
@@ -282,8 +302,8 @@ class BaseTrainer():
         if self.is_fitted:
 
             transformed = []
-            for loss, output, data, target in self._fit_one_epoch(
-                    loader=loader, train=False):
+            for loss, output, data, target in self._fit_one_epoch(loader=loader,
+                                                                  train=False):
                 transformed.append(output)
             transformed = torch.cat(transformed, axis=0)
             return transformed
@@ -304,14 +324,38 @@ class BaseTrainer():
         transformed = self._transform(dataset)
         return transformed == dataset.get_targets()
 
-    def before_each_epoch(self):
+    def stdout_items(self, batch_ix, train, epoch, seen_item, loader, loss):
+        return [
+            f"{'Train' if train else ' Test'}",
+            f"Epoch: {epoch or 'NA'} [{seen_item:04}/{len(loader.dataset):04} ({100. * batch_ix / len(loader):.0f}%)]",
+            f"Batch Loss: {loss.item():.6f}",
+        ]
+
+    def before_fit(self, *args, **kwargs):
         pass
 
-    def after_each_epoch(self):
+    def after_fit(self, *args, **kwargs):
         pass
 
-    def before_fit(self):
+    def before_each_epoch(self, *args, **kwargs):
         pass
 
-    def after_fit(self):
+    def after_each_epoch(self, *args, **kwargs):
         pass
+
+    def before_each_phase(self, *args, **kwargs):
+        pass
+
+    def after_each_phase(self, *args, **kwargs):
+        pass
+
+    def before_each_batch(self, loader, seen_item, batch_ix, batch, epoch,
+                          train):
+        pass
+
+    def after_each_batch(self, loader, seen_item, batch_ix, batch, epoch, train,
+                         loss, output, data, target):
+        if batch_ix % self.params['stdout_interval'] == 0:
+            print('\t'.join(
+                self.stdout_items(batch_ix, train, epoch, seen_item, loader,
+                                  loss)))
