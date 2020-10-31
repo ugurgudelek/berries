@@ -286,8 +286,6 @@ class BaseTrainer():
 
                 self._save_checkpoint(epoch=epoch)
 
-            self.is_fitted = True
-
         except KeyboardInterrupt:
             print('Exiting from training early')
 
@@ -299,15 +297,12 @@ class BaseTrainer():
                             num_workers=0,
                             pin_memory=self.on_cuda)
 
-        if self.is_fitted:
-
-            transformed = []
-            for loss, output, data, target in self._fit_one_epoch(loader=loader,
-                                                                  train=False):
-                transformed.append(output)
-            transformed = torch.cat(transformed, axis=0)
-            return transformed
-        raise RuntimeError('Model needs to be fit')
+        transformed = []
+        for loss, output, data, target in self._fit_one_epoch(loader=loader,
+                                                              train=False):
+            transformed.append(output)
+        transformed = torch.cat(transformed, axis=0)
+        return transformed
 
     def _fit_transform(self, dataset):
         self.fit(dataset=dataset)
