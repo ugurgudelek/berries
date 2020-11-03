@@ -167,15 +167,33 @@ class BaseTrainer():
         return loss
 
     def _set_grad_enabled(self, train):
-        if train and not self.model.training:
-            self.model.train()
-            torch.set_grad_enabled(True)
+        # if torch.is_grad_enabled():
 
-        if not train and self.model.training:
-            self.model.train(False)
-            torch.set_grad_enabled(False)
+        # if train and not self.model.training:
+        #     self.model.train()
+        #     torch.set_grad_enabled(True)
+
+        # if not train and self.model.training:
+        #     self.model.train(False)
+        #     torch.set_grad_enabled(False)
+
+        torch.set_grad_enabled(train)
+        self.model.train(train)
 
     def _fit_one_batch(self, batch, train):
+        """All training steps are implemented here. 
+        This function is the core of handling model - actual training loop.
+
+        Args:
+            batch (dict): [description]
+            train (bool): [description]
+
+        Returns:
+            loss    (torch.Tensor): [description]
+            output  (torch.Tensor): [description]
+            data    (torch.Tensor): [description]
+            target  (torch.Tensor): [description]
+        """
 
         self._set_grad_enabled(train)
 
@@ -203,6 +221,7 @@ class BaseTrainer():
     def _fit_one_epoch(self, loader, epoch=None, train=True):
 
         seen_item = 0
+
         for batch_ix, batch in enumerate(loader):
             self.before_each_batch(loader, seen_item, batch_ix, batch, epoch,
                                    train)
@@ -210,7 +229,7 @@ class BaseTrainer():
             seen_item += len(data)
             self.after_each_batch(loader, seen_item, batch_ix, batch, epoch,
                                   train, loss, output, data, target)
-            yield loss, output, data, target
+            yield loss, output, data, target, batch
 
     def _log_metrics(self, phase, epoch, container):
         for metric_key, metric_val in container.items():
@@ -252,10 +271,10 @@ class BaseTrainer():
 
                 for phase in ['training', 'validation']:
 
-                    self.before_each_phase(phase)
+                    self.before_each_phase(phase, epoch)
 
                     metric_container = defaultdict(list)
-                    for loss, output, data, target in self._fit_one_epoch(
+                    for loss, output, data, target, batch in self._fit_one_epoch(
                             loader=train_loader
                             if phase == 'training' else validation_loader,
                             epoch=epoch,
@@ -264,19 +283,23 @@ class BaseTrainer():
                         # Store loss
                         metric_container['loss'].append(loss.item())
 
+                        if phase == 'validation':
+                            metric_container['slot'].append(
+                                batch['slot'].item())
+
                         # Store other metrics
                         metric_container = self._calculate_metrics(
                             yhat=output, y=target, container=metric_container)
 
-                    self._log_metrics(
-                        phase=phase,
-                        epoch=epoch,
-                        container={
-                            key: np.array(values).mean()
-                            for key, values in metric_container.items()
-                        })
+                        self._log_metrics(
+                            phase=phase,
+                            epoch=epoch,
+                            container={
+                                key: np.array(values).mean()
+                                for key, values in metric_container.items()
+                            })
 
-                    self.after_each_phase(phase, metric_container)
+                    self.after_each_phase(phase, metric_container, epoch)
 
                 self.after_each_epoch(epoch)
 
@@ -309,7 +332,8 @@ class BaseTrainer():
         return self._transform(dataset=dataset)
 
     def transform(self, dataset):
-        return self._transform(dataset).cpu().detach().numpy()
+        transformed, target = self._transform(dataset)
+        return transformed.cpu().detach().numpy(), target.cpu().detach().numpy()
 
     def fit_transform(self, dataset):
         return self._fit_transform(dataset).cpu().detach().numpy()
