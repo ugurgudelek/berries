@@ -1,0 +1,19 @@
+name: berries
+channels:
+  - pytorch
+  - plotly
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.8
+  - pytorch
+  - torchaudio
+  - torchvision
+  - cudatoolkit=11.0
+  - yapf
+  - pandas
+  - pyyaml
+  - matplotlib
+  - scikit-learn
+  - plotly
+  - tqdm
