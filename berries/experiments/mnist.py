@@ -15,6 +15,7 @@ from berries.metric import metrics
 
 
 class MNISTExperiment(Experiment):
+
     def __init__(self):
         self.params = {
             'project_name': 'debug',
@@ -31,13 +32,14 @@ class MNISTExperiment(Experiment):
         self.hyperparams = {
             'lr': 0.001,
             'batch_size': 2048,
+            'validation_batch_size': 1024,
             'epoch': 2,
         }
 
         self.dataset = MNIST(root='./input/',
                              transform=transforms.Compose([
                                  transforms.ToTensor(),
-                                 transforms.Normalize((0.1307, ), (0.3081, ))
+                                 transforms.Normalize((0.1307,), (0.3081,))
                              ]),
                              download=True)
 
@@ -50,12 +52,13 @@ class MNISTExperiment(Experiment):
                         hyperparams=self.hyperparams,
                         params=self.params,
                         criterion=nn.CrossEntropyLoss()) as trainer:
-            trainer.fit(dataset=self.dataset.trainset)
+            trainer.fit(dataset=self.dataset.trainset,
+                        validation_dataset=self.dataset.testset)
 
-            train_transformed = trainer.transform(
-                dataset=self.dataset.trainset)
-            test_transformed = trainer.transform(dataset=self.dataset.testset)
-            print()
+            # train_transformed = trainer.transform(
+            #     dataset=self.dataset.trainset)
+            # test_transformed = trainer.transform(dataset=self.dataset.testset)
+            # print()
 
 
 def main():

@@ -253,7 +253,8 @@ class BaseTrainer():
             train_loader = DataLoader(dataset=dataset,
                                       batch_size=self.batch_size,
                                       shuffle=True,
-                                      drop_last=False,
+                                      drop_last=self.params.get(
+                                          'drop_last', False),
                                       num_workers=0,
                                       pin_memory=self.on_cuda)
 
@@ -261,7 +262,7 @@ class BaseTrainer():
                 dataset=validation_dataset,
                 batch_size=self.validation_batch_size,
                 shuffle=False,
-                drop_last=False,
+                drop_last=self.params.get('drop_last', False),
                 num_workers=0,
                 pin_memory=self.on_cuda)
 
@@ -282,10 +283,6 @@ class BaseTrainer():
 
                         # Store loss
                         metric_container['loss'].append(loss.item())
-
-                        if phase == 'validation':
-                            metric_container['slot'].append(
-                                batch['slot'].item())
 
                         # Store other metrics
                         metric_container = self._calculate_metrics(
@@ -321,8 +318,8 @@ class BaseTrainer():
                             pin_memory=self.on_cuda)
 
         transformed = []
-        for loss, output, data, target in self._fit_one_epoch(loader=loader,
-                                                              train=False):
+        for loss, output, data, target, batch in self._fit_one_epoch(
+                loader=loader, train=False):
             transformed.append(output)
         transformed = torch.cat(transformed, axis=0)
         return transformed
@@ -332,8 +329,8 @@ class BaseTrainer():
         return self._transform(dataset=dataset)
 
     def transform(self, dataset):
-        transformed, target = self._transform(dataset)
-        return transformed.cpu().detach().numpy(), target.cpu().detach().numpy()
+        transformed = self._transform(dataset)
+        return transformed.cpu().detach().numpy()
 
     def fit_transform(self, dataset):
         return self._fit_transform(dataset).cpu().detach().numpy()

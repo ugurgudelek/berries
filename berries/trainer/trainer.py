@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader
 
 
 class CNNTrainer(BaseTrainer):
+
     def __init__(self,
                  model,
                  metrics,
@@ -27,6 +28,7 @@ class CNNTrainer(BaseTrainer):
 
 
 class VAETrainer(BaseTrainer):
+
     def __init__(self,
                  model,
                  metrics,
@@ -71,23 +73,21 @@ class VAETrainer(BaseTrainer):
                             num_workers=0,
                             pin_memory=self.on_cuda)
 
-        if self.is_fitted:
-
-            latents = []
-            self._set_grad_enabled(False)
-            for batch_ix, batch in enumerate(loader):
-                data, target = self.handle_batch(batch)
-                latent = self.model.latent(data)
-                latents.append(latent)
-            latents = torch.cat(latents, axis=0)
-            return latents
-        raise RuntimeError('Model needs to be fit')
+        latents = []
+        self._set_grad_enabled(False)
+        for batch_ix, batch in enumerate(loader):
+            data, target = self.handle_batch(batch)
+            latent = self.model.latent(data)
+            latents.append(latent)
+        latents = torch.cat(latents, axis=0)
+        return latents
 
     def encode(self, dataset):
         return self._encode(dataset).cpu().detach().numpy()
 
 
 class VAEClassifierTrainer(BaseTrainer):
+
     def __init__(self,
                  model,
                  compressor,

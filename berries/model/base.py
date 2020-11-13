@@ -17,6 +17,7 @@ def _assert_no_grad(tensor):
 
 
 class BaseModel(nn.Module):
+
     def __init__(self):
         super().__init__()
 
@@ -29,4 +30,4 @@ class BaseModel(nn.Module):
         checkpoint = torch.load(path, map_location=map_location)
         self.load_state_dict(checkpoint['model_state_dict'])
 
-        return self
+        return self.to(device)

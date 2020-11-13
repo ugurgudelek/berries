@@ -15,6 +15,7 @@ class Encoder(nn.Module):
     :param dropout: percentage of nodes to dropout
     :param block: LSTM/GRU block
     """
+
     def __init__(self,
                  number_of_features,
                  hidden_size,
@@ -62,6 +63,7 @@ class Lambda(nn.Module):
     :param hidden_size: hidden size of the encoder
     :param latent_length: latent vector length
     """
+
     def __init__(self, hidden_size, latent_length):
         super(Lambda, self).__init__()
 
@@ -103,6 +105,7 @@ class Decoder(nn.Module):
     :param output_size: 2, one representing the mean, other log std dev of the output
     :param block: GRU/LSTM - use the same which you've used in the encoder
     """
+
     def __init__(self,
                  sequence_length,
                  batch_size,
@@ -110,7 +113,8 @@ class Decoder(nn.Module):
                  hidden_layer_depth,
                  latent_length,
                  output_size,
-                 block='LSTM'):
+                 block='LSTM',
+                 device=torch.device('cpu')):
 
         super(Decoder, self).__init__()
 
@@ -120,6 +124,7 @@ class Decoder(nn.Module):
         self.hidden_layer_depth = hidden_layer_depth
         self.latent_length = latent_length
         self.output_size = output_size
+        self.device = device
 
         if block == 'LSTM':
             self.model = nn.LSTM(1, self.hidden_size, self.hidden_layer_depth)
@@ -134,11 +139,13 @@ class Decoder(nn.Module):
         self.decoder_inputs = torch.zeros(self.sequence_length,
                                           self.batch_size,
                                           1,
-                                          requires_grad=True).type(torch.float)
+                                          requires_grad=True).type(
+                                              torch.float).to(self.device)
         self.c_0 = torch.zeros(self.hidden_layer_depth,
                                self.batch_size,
                                self.hidden_size,
-                               requires_grad=True).type(torch.float)
+                               requires_grad=True).type(torch.float).to(
+                                   self.device)
 
         nn.init.xavier_uniform_(self.latent_to_hidden.weight)
         nn.init.xavier_uniform_(self.hidden_to_output.weight)
@@ -152,13 +159,10 @@ class Decoder(nn.Module):
         h_state = self.latent_to_hidden(latent)
 
         if isinstance(self.model, nn.LSTM):
-            h_0 = torch.stack(
-                [h_state for _ in range(self.hidden_layer_depth)])
-            decoder_output, _ = self.model(self.decoder_inputs,
-                                           (h_0, self.c_0))
+            h_0 = torch.stack([h_state for _ in range(self.hidden_layer_depth)])
+            decoder_output, _ = self.model(self.decoder_inputs, (h_0, self.c_0))
         elif isinstance(self.model, nn.GRU):
-            h_0 = torch.stack(
-                [h_state for _ in range(self.hidden_layer_depth)])
+            h_0 = torch.stack([h_state for _ in range(self.hidden_layer_depth)])
             decoder_output, _ = self.model(self.decoder_inputs, h_0)
         else:
             raise NotImplementedError
@@ -188,19 +192,21 @@ class VAE(BaseModel):
     :param max_grad_norm: The grad-norm to be clipped
     :param dload: Download directory where models are to be dumped
     """
-    def __init__(
-        self,
-        sequence_length,
-        number_of_features,
-        hidden_size=90,
-        hidden_layer_depth=2,
-        latent_length=20,
-        batch_size=32,
-        block='LSTM',
-        dropout_rate=0.,
-    ):
+
+    def __init__(self,
+                 sequence_length,
+                 number_of_features,
+                 hidden_size=90,
+                 hidden_layer_depth=2,
+                 latent_length=20,
+                 batch_size=32,
+                 block='LSTM',
+                 dropout_rate=0.,
+                 device=torch.device('cpu')):
 
         super().__init__()
+
+        self.device = device
 
         self.encoder = Encoder(number_of_features=number_of_features,
                                hidden_size=hidden_size,
@@ -209,8 +215,7 @@ class VAE(BaseModel):
                                dropout=dropout_rate,
                                block=block)
 
-        self.lmbd = Lambda(hidden_size=hidden_size,
-                           latent_length=latent_length)
+        self.lmbd = Lambda(hidden_size=hidden_size, latent_length=latent_length)
 
         self.decoder = Decoder(sequence_length=sequence_length,
                                batch_size=batch_size,
@@ -218,7 +223,8 @@ class VAE(BaseModel):
                                hidden_layer_depth=hidden_layer_depth,
                                latent_length=latent_length,
                                output_size=number_of_features,
-                               block=block)
+                               block=block,
+                               device=self.device)
 
         self.sequence_length = sequence_length
         self.hidden_size = hidden_size
