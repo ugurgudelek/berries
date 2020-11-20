@@ -247,7 +247,7 @@ class VAE(BaseModel):
         latent = self.lmbd(cell_output)
         x_decoded = self.decoder(latent)
 
-        return x_decoded
+        return x_decoded.permute(1, 0, 2)
 
     def latent(self, x):
         x = x.permute(1, 0, 2)

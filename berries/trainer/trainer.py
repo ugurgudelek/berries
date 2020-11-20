@@ -42,6 +42,7 @@ class VAETrainer(BaseTrainer):
 
     def compute_loss(self, output, targets):
         targets = targets.permute(1, 0, 2)
+        output = output.permute(1, 0, 2)
         joint_loss, recon_loss, kl_loss = self._rec(x_decoded=output,
                                                     x=targets,
                                                     loss_fn=self.criterion)
@@ -104,7 +105,7 @@ class VAEClassifierTrainer(BaseTrainer):
 
     def handle_batch(self, batch):
         data = batch['data']
-        target = batch['target'].squeeze().long()
+        target = batch['target'].squeeze()
 
         # cast data to a device
         data, target = data.to(self.device), target.to(self.device)
