@@ -4,14 +4,41 @@ __email__ = "ugurgudelek@gmail.com"
 import os
 from collections import defaultdict
 from typing import Iterable
+import functools
 
 import numpy as np
+import pandas as pd
 import torch
 from berries.logger.logger import LocalLogger
 from berries.plot.plotter import Plotter
 from torch.nn import MSELoss
 from torch.optim import Adam
 from torch.utils.data import DataLoader
+
+
+def hook(before=None, after=None):
+
+    def wrap(f):
+
+        @functools.wraps(f)
+        def wrapped_f(self, *args, **kwargs):
+
+            if before:
+                self.__getattribute__(before)(*args, **kwargs)
+
+            returned_value = f(self, *args, **kwargs)
+
+            if after:
+                if returned_value is None:
+                    self.__getattribute__(after)()
+                elif isinstance(returned_value, tuple):
+                    self.__getattribute__(after)(*returned_value)
+
+            return returned_value
+
+        return wrapped_f
+
+    return wrap
 
 
 class BaseTrainer():
@@ -23,6 +50,7 @@ class BaseTrainer():
 
         self.hyperparams = hyperparams
         self.params = params
+        self.verbose = self.params.get('verbose', 1)
 
         self.device = torch.device('cuda:0' if self.params['device'] ==
                                    'cuda' else 'cpu')
@@ -45,6 +73,8 @@ class BaseTrainer():
         self.plotter = Plotter()
 
         self._resume_or_not()
+
+        self.stdout_items = dict()
 
     def __str__(self):
         """
@@ -181,6 +211,32 @@ class BaseTrainer():
         torch.set_grad_enabled(train)
         self.model.train(train)
 
+    def _log_metrics(self, phase, epoch, container):
+        for metric_key, metric_val in container.items():
+            self.logger.log_metric(log_name=f'{phase}_{metric_key}',
+                                   x=epoch,
+                                   y=np.mean(metric_val))
+
+    def _calculate_metrics(self, yhat, y, container):
+        for metric_fn in self.metrics:
+            container[metric_fn.__name__].append(metric_fn()(yhat, y))
+        return container
+
+    def _to_loader(self, dataset, training, batch_size=None):
+        return DataLoader(
+            dataset=dataset,
+            batch_size=batch_size or
+            (self.batch_size if training else self.validation_batch_size),
+            shuffle=self.params.get('train_shuffle', training),
+            drop_last=self.params.get('drop_last', False),
+            num_workers=0,
+            pin_memory=self.on_cuda)
+
+    @staticmethod
+    def _make_iterable_if_not(item):
+        return item if isinstance(item, Iterable) else (item,)
+
+    @hook(before='before_fit_one_batch', after='after_fit_one_batch')
     def _fit_one_batch(self, batch, train):
         """All training steps are implemented here. 
         This function is the core of handling model - actual training loop.
@@ -219,51 +275,51 @@ class BaseTrainer():
 
         return loss, output, data, target
 
-    def _fit_one_epoch(self, loaders, epoch=None, train=True, verbose=1):
+    @hook(before='before_fit_one_epoch', after='after_fit_one_epoch')
+    def _fit_one_epoch(self, loaders, phase, epoch):
 
         if not isinstance(loaders, Iterable):
             raise Exception("loaders must be an iterable")
 
+        metric_container = defaultdict(list)
         seen_item = 0
         for loader in loaders:
             for batch_ix, batch in enumerate(loader):
-                self.before_each_batch(loader, seen_item, batch_ix, batch,
-                                       epoch, train)
-                loss, output, data, target = self._fit_one_batch(batch, train)
-                seen_item += len(data)
-                self.after_each_batch(loader, seen_item, batch_ix, batch, epoch,
-                                      train, loss, output, data, target,
-                                      verbose)
-                yield loss, output, data, target, batch
 
-    def _log_metrics(self, phase, epoch, container):
-        for metric_key, metric_val in container.items():
-            self.logger.log_metric(log_name=f'{phase}_{metric_key}',
-                                   x=epoch,
-                                   y=np.mean(metric_val))
+                loss, output, data, target = self._fit_one_batch(
+                    batch, train=True if phase == 'training' else False)
+                seen_item += len(target)
 
-    def _calculate_metrics(self, yhat, y, container):
-        for metric_fn in self.metrics:
-            container[metric_fn.__name__].append(metric_fn()(yhat, y))
-        return container
+                # Store loss
+                metric_container['loss'].append(loss.item())
 
-    def _to_loader(self, dataset, training, batch_size=None):
-        return DataLoader(
-            dataset=dataset,
-            batch_size=batch_size or
-            (self.batch_size if training else self.validation_batch_size),
-            shuffle=self.params.get('train_shuffle', training),
-            drop_last=self.params.get('drop_last', False),
-            num_workers=0,
-            pin_memory=self.on_cuda)
+                # Store other metrics
+                metric_container = self._calculate_metrics(
+                    yhat=output, y=target, container=metric_container)
 
-    @staticmethod
-    def _make_iterable_if_not(item):
-        return item if isinstance(item, Iterable) else (item,)
+                self.stdout_items['phase'] = phase
+                self.stdout_items['epoch'] = epoch
+                self.stdout_items['seen_item'] = seen_item
+                self.stdout_items['dataset_len'] = sum(
+                    len(loader.dataset) for loader in loaders)
+                self.stdout_items['batch_loss'] = loss.item()
 
-    def fit(self, dataset, validation_dataset, verbose=1):
+                if self.verbose != 0:
+                    if batch_ix % self.params['stdout_interval'] == 0:
+                        self.print_stdout_items()
+
+        self._log_metrics(phase=phase,
+                          epoch=epoch,
+                          container={
+                              key: np.array(values).mean()
+                              for key, values in metric_container.items()
+                          })
+
+    @hook(before='before_fit', after='after_fit')
+    def fit(self, dataset, validation_dataset):
         if self.params['pretrained']:
-            raise Exception("-You can not use fit with --pretrained=True")
+            raise Exception("You can not use fit with --pretrained=True")
+
         # At any point you can hit Ctrl + C to break out of training early.
         try:
             self.dataset = dataset
@@ -279,40 +335,20 @@ class BaseTrainer():
                 for d in self._make_iterable_if_not(validation_dataset)
             ]
 
-            for epoch in range(self.start_epoch, self.hyperparams['epoch'] + 1):
+            # run 1 epoch before training to watch untrained model performance
+            if not self.params['resume']:
+                metric_container = self._fit_one_epoch(
+                    loaders=validation_loaders, epoch=0, phase='validation')
 
-                self.before_each_epoch(epoch)
+            for epoch in range(self.start_epoch, self.hyperparams['epoch'] + 1):
 
                 for phase in ['training', 'validation']:
 
-                    self.before_each_phase(phase, epoch)
-
-                    metric_container = defaultdict(list)
-                    for loss, output, data, target, batch in self._fit_one_epoch(
-                            loaders=train_loaders
-                            if phase == 'training' else validation_loaders,
-                            epoch=epoch,
-                            train=True if phase == 'training' else False,
-                            verbose=verbose):
-
-                        # Store loss
-                        metric_container['loss'].append(loss.item())
-
-                        # Store other metrics
-                        metric_container = self._calculate_metrics(
-                            yhat=output, y=target, container=metric_container)
-
-                        self._log_metrics(
-                            phase=phase,
-                            epoch=epoch,
-                            container={
-                                key: np.array(values).mean()
-                                for key, values in metric_container.items()
-                            })
-
-                    self.after_each_phase(phase, metric_container, epoch)
-
-                self.after_each_epoch(epoch)
+                    metric_container = self._fit_one_epoch(
+                        loaders=train_loaders
+                        if phase == 'training' else validation_loaders,
+                        epoch=epoch,
+                        phase=phase)
 
                 if epoch % self.params['log_interval'] == 0:
                     self._save_checkpoint(epoch=epoch)
@@ -323,65 +359,78 @@ class BaseTrainer():
         except KeyboardInterrupt:
             print('Exiting from training early')
 
-    def _transform(self, dataset, batch_size, verbose):
+    def _transform(self, dataset, batch_size):
         loader = self._to_loader(dataset, training=False, batch_size=batch_size)
 
         transformed = []
-        for loss, output, data, target, batch in self._fit_one_epoch(
-                loaders=(loader,), train=False, verbose=verbose):
+        targets = []
+        for batch_ix, batch in enumerate(loader):
+            loss, output, data, target = self._fit_one_batch(batch, train=False)
+            if output.shape[1] != 1:  # classification
+                output = output.argmax(dim=1)
             transformed.append(output)
+            targets.append(target)
+
         transformed = torch.cat(transformed, axis=0)
-        return transformed
+        targets = torch.cat(targets, axis=0)
+        return transformed, targets
 
-    def _fit_transform(self, dataset):
-        self.fit(dataset=dataset)
-        return self._transform(dataset=dataset)
-
-    def transform(self, dataset, batch_size=None, verbose=1):
-        transformed = self._transform(dataset, batch_size, verbose)
-        return transformed.cpu().detach().numpy()
+    def transform(self, dataset, batch_size=None):
+        transformed, targets = self._transform(dataset, batch_size)
+        return (transformed.cpu().detach().numpy(),
+                targets.cpu().detach().numpy())
 
     def fit_transform(self, dataset):
-        return self._fit_transform(dataset).cpu().detach().numpy()
+        self.fit(dataset=dataset)
+        return self.transform(dataset=dataset)
 
     def score(self, dataset):
         raise NotImplementedError()
         transformed = self._transform(dataset)
         return transformed == dataset.get_targets()
 
-    def stdout_items(self, batch_ix, train, epoch, seen_item, loader, loss):
-        return [
-            f"{'Train' if train else ' Test'}",
-            f"Epoch: {epoch or 'NA'} [{seen_item:04}/{len(loader.dataset):04} ({100. * batch_ix / len(loader):.0f}%)]",
-            f"Batch Loss: {loss.item():.6f}",
-        ]
+    def to_prediction_dataframe(self, dataset, save=True):
+        predictions, targets = self.transform(dataset=dataset)
+        prediction_dataframe = pd.DataFrame({
+            'prediction': predictions,
+            'target': targets
+        })
+        if save:
+            prediction_dataframe.to_csv(self.experiment_fpath /
+                                        'predictions.csv',
+                                        index=False)
+        return prediction_dataframe
 
-    def before_fit(self, *args, **kwargs):
+    def print_stdout_items(self):
+
+        phase = self.stdout_items['phase']
+        epoch = self.stdout_items['epoch']
+        seen_item = self.stdout_items['seen_item']
+        dataset_len = self.stdout_items['dataset_len']
+        batch_loss = self.stdout_items['batch_loss']
+
+        print('\t'.join([
+            f"{phase}",
+            f"Epoch: {epoch} [{seen_item:04}/{dataset_len:04} ({100. * seen_item / dataset_len:.0f}%)]",
+            f"Batch Loss: {batch_loss:.6f}",
+        ]))
+
+    # Hook methods
+
+    def before_fit(self, dataset, validation_dataset):
         pass
 
-    def after_fit(self, *args, **kwargs):
+    def after_fit(self):
         pass
 
-    def before_each_epoch(self, *args, **kwargs):
+    def before_fit_one_epoch(self, loaders, phase, epoch):
         pass
 
-    def after_each_epoch(self, *args, **kwargs):
+    def after_fit_one_epoch(self):
         pass
 
-    def before_each_phase(self, *args, **kwargs):
+    def before_fit_one_batch(self, batch, train):
         pass
 
-    def after_each_phase(self, *args, **kwargs):
+    def after_fit_one_batch(self, loss, output, data, target):
         pass
-
-    def before_each_batch(self, loader, seen_item, batch_ix, batch, epoch,
-                          train):
-        pass
-
-    def after_each_batch(self, loader, seen_item, batch_ix, batch, epoch, train,
-                         loss, output, data, target, verbose):
-        if verbose != 0:
-            if batch_ix % self.params['stdout_interval'] == 0:
-                print('\t'.join(
-                    self.stdout_items(batch_ix, train, epoch, seen_item, loader,
-                                      loss)))
