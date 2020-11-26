@@ -31,9 +31,9 @@ class MNISTExperiment(Experiment):
 
         self.hyperparams = {
             'lr': 0.001,
-            'batch_size': 2048,
-            'validation_batch_size': 1024,
-            'epoch': 2,
+            'batch_size': 10000,
+            'validation_batch_size': 10000,
+            'epoch': 30,
         }
 
         self.dataset = MNIST(root='./input/',
