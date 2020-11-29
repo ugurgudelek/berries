@@ -27,7 +27,36 @@ class CNNTrainer(BaseTrainer):
                          criterion, logger)
 
 
-class VAETrainer(BaseTrainer):
+class AETrainer(BaseTrainer):
+
+    def __init__(self,
+                 model,
+                 metrics,
+                 hyperparams,
+                 params,
+                 optimizer=None,
+                 criterion=None,
+                 logger=None):
+        super().__init__(model, metrics, hyperparams, params, optimizer,
+                         criterion, logger)
+
+    def _encode(self, dataset):
+        loader = self._to_loader(dataset, training=False)
+
+        latents = []
+        self._set_grad_enabled(False)
+        for batch_ix, batch in enumerate(loader):
+            data, target = self.handle_batch(batch)
+            latent = self.model.latent(data)
+            latents.append(latent)
+        latents = torch.cat(latents, axis=0)
+        return latents
+
+    def encode(self, dataset):
+        return self._encode(dataset).cpu().detach().numpy()
+
+
+class VAETrainer(AETrainer):
 
     def __init__(self,
                  model,
@@ -66,28 +95,8 @@ class VAETrainer(BaseTrainer):
 
         return kl_loss + recon_loss, recon_loss, kl_loss
 
-    def _encode(self, dataset):
-        loader = DataLoader(dataset=dataset,
-                            batch_size=self.batch_size,
-                            shuffle=False,
-                            drop_last=True,
-                            num_workers=0,
-                            pin_memory=self.on_cuda)
 
-        latents = []
-        self._set_grad_enabled(False)
-        for batch_ix, batch in enumerate(loader):
-            data, target = self.handle_batch(batch)
-            latent = self.model.latent(data)
-            latents.append(latent)
-        latents = torch.cat(latents, axis=0)
-        return latents
-
-    def encode(self, dataset):
-        return self._encode(dataset).cpu().detach().numpy()
-
-
-class VAEClassifierTrainer(BaseTrainer):
+class PredictorFromCompressorTrainer(BaseTrainer):
 
     def __init__(self,
                  model,
