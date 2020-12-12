@@ -2,6 +2,9 @@ from sklearn.base import BaseEstimator as SklearnBaseEstimator
 from torch import nn
 import torch
 
+import functools
+import operator
+
 
 class BaseEstimator(SklearnBaseEstimator):
     # http://msmbuilder.org/development/apipatterns.html
@@ -31,3 +34,8 @@ class BaseModel(nn.Module):
         self.load_state_dict(checkpoint['model_state_dict'])
 
         return self.to(device)
+
+    def num_features_before_fcnn(self, input_dim):
+        return functools.reduce(
+            operator.mul,
+            list(self.feature_extractor(torch.rand(1, *input_dim)).shape))
