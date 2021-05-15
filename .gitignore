@@ -1,0 +1,7 @@
+
+.idea
+.vscode
+*.pyc
+berries_ugurgudelek.egg-info
+projects
+input
