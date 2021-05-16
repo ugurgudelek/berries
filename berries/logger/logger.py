@@ -256,19 +256,20 @@ class NeptuneLogger(GenericLogger):
 
     def __init__(self, root, project_name, experiment_name, params,
                  hyperparams):
-        import neptune
+        import neptune.new as neptune
         super(NeptuneLogger, self).__init__(root, project_name, experiment_name,
                                             params, hyperparams)
 
-        neptune.init(project_qualified_name=f'ugurgudelek/{project_name}',
-                     backend=neptune.HostedNeptuneBackend())
-        self.experiment = neptune.create_experiment(name=experiment_name,
-                                                    params={
-                                                        **params,
-                                                        **hyperparams
-                                                    },
-                                                    upload_stdout=False,
-                                                    send_hardware_metrics=False)
+        self.run = neptune.init(project=self.params['neptune_project_name'])
+
+        # Legacy neptune client code
+        # self.experiment = neptune.create_experiment(name=experiment_name,
+        #                                             params={
+        #                                                 **params,
+        #                                                 **hyperparams
+        #                                             },
+        #                                             upload_stdout=False,
+        #                                             send_hardware_metrics=False)
 
     def log_metric(self,
                    metric_name,
@@ -276,10 +277,12 @@ class NeptuneLogger(GenericLogger):
                    epoch,
                    metric_value,
                    timestamp=None):
-        log_name = f'{phase}-{metric_name}'
-        x = epoch
-        y = metric_value
-        self.experiment.log_metric(log_name, x, y, timestamp)
+        # log_name = f'{phase}-{metric_name}'
+        # x = epoch
+        # y = metric_value
+        # self.experiment.log_metric(log_name, x, y, timestamp)
+
+        self.run[f'{phase}/{metric_name}'].log(metric_value)
 
     def log_history(self, phase, epoch, history):
         raise NotImplementedError()
