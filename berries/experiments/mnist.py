@@ -18,24 +18,40 @@ from berries.logger import MultiLogger
 class MNISTExperiment(Experiment):
 
     def __init__(self):
+
         self.params = {
             'project_name': 'debug',
-            'experiment_name': 'mnist-float-v2',
+            'experiment_name': 'mnist',
             'seed': 42,
             'device': 'cuda' if torch.cuda.is_available() else 'cpu',
             'resume': False,
             'pretrained': False,
-            'log_interval': 1,
-            'stdout_interval': 10,
+            'checkpoint': {
+                'on_epoch': 2,
+            },
+            'log': {
+                'on_epoch': 2,
+            },
+            'stdout': {
+                'verbose': True,
+                'on_batch': 0,
+                'on_epoch': 2
+            },
             'root': Path('./'),
-            'neptune_project_name': 'machining/stroke',
+            'neptune': {
+                # 'id': 'DEBUG-12',
+                'workspace': 'ugurgudelek',
+                'project': 'debug',
+                'tags': ['MNIST', 'CNN'],
+                'source_files': ['./mnist.py']
+            }
         }
 
         self.hyperparams = {
             'lr': 0.001,
             'batch_size': 10000,
             'validation_batch_size': 10000,
-            'epoch': 30,
+            'epoch': 13,
         }
 
         self.dataset = MNIST(root='./input/',
@@ -64,9 +80,24 @@ class MNISTExperiment(Experiment):
         self.trainer.fit(dataset=self.dataset.trainset,
                          validation_dataset=self.dataset.testset)
 
+        # Log final model
+        self.logger.log_model(path=self.trainer._get_last_checkpoint_path())
+
+        # Log prediction dataframe
+        prediction_dataframe = self.trainer.to_prediction_dataframe(dataset=self.dataset.testset,
+                                                                    classification=True,
+                                                                    save=True) # yapf:disable
+
+        self.logger.log_dataframe(key='prediction/validation',
+                                  dataframe=prediction_dataframe)
+
+        # Log image
+        # Example can be found at trainer.py
+
 
 def main():
-    MNISTExperiment().run()
+    with MNISTExperiment() as experiment:
+        experiment.run()
 
 
 if __name__ == "__main__":

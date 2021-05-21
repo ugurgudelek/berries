@@ -40,6 +40,26 @@ class CNNTrainer(BaseTrainer):
         super().__init__(model, metrics, hyperparams, params, optimizer,
                          criterion, logger)
 
+    def after_fit_one_epoch(self, history_container, metric_container):
+        import matplotlib.pyplot as plt
+
+        samples = self.validation_dataset.get_random_sample(n=3)
+        predictions, targets = self.transform(dataset=samples,
+                                              classification=True)
+        for i in range(len(samples)):
+            data = samples[i]['data'].squeeze()
+            target = targets[i]
+            prediction = predictions[i]
+
+            fig = plt.figure()
+            plt.imshow(data)
+            plt.axis("off")
+            plt.suptitle(
+                f'Epoch:{self.epoch}    Target:{target}    Prediction:{prediction}'
+            )
+            self.logger.log_image(fig)
+            plt.close()
+
 
 class AETrainer(BaseTrainer):
 
