@@ -12,6 +12,8 @@ from PIL import Image
 
 from functools import reduce
 
+from .base import BaseTorchDataset
+
 
 class MNIST:
     """Placeholder class for MNISTInner
@@ -135,13 +137,14 @@ class MNIST:
         print('Done!')
 
 
-class MNISTInner(Dataset):
+class MNISTInner(BaseTorchDataset):
     """
     Actual MNIST class to work with.
     Normalization should be implemented here!
     """
 
     def __init__(self, data, targets, transform, target_transform):
+        super().__init__()
         self.data = data
         self.targets = targets
         self.transform = transform
