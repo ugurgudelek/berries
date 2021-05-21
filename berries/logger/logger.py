@@ -52,6 +52,12 @@ class GenericLogger(metaclass=ABCMeta):
     def save(self):
         raise NotImplementedError()
 
+    def log_dataframe(self, key, dataframe):
+        pass
+
+    def log_model(self, path, name):
+        pass
+
     def stop(self):
         pass
 
@@ -73,14 +79,15 @@ class MultiLogger(GenericLogger):
         self.hyperparams = hyperparams
         self.offline = offline
 
-        self.loggers = [
-            LocalLogger(root, project_name, experiment_name, params,
-                        hyperparams),
-        ]
+        self._loggers = {
+            'local':
+                LocalLogger(root, project_name, experiment_name, params,
+                            hyperparams),
+        }
         if not offline:
-            self.loggers.append(
-                NeptuneLogger(root, project_name, experiment_name, params,
-                              hyperparams))
+            self._loggers['neptune'] = NeptuneLogger(root, project_name,
+                                                     experiment_name, params,
+                                                     hyperparams)
 
     def log_metric(self,
                    metric_name,
@@ -88,7 +95,7 @@ class MultiLogger(GenericLogger):
                    epoch,
                    metric_value,
                    timestamp=None):
-        for logger in self.loggers:
+        for logger_name, logger in self._loggers.items():
             logger.log_metric(metric_name, phase, epoch, metric_value,
                               timestamp)
 
@@ -101,16 +108,28 @@ class MultiLogger(GenericLogger):
                   description=None,
                   timestamp=None,
                   **kwargs):
-        for logger in self.loggers:
+        for logger_name, logger in self._loggers.items():
             logger.log_image(img, image_name, description, timestamp, **kwargs)
 
     def log_text(self, text, timestamp=None, **kwargs):
-        for logger in self.loggers:
+        for logger_name, logger in self._loggers.items():
             logger.log_text(text, timestamp=None, **kwargs)
 
+    def log_dataframe(self, key, dataframe):
+        for logger_name, logger in self._loggers.items():
+            logger.log_dataframe(key, dataframe)
+
+    def log_model(self, path, name='model'):
+        for logger_name, logger in self._loggers.items():
+            logger.log_model(path, name)
+
     def save(self):
-        for logger in self.loggers:
+        for logger_name, logger in self._loggers.items():
             logger.save()
+
+    def stop(self):
+        for logger_name, logger in self._loggers.items():
+            logger.stop()
 
 
 class LocalLogger(GenericLogger):
@@ -177,12 +196,13 @@ class LocalLogger(GenericLogger):
                   description=None,
                   timestamp=None,
                   **kwargs):
-        self.container['image'].append({
-            'img': img,
-            'image_name': image_name,
-            'description': description,
-            **kwargs, 'timestamp': timestamp
-        })
+        # self.container['image'].append({
+        #     'img': img,
+        #     'image_name': image_name,
+        #     'description': description,
+        #     **kwargs, 'timestamp': timestamp
+        # })
+        pass
 
     def log_text(self, text, timestamp=None, **kwargs):
         self.container['text'].append({
@@ -256,20 +276,31 @@ class NeptuneLogger(GenericLogger):
 
     def __init__(self, root, project_name, experiment_name, params,
                  hyperparams):
-        import neptune.new as neptune
         super(NeptuneLogger, self).__init__(root, project_name, experiment_name,
                                             params, hyperparams)
+        import neptune.new as neptune
+        from neptune.new.types import File
 
-        self.run = neptune.init(project=self.params['neptune_project_name'])
+        self._File = File
 
-        # Legacy neptune client code
-        # self.experiment = neptune.create_experiment(name=experiment_name,
-        #                                             params={
-        #                                                 **params,
-        #                                                 **hyperparams
-        #                                             },
-        #                                             upload_stdout=False,
-        #                                             send_hardware_metrics=False)
+        neptune_params = params['neptune']
+        workspace = neptune_params['workspace']
+        project = neptune_params['project']
+        source_files = neptune_params['source_files']
+
+        run_id = neptune_params.get('id', False)
+        if run_id:
+            self.run = neptune.init(project=f'{workspace}/{project}',
+                                    run=run_id,
+                                    source_files=source_files)
+        else:
+            self.run = neptune.init(project=f'{workspace}/{project}',
+                                    source_files=source_files)
+
+        self.run['sys/tags'].add(neptune_params['tags'])
+
+        self.run['parameters'] = params
+        self.run['hyperparameters'] = hyperparams
 
     def log_metric(self,
                    metric_name,
@@ -277,10 +308,6 @@ class NeptuneLogger(GenericLogger):
                    epoch,
                    metric_value,
                    timestamp=None):
-        # log_name = f'{phase}-{metric_name}'
-        # x = epoch
-        # y = metric_value
-        # self.experiment.log_metric(log_name, x, y, timestamp)
 
         self.run[f'{phase}/{metric_name}'].log(metric_value)
 
@@ -294,13 +321,7 @@ class NeptuneLogger(GenericLogger):
                   timestamp=None,
                   **kwargs):
 
-        log_name = f'{image_name}'
-        x = None
-        y = img
-        image_name = image_name
-        description = description
-        self.experiment.log_image(log_name, x, y, image_name, description,
-                                  timestamp)
+        self.run["image_preds"].log(self._File.as_image(img))
 
     def log_text(self, text, timestamp=None, **kwargs):
         log_name = 'text'
@@ -308,11 +329,17 @@ class NeptuneLogger(GenericLogger):
         y = text
         self.experiment.log_text(log_name, x, y, timestamp)
 
+    def log_dataframe(self, key, dataframe):
+        self.run[key].upload(self._File.as_html(dataframe))
+
+    def log_model(self, path, name='model'):
+        self.run[name].upload(str(path))
+
     def save(self):
         pass
 
     def stop(self):
-        self.experiment.stop()
+        self.run.stop()
 
 
 class WandBLogger(GenericLogger):

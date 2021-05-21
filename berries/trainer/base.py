@@ -9,7 +9,6 @@ import functools
 import numpy as np
 import pandas as pd
 import torch
-from berries.logger.logger import LocalLogger as logger_backend
 from berries.plot.plotter import Plotter
 from torch.nn import MSELoss
 from torch.optim import Adam
@@ -47,12 +46,10 @@ class BaseTrainer():
 
     def __init__(self, model, metrics, hyperparams, params, optimizer,
                  criterion, logger) -> None:
-        # self._validate_hyperparams(hyperparams)
-        # self._validate_params(params)
 
         self.hyperparams = hyperparams
         self.params = params
-        self.verbose = self.params.get('verbose', 1)
+        self.logger = logger
 
         self.device = torch.device('cuda:0' if self.params['device'] ==
                                    'cuda' else 'cpu')
@@ -73,13 +70,6 @@ class BaseTrainer():
                           """)
             self.params['log_history'] = False
 
-        self.logger = logger or logger_backend(
-            root=self.params['root'],
-            project_name=self.params['project_name'],
-            experiment_name=self.params['experiment_name'],
-            params=self.params,
-            hyperparams=self.hyperparams)
-
         self.metrics = metrics
 
         self.batch_size = self.hyperparams.get('batch_size', 16)
@@ -90,8 +80,6 @@ class BaseTrainer():
         self.plotter = Plotter()
 
         self._resume_or_not()
-
-        self.stdout_items = dict()
 
     def __str__(self):
         """
@@ -131,7 +119,6 @@ class BaseTrainer():
         if self.params['resume'] or self.params['pretrained']:
 
             cpt_path = self.experiment_fpath / 'checkpoints'
-            # print(f"Loading checkpoint...{cpt_path}")
             if not cpt_path.exists():
                 raise Exception(f"""
                     You do not have any checkpoint to resume.
@@ -143,7 +130,14 @@ class BaseTrainer():
             print(f"Checkpoint is loaded from {last_epoch}")
         else:
             self.start_epoch = 1
+            self.epoch = 1
             print("Starting training from epoch 1")
+
+    def _get_last_checkpoint_path(self):
+        cpt_path = self.experiment_fpath / 'checkpoints'
+        last_epoch = sorted(list(map(int, os.listdir(cpt_path))))[-1]
+        path = self.experiment_fpath / f'checkpoints/{last_epoch}/model-optim.pth'
+        return path
 
     def _save_checkpoint(self, epoch):  # todo: move into generic model
         # Save the model if the validation loss is the best we've seen so far.
@@ -173,6 +167,7 @@ class BaseTrainer():
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         self.start_epoch = checkpoint['epoch'] + 1
+        self.epoch = epoch
         # self.hyperparams = checkpoint['hyperparams']
         # self.params = checkpoint['params']
         # self.history = checkpoint['history']
@@ -219,6 +214,17 @@ class BaseTrainer():
         for metric_fn in self.metrics:
             container[metric_fn.__name__].append(metric_fn()(yhat, y))
         return container
+
+    def _pad_collate(batch):
+        # https://suzyahyah.github.io/pytorch/2019/07/01/DataLoader-Pad-Pack-Sequence.html
+        raise NotImplementedError()
+        (xx, yy) = zip(*batch)
+        x_lens = [len(x) for x in xx]
+        y_lens = [len(y) for y in yy]
+
+        xx_pad = pad_sequence(xx, batch_first=True, padding_value=0)
+        yy_pad = pad_sequence(yy, batch_first=True, padding_value=0)
+        return xx_pad, yy_pad, x_lens, y_lens
 
     def _to_loader(self, dataset, training, batch_size=None):
         return DataLoader(
@@ -306,17 +312,20 @@ class BaseTrainer():
                 history_container['output'].append(batch_output.detach())
                 history_container['target'].append(batch_target.detach())
 
-                # Config stdout items
-                self.stdout_items['phase'] = phase
-                self.stdout_items['epoch'] = epoch
-                self.stdout_items['seen_item'] = seen_item
-                self.stdout_items['dataset_len'] = sum(
-                    len(loader.dataset) for loader in loaders)
-                self.stdout_items['batch_loss'] = batch_loss.mean().item()
+                if self.params['stdout']['verbose']:
+                    if self.params['stdout']['on_batch'] and (
+                            batch_ix +
+                            1) % self.params['stdout']['on_batch'] == 0:
 
-                if self.verbose != 0:
-                    if batch_ix % self.params['stdout_interval'] == 0:
-                        self.print_stdout_items()
+                        dataset_len = sum(
+                            len(loader.dataset) for loader in loaders)
+                        batch_loss = batch_loss.mean().item()
+
+                        print('\t'.join([
+                            f"{phase}",
+                            f"Epoch: {epoch} [{seen_item:04}/{dataset_len:04} ({100. * seen_item / dataset_len:.0f}%)]",
+                            f"Batch Loss: {batch_loss:.6f}",
+                        ]))
 
             history_container = {
                 key: torch.cat(value_list)
@@ -358,7 +367,7 @@ class BaseTrainer():
         # At any point you can hit Ctrl + C to break out of training early.
         try:
             self.dataset = dataset
-            self.validation_set = validation_dataset
+            self.validation_dataset = validation_dataset
 
             # Support for list of datasets
             train_loaders = [
@@ -375,24 +384,39 @@ class BaseTrainer():
                 history_container, metric_container = self._fit_one_epoch(
                     loaders=validation_loaders, epoch=0, phase='validation')
 
-            for epoch in range(self.start_epoch, self.hyperparams['epoch'] + 1):
+            for self.epoch in range(self.start_epoch,
+                                    self.hyperparams['epoch'] + 1):
 
                 for phase in ['training', 'validation']:
 
                     history_container, metric_container = self._fit_one_epoch(
                         loaders=train_loaders
                         if phase == 'training' else validation_loaders,
-                        epoch=epoch,
+                        epoch=self.epoch,
                         phase=phase)
 
-                if epoch % self.params.get('log_interval', 1) == 0:
+                    if self.params['stdout']['verbose']:
+                        n = self.params['stdout']['on_epoch']
+                        if n and (self.epoch) % n == 0:
+
+                            print('\t'.join([
+                                f"{phase}", f"Epoch: {self.epoch}",
+                                f"Loss: {metric_container['loss']:.6f}", *[
+                                    f"{metric_fn.__name__.lower()}: {metric_container[metric_fn.__name__.lower()]:.6f}"
+                                    for metric_fn in self.metrics
+                                ]
+                            ]))
+
+                if self.epoch % self.params['log']['on_epoch'] == 0:
                     self.logger.save()
 
-                if self.params.get('save_checkpoint', False):
-                    self._save_checkpoint(epoch=epoch)
+                if self.params.get('checkpoint', False) and \
+                    (self.epoch % self.params['checkpoint']['on_epoch']) == 0:
+                    self._save_checkpoint(epoch=self.epoch)
 
         except KeyboardInterrupt:
             print('Exiting from training early. Bye!')
+            self.logger.stop()
 
     def _transform(self, dataset, batch_size, classification):
         loader = self._to_loader(dataset, training=False, batch_size=batch_size)
@@ -437,20 +461,6 @@ class BaseTrainer():
                                         'predictions.csv',
                                         index=False)
         return prediction_dataframe
-
-    def print_stdout_items(self):
-
-        phase = self.stdout_items['phase']
-        epoch = self.stdout_items['epoch']
-        seen_item = self.stdout_items['seen_item']
-        dataset_len = self.stdout_items['dataset_len']
-        batch_loss = self.stdout_items['batch_loss']
-
-        print('\t'.join([
-            f"{phase}",
-            f"Epoch: {epoch} [{seen_item:04}/{dataset_len:04} ({100. * seen_item / dataset_len:.0f}%)]",
-            f"Batch Loss: {batch_loss:.6f}",
-        ]))
 
     # Hook methods
 
