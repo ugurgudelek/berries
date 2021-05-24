@@ -309,7 +309,7 @@ class NeptuneLogger(GenericLogger):
                    metric_value,
                    timestamp=None):
 
-        self.run[f'{phase}/{metric_name}'].log(metric_value)
+        self.run[f'{phase}/{metric_name}'].log(metric_value, step=epoch)
 
     def log_history(self, phase, epoch, history):
         raise NotImplementedError()

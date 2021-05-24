@@ -6,7 +6,7 @@
 # @Desc    :   None
 
 import torch
-from torch.utils.data import Dataset, Subset
+from torch.utils.data import Dataset, Subset, ConcatDataset
 
 
 class BaseTorchDataset(Dataset):
@@ -18,3 +18,9 @@ class BaseTorchDataset(Dataset):
 
         indices = torch.randint(low=0, high=len(self), size=(n,))
         return Subset(self, indices)
+
+
+class ConcatTorchDataset(ConcatDataset, BaseTorchDataset):
+
+    def __init__(self, datasets):
+        super(ConcatTorchDataset, self).__init__(datasets)

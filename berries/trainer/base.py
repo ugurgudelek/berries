@@ -381,26 +381,30 @@ class BaseTrainer():
 
             # run 1 epoch before training to watch untrained model performance
             if not self.params.get('resume', False):
+                self.epoch = 0
+                self.phase = 'validation'
                 history_container, metric_container = self._fit_one_epoch(
-                    loaders=validation_loaders, epoch=0, phase='validation')
+                    loaders=validation_loaders,
+                    epoch=self.epoch,
+                    phase=self.phase)
 
             for self.epoch in range(self.start_epoch,
                                     self.hyperparams['epoch'] + 1):
 
-                for phase in ['training', 'validation']:
+                for self.phase in ['training', 'validation']:
 
                     history_container, metric_container = self._fit_one_epoch(
                         loaders=train_loaders
-                        if phase == 'training' else validation_loaders,
+                        if self.phase == 'training' else validation_loaders,
                         epoch=self.epoch,
-                        phase=phase)
+                        phase=self.phase)
 
                     if self.params['stdout']['verbose']:
                         n = self.params['stdout']['on_epoch']
                         if n and (self.epoch) % n == 0:
 
                             print('\t'.join([
-                                f"{phase}", f"Epoch: {self.epoch}",
+                                f"{self.phase}", f"Epoch: {self.epoch}",
                                 f"Loss: {metric_container['loss']:.6f}", *[
                                     f"{metric_fn.__name__.lower()}: {metric_container[metric_fn.__name__.lower()]:.6f}"
                                     for metric_fn in self.metrics

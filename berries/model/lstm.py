@@ -15,23 +15,23 @@ class LSTM(BaseModel):
     """
 
     def __init__(self,
-                 input_size,
+                 sequence_input_size,
                  hidden_size,
                  output_size=1,
                  num_layers=2,
                  batch_size=64,
-                 aux_input_size=0,
+                 scalar_input_size=0,
                  bidirectional=False,
                  stateful=False,
                  hidden_reset_period=None,
                  return_sequences=False):
         super(LSTM, self).__init__()
-        self.input_size = input_size
+        self.sequence_input_size = sequence_input_size
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.num_layers = num_layers
         self.batch_size = batch_size  # todo: check this
-        self.aux_input_size = aux_input_size
+        self.scalar_input_size = scalar_input_size
         self.bidirectional = bidirectional
         self.return_sequences = return_sequences
 
@@ -55,7 +55,7 @@ class LSTM(BaseModel):
         #   h_n (num_layers * num_directions, batch, hidden_size)
         #   c_n (num_layers * num_directions, batch, hidden_size)
         self.lstm = nn.LSTM(
-            input_size=self.input_size,
+            input_size=self.sequence_input_size,
             hidden_size=self.hidden_size,
             num_layers=self.num_layers,
             bias=True,
@@ -64,12 +64,18 @@ class LSTM(BaseModel):
             batch_first=True)
 
         # Define the output layer
+        in_features = self.hidden_size * self.num_directions + self.scalar_input_size
         self.classifier = nn.Sequential(
-            nn.Linear(in_features=self.hidden_size * self.num_directions +
-                      self.aux_input_size,
-                      out_features=self.output_size),
-            # nn.Sigmoid(),   # ! be careful. output cannot exceed 1.
-        )
+            nn.Linear(in_features=in_features, out_features=in_features // 2),
+            nn.ReLU(),
+            nn.Linear(in_features=in_features // 2,
+                      out_features=in_features // 4),
+            nn.ReLU(),
+            nn.Linear(
+                in_features=in_features // 4,
+                out_features=self.output_size,
+                # nn.Sigmoid(),   # ! be careful. with this setting, output cannot exceed 1.
+            ))
 
         self.hidden = self._init_hidden()
         self._init_weights()
@@ -124,7 +130,7 @@ class LSTM(BaseModel):
 
     def forward(self, x):
         """
-        # required x shape: (batch_size, seq_len, input_size) because batch_first=True
+        # required x shape: (batch_size, seq_len, sequence_input_size) because batch_first=True
         # required hidden shape:(num_layers * num_directions, batch_size, hidden_size)
 
         # hidden reset -> if not applied: the LSTM will treat a new batch as a continuation of a sequence (Stateful LSTM)
@@ -132,10 +138,10 @@ class LSTM(BaseModel):
         # See. [Stateful vs Stateless LSTM](http://philipperemy.github.io/keras-stateful-lstm/)
         """
 
-        lstm_x = x['lstm_x']
-        fccn_x = x.get('fcnn_x', None)
+        sequence = x['sequences']
+        scalars = x.get('scalars', None)
 
-        batch_size, seq_len, input_size = lstm_x.shape
+        batch_size, seq_len, sequence_input_size = sequence.shape
 
         if not self.stateful:
             self.reset_states(batch_size=batch_size)
@@ -147,7 +153,7 @@ class LSTM(BaseModel):
 
         # forward pass
         # auto iterates over seq_len
-        lstm_out, self.hidden = self.lstm(lstm_x, self.hidden)
+        lstm_out, self.hidden = self.lstm(sequence, self.hidden)
         # lstm_out'shape (batch, seq_len, num_directions * hidden_size)
         last_seq_out = lstm_out[:, -1, :]  # all_batch, last_seq, all_hidden
 
@@ -158,8 +164,8 @@ class LSTM(BaseModel):
 
         else:
             fc_in = last_seq_out
-            if fccn_x is not None:  # concat aux data
-                fc_in = torch.cat((last_seq_out, fccn_x), dim=1)
+            if scalars is not None:  # concat aux data
+                fc_in = torch.cat((last_seq_out, scalars), dim=1)
             # tensor containing the output features (h_t) from the last layer of the LSTM
 
         fc_out = self.classifier(fc_in)
