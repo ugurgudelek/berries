@@ -21,6 +21,7 @@ class LSTMTrainer(BaseTrainer):
                  hyperparams,
                  params,
                  optimizer=None,
+                 scheduler=None,
                  criterion=None,
                  logger=None):
         super().__init__(model, metrics, hyperparams, params, optimizer,
@@ -35,10 +36,11 @@ class CNNTrainer(BaseTrainer):
                  hyperparams,
                  params,
                  optimizer=None,
+                 scheduler=None,
                  criterion=None,
                  logger=None):
         super().__init__(model, metrics, hyperparams, params, optimizer,
-                         criterion, logger)
+                         scheduler, criterion, logger)
 
     def after_fit_one_epoch(self, history_container, metric_container):
         import matplotlib.pyplot as plt
@@ -69,10 +71,11 @@ class AETrainer(BaseTrainer):
                  hyperparams,
                  params,
                  optimizer=None,
+                 scheduler=None,
                  criterion=None,
                  logger=None):
         super().__init__(model, metrics, hyperparams, params, optimizer,
-                         criterion, logger)
+                         scheduler, criterion, logger)
 
     def _encode(self, dataset):
         loader = self._to_loader(dataset, training=False)
@@ -98,10 +101,11 @@ class VAETrainer(AETrainer):
                  hyperparams,
                  params,
                  optimizer=None,
+                 scheduler=None,
                  criterion=None,
                  logger=None):
         super().__init__(model, metrics, hyperparams, params, optimizer,
-                         criterion, logger)
+                         scheduler, criterion, logger)
 
     def compute_loss(self, output, targets):
         targets = targets.permute(1, 0, 2)
@@ -139,10 +143,11 @@ class PredictorFromCompressorTrainer(BaseTrainer):
                  hyperparams,
                  params,
                  optimizer=None,
+                 scheduler=None,
                  criterion=None,
                  logger=None):
         super().__init__(model, metrics, hyperparams, params, optimizer,
-                         criterion, logger)
+                         scheduler, criterion, logger)
 
         self.compressor = compressor
 

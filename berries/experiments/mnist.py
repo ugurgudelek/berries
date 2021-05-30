@@ -3,6 +3,7 @@ __email__ = "ugurgudelek@gmail.com"
 
 import torch
 from torch import nn
+from torch.optim import lr_scheduler, Adam
 from torchvision import transforms
 
 from pathlib import Path
@@ -28,6 +29,8 @@ class MNISTExperiment(Experiment):
             'pretrained': False,
             'checkpoint': {
                 'on_epoch': 2,
+                'metric': metrics.Accuracy.__name__.lower(),
+                'trigger': lambda new, old: new > old
             },
             'log': {
                 'on_epoch': 2,
@@ -69,11 +72,24 @@ class MNISTExperiment(Experiment):
             params=self.params,
             hyperparams=self.hyperparams)
 
+        self.optimizer = Adam(params=self.model.parameters(),
+                              lr=self.hyperparams.get('lr', 0.001),
+                              weight_decay=self.hyperparams.get(
+                                  'weight_decay', 0))
+
+        # Decay LR by a factor of 0.1 every 7 epochs
+        self.exp_lr_scheduler = lr_scheduler.StepLR(self.optimizer,
+                                                    step_size=7,
+                                                    gamma=0.1,
+                                                    verbose=True)
+
         self.trainer = CNNTrainer(model=self.model,
+                                  criterion=nn.CrossEntropyLoss(),
+                                  optimizer=self.optimizer,
+                                  scheduler=self.exp_lr_scheduler,
                                   metrics=[metrics.Accuracy],
                                   hyperparams=self.hyperparams,
                                   params=self.params,
-                                  criterion=nn.CrossEntropyLoss(),
                                   logger=self.logger)
 
     def run(self):

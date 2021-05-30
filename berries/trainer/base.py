@@ -5,6 +5,7 @@ import os
 from collections import defaultdict
 from typing import Iterable
 import functools
+import copy
 
 import numpy as np
 import pandas as pd
@@ -44,8 +45,17 @@ def hook(before=None, after=None):
 
 class BaseTrainer():
 
-    def __init__(self, model, metrics, hyperparams, params, optimizer,
-                 criterion, logger) -> None:
+    def __init__(
+        self,
+        model,
+        metrics,
+        hyperparams,
+        params,
+        optimizer,
+        scheduler,
+        criterion,
+        logger,
+    ) -> None:
 
         self.hyperparams = hyperparams
         self.params = params
@@ -59,6 +69,8 @@ class BaseTrainer():
                                            lr=self.hyperparams.get('lr', 0.001),
                                            weight_decay=self.hyperparams.get(
                                                'weight_decay', 0))
+
+        self.scheduler = scheduler
         self.criterion = criterion or MSELoss()
         if self.criterion.reduction != 'none' and self.params.get(
                 'log_history', False):
@@ -100,19 +112,14 @@ class BaseTrainer():
         return self.device.type == 'cuda'
 
     def __repr__(self):
-        return """repr"""
-
-    def _validate_hyperparams(self, hyperparams):
-        raise NotImplementedError()
-
-    def _validate_params(self, params):
-        raise NotImplementedError()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.logger.stop()
+        return f'BaseTrainer(model={self.model},\
+                 metrics={self.metrics},\
+                 hyperparams={self.hyperparams},\
+                 params={self.params},\
+                 optimizer={self.optimizer},\
+                 criterion={self.criterion},\
+                 logger={self.logger},\
+                 scheduler={self.scheduler})'
 
     def _resume_or_not(self):
         # Resume or not
@@ -131,6 +138,7 @@ class BaseTrainer():
         else:
             self.start_epoch = 1
             self.epoch = 1
+            self.best_checkpoint_metric = 0.
             print("Starting training from epoch 1")
 
     def _get_last_checkpoint_path(self):
@@ -139,17 +147,15 @@ class BaseTrainer():
         path = self.experiment_fpath / f'checkpoints/{last_epoch}/model-optim.pth'
         return path
 
-    def _save_checkpoint(self, epoch):  # todo: move into generic model
-        # Save the model if the validation loss is the best we've seen so far.
-        # is_best = val_loss > best_val_loss
-        # best_val_loss = max(val_loss, best_val_loss)
+    def _save_checkpoint(self):  # todo: move into generic model
 
-        self.cpt_fpath = self.experiment_fpath / 'checkpoints' / str(epoch)
+        self.cpt_fpath = self.experiment_fpath / 'checkpoints' / str(self.epoch)
         self.cpt_fpath.mkdir(parents=True, exist_ok=True)
         # save model
         torch.save(
             {
-                'epoch': epoch,
+                'epoch': self.epoch,
+                'best_checkpoint_metric': self.best_checkpoint_metric,
                 'model_state_dict': self.model.state_dict(),
                 'optimizer_state_dict': self.optimizer.state_dict()
             }, self.cpt_fpath / 'model-optim.pth')
@@ -168,6 +174,7 @@ class BaseTrainer():
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         self.start_epoch = checkpoint['epoch'] + 1
         self.epoch = epoch
+        self.best_checkpoint_metric = checkpoint['best_checkpoint_metric']
         # self.hyperparams = checkpoint['hyperparams']
         # self.params = checkpoint['params']
         # self.history = checkpoint['history']
@@ -259,26 +266,31 @@ class BaseTrainer():
         self._set_grad_enabled(train)
 
         data, target = self.handle_batch(batch)
-        output = self.forward(data)
-        loss = self.compute_loss(output, target)
 
-        if train:
-            # do not let pytorch accumulates gradient
-            self.optimizer.zero_grad()
+        # do not let pytorch accumulates gradient
+        self.optimizer.zero_grad()
 
-            # calculate gradient with backpropagation
-            if self.criterion.reduction == 'none':
-                loss.sum().backward()
-            else:
-                loss.backward()
+        # track history if only in train
+        with torch.set_grad_enabled(train):
+            output = self.forward(data)
+            loss = self.compute_loss(output, target)
 
-            # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
-            if self.hyperparams.get('clip', None):  # if clip is given
-                torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(), max_norm=self.hyperparams['clip'])
+            if train:
 
-            # distribute gradients to update weights
-            self.optimizer.step()
+                # calculate gradient with backpropagation
+                if self.criterion.reduction == 'none':
+                    loss.sum().backward()
+                else:
+                    loss.backward()
+
+                # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
+                if self.hyperparams.get('clip', None):  # if clip is given
+                    torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(),
+                        max_norm=self.hyperparams['clip'])
+
+                # distribute gradients to update weights
+                self.optimizer.step()
 
         return loss, output, data, target
 
@@ -290,21 +302,24 @@ class BaseTrainer():
 
         history_container = defaultdict(list)
 
-        seen_item = 0
+        self.model.train(phase == 'training')
+
+        self.num_seen_sample = 0
         for loader_ix, loader in enumerate(loaders):
 
             for batch_ix, batch in enumerate(loader):
 
                 batch_loss, batch_output, batch_data, batch_target = self._fit_one_batch(
                     batch, train=True if phase == 'training' else False)
-                seen_item += len(batch_target)
+                self.num_seen_sample += len(batch_target)
 
                 # Store
                 history_container['id'].append(
                     batch.get(
                         'id',
                         torch.tensor(
-                            range(seen_item - len(batch_target), seen_item)))
+                            range(self.num_seen_sample - len(batch_target),
+                                  self.num_seen_sample)))
                 )  # generate new id if id attr is not available
                 history_container['loss'].append(batch_loss.detach(
                 ) if batch_loss.dim() != 0 else batch_loss.detach().unsqueeze(
@@ -323,16 +338,20 @@ class BaseTrainer():
 
                         print('\t'.join([
                             f"{phase}",
-                            f"Epoch: {epoch} [{seen_item:04}/{dataset_len:04} ({100. * seen_item / dataset_len:.0f}%)]",
+                            f"Epoch: {epoch} [{self.num_seen_sample:04}/{dataset_len:04} ({100. * self.num_seen_sample / dataset_len:.0f}%)]",
                             f"Batch Loss: {batch_loss:.6f}",
                         ]))
 
-            history_container = {
-                key: torch.cat(value_list)
-                for key, value_list in history_container.items()
-            }
+        if phase == 'training':
+            if self.scheduler is not None:
+                self.scheduler.step()
 
-        if self.params.get('log_history', None):
+        history_container = {
+            key: torch.cat(value_list)
+            for key, value_list in history_container.items()
+        }
+
+        if self.params['log'].get('history', False):
             self.logger.log_history(
                 phase=phase,
                 epoch=epoch,
@@ -356,6 +375,20 @@ class BaseTrainer():
                                    phase=phase,
                                    epoch=epoch,
                                    metric_value=metric_value)
+
+        # Save checkpoint if the model is best
+        if phase == 'validation':
+            if 'checkpoint' in self.params and 'metric' in self.params[
+                    'checkpoint']:
+                checkpoint_metric = metric_container[self.params['checkpoint']['metric']] #yapf:disable
+                trigger = self.params['checkpoint'].get(
+                    'trigger', lambda new, old: new > old)
+                if trigger(checkpoint_metric, self.best_checkpoint_metric):
+                    print(
+                        f'Best:{checkpoint_metric} > Last:{self.best_checkpoint_metric}'
+                    )
+                    self.best_checkpoint_metric = checkpoint_metric
+                    self._save_checkpoint()
 
         return (history_container, metric_container)
 
@@ -416,7 +449,7 @@ class BaseTrainer():
 
                 if self.params.get('checkpoint', False) and \
                     (self.epoch % self.params['checkpoint']['on_epoch']) == 0:
-                    self._save_checkpoint(epoch=self.epoch)
+                    self._save_checkpoint()
 
         except KeyboardInterrupt:
             print('Exiting from training early. Bye!')
