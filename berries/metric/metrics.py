@@ -15,8 +15,8 @@ class MSE(nn.Module):
         self.mse = nn.MSELoss()
 
     def forward(self, yhat, y):
-        loss = self.mse(yhat.detach(), y)
-        return loss.cpu().numpy().item()
+        loss = self.mse(yhat, y)
+        return loss.item()
 
 
 class RMSE(nn.Module):
@@ -27,8 +27,8 @@ class RMSE(nn.Module):
         self.eps = eps
 
     def forward(self, yhat, y):
-        loss = torch.sqrt(self.mse(yhat.detach(), y) + self.eps)
-        return loss.cpu().numpy().item()
+        loss = torch.sqrt(self.mse(yhat, y) + self.eps)
+        return loss.item()
 
 
 class MAE(nn.Module):
@@ -38,8 +38,8 @@ class MAE(nn.Module):
         self.mae = nn.L1Loss()
 
     def forward(self, yhat, y):
-        loss = self.mae(yhat.detach(), y)
-        return loss.cpu().numpy().item()
+        loss = self.mae(yhat, y)
+        return loss.item()
 
 
 class MAPE(nn.Module):
@@ -50,9 +50,8 @@ class MAPE(nn.Module):
         self.eps = eps
 
     def forward(self, yhat, y):
-        loss = 100 * self.mae(yhat.detach() / (y + self.eps), y /
-                              (y + self.eps))
-        return loss.cpu().numpy().item()
+        loss = 100 * self.mae(yhat / (y + self.eps), y / (y + self.eps))
+        return loss.item()
 
 
 class Accuracy(nn.Module):
@@ -61,8 +60,7 @@ class Accuracy(nn.Module):
         super().__init__()
 
     def forward(self, yhat, y):
-        return 100 * torch.mean((torch.argmax(yhat.detach(), dim=1)
-                                 == y).float()).cpu().numpy().item()
+        return 100 * torch.mean((torch.argmax(yhat, dim=1) == y).float()).item()
 
 
 class AccuracyBar(nn.Module):
@@ -71,8 +69,8 @@ class AccuracyBar(nn.Module):
         super().__init__()
 
     def forward(self, yhat, y):
-        return (100 * (1 - torch.mean(torch.abs(yhat.detach() - y)) / torch.mean(y)))\
-            .cpu().numpy().item()
+        return (100 * (1 - torch.mean(torch.abs(yhat - y)) / torch.mean(y)))\
+            .item()
 
 
 class R2(nn.Module):
@@ -81,12 +79,11 @@ class R2(nn.Module):
         super().__init__()
 
     def forward(self, yhat, y):
-        dividend = ((yhat.detach() - yhat.detach().mean()) *
-                    (y - y.mean())).sum()
-        divisor = (y.size(0) - 1) * yhat.detach().std() * y.std()
+        dividend = ((yhat - yhat.mean()) * (y - y.mean())).sum()
+        divisor = (y.size(0) - 1) * yhat.std() * y.std()
         corr = torch.div(dividend, divisor)
         r2 = torch.pow(corr, 2)
-        return r2.cpu().numpy().item()
+        return r2.item()
 
 
 if __name__ == "__main__":

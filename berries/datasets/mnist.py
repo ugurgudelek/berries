@@ -162,10 +162,12 @@ class MNISTInner(BaseTorchDataset):
 
         # doing this so that it is consistent with all other datasets
         # to return a PIL Image
-        img = Image.fromarray(img.numpy(), mode='L')
+        img = np.array(Image.fromarray(img.numpy(), mode='L'))
+        img = np.expand_dims(img, axis=0)  # add channel dimension
 
         if self.transform is not None:
-            img = self.transform(img)
+            img = self.transform(image=img)['image']
+            img = img.permute(1, 0, 2)  # change it to the c,w,h
 
         if self.target_transform is not None:
             target = self.target_transform(target)

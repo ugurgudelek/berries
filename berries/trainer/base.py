@@ -43,6 +43,42 @@ def hook(before=None, after=None):
     return wrap
 
 
+class NodeTensor(torch.Tensor):
+
+    @classmethod
+    def __torch_function__(cls, func, types, args=(), kwargs=None):
+        # print(f"func: {func.__name__}, args: {args!r}, kwargs: {kwargs!r}")
+        if kwargs is None:
+            kwargs = {}
+        return super().__torch_function__(func, types, args, kwargs)
+
+    def __init__(self, data):
+        pass
+
+    def append(self, data):
+        _data = data.data.detach().to(self.device)
+        self.data = torch.cat([self.data, _data])
+
+
+class Container:
+
+    def __init__(self, keys):
+        self.keys = keys
+        self._container = {key: NodeTensor([]) for key in keys}
+
+    def __getattr__(self, key):
+        return self._container[key]
+
+    def __setitem__(self, key, data):
+        self._container[key] = NodeTensor([data])
+
+    def __getitem__(self, key):
+        return self._container[key]
+
+    def items(self):
+        return self._container.items()
+
+
 class BaseTrainer():
 
     def __init__(
@@ -71,16 +107,16 @@ class BaseTrainer():
                                                'weight_decay', 0))
 
         self.scheduler = scheduler
-        self.criterion = criterion or MSELoss()
-        if self.criterion.reduction != 'none' and self.params.get(
-                'log_history', False):
-            warnings.warn("""
-                          'reduction' parameter of the criterion is not 'none' and
-                          'log_history' parameters of the self.params is True
-                          In this configuration history_container has invalid shape for loss attibute.
-                          Therefore to be able to run experiment. log_history is set to False.
-                          """)
-            self.params['log_history'] = False
+        self.criterion = criterion or MSELoss(reduction='none')
+        # if self.criterion.reduction != 'none' and self.params.get(
+        #         'log_history', False):
+        #     warnings.warn("""
+        #                   'reduction' parameter of the criterion is not 'none' and
+        #                   'log_history' parameters of the self.params is True
+        #                   In this configuration history_container has invalid shape for loss attibute.
+        #                   Therefore to be able to run experiment. log_history is set to False.
+        #                   """)
+        #     self.params['log_history'] = False
 
         self.metrics = metrics
 
@@ -300,7 +336,11 @@ class BaseTrainer():
         if not isinstance(loaders, Iterable):
             raise Exception("loaders must be an iterable")
 
-        history_container = defaultdict(list)
+        history = Container(keys=['_id', 'loss', 'output', 'target'])
+
+        metric_container = Container(keys=[
+            'loss', *[metric.__name__.lower() for metric in self.metrics]
+        ])
 
         self.model.train(phase == 'training')
 
@@ -314,83 +354,41 @@ class BaseTrainer():
                 self.num_seen_sample += len(batch_target)
 
                 # Store
-                history_container['id'].append(
-                    batch.get(
-                        'id',
-                        torch.tensor(
-                            range(self.num_seen_sample - len(batch_target),
-                                  self.num_seen_sample)))
-                )  # generate new id if id attr is not available
-                history_container['loss'].append(batch_loss.detach(
-                ) if batch_loss.dim() != 0 else batch_loss.detach().unsqueeze(
-                    dim=0))
-                history_container['output'].append(batch_output.detach())
-                history_container['target'].append(batch_target.detach())
+                # generate new id if id attr is not available
+                _id = batch.get('id', torch.tensor(range(self.num_seen_sample - len(batch_target), self.num_seen_sample))) #yapf:disable
+                # if reduction != 'none' batch_loss has zero-dim, so expand dims if this is the case
+                _batch_loss = batch_loss if batch_loss.dim() != 0 else batch_loss.unsqueeze(dim=0) #yapf:disable
 
-                if self.params['stdout']['verbose']:
-                    if self.params['stdout']['on_batch'] and (
-                            batch_ix +
-                            1) % self.params['stdout']['on_batch'] == 0:
+                history._id.append(_id)
+                history.loss.append(_batch_loss)
+                history.output.append(batch_output)
+                history.target.append(batch_target)
 
-                        dataset_len = sum(
-                            len(loader.dataset) for loader in loaders)
-                        batch_loss = batch_loss.mean().item()
+                if self.params['stdout'].get('verbose', True):
+                    if 'on_batch' in self.params['stdout']:
+                        if (batch_ix + 1) % self.params['stdout']['on_batch'] == 0: #yapf:disable
+                            dataset_len = sum(len(loader.dataset) for loader in loaders) #yapf:disable
+                            batch_loss = batch_loss.mean().item()
 
-                        print('\t'.join([
-                            f"{phase}",
-                            f"Epoch: {epoch} [{self.num_seen_sample:04}/{dataset_len:04} ({100. * self.num_seen_sample / dataset_len:.0f}%)]",
-                            f"Batch Loss: {batch_loss:.6f}",
-                        ]))
+                            print('\t'.join([
+                                f"{phase}",
+                                f"Epoch: {epoch} [{self.num_seen_sample:04}/{dataset_len:04} ({100. * self.num_seen_sample / dataset_len:.0f}%)]",
+                                f"Batch Loss: {batch_loss:.6f}",
+                            ]))
 
         if phase == 'training':
             if self.scheduler is not None:
                 self.scheduler.step()
 
-        history_container = {
-            key: torch.cat(value_list)
-            for key, value_list in history_container.items()
-        }
-
-        if self.params['log'].get('history', False):
-            self.logger.log_history(
-                phase=phase,
-                epoch=epoch,
-                history={
-                    key: val.cpu().numpy()
-                    for key, val in history_container.items()
-                })
-
-        metric_container = dict()
         # Add loss to metrics
-        metric_container['loss'] = history_container['loss'].mean().item()
+        metric_container['loss'] = history.loss.mean()
 
         # Calculate metrics
         for metric_fn in self.metrics:
             metric_container[metric_fn.__name__.lower()] = metric_fn()(
-                yhat=history_container['output'], y=history_container['target'])
+                yhat=history.output, y=history.target)
 
-        # Log loss and metrics
-        for metric_name, metric_value in metric_container.items():
-            self.logger.log_metric(metric_name=metric_name,
-                                   phase=phase,
-                                   epoch=epoch,
-                                   metric_value=metric_value)
-
-        # Save checkpoint if the model is best
-        if phase == 'validation':
-            if 'checkpoint' in self.params and 'metric' in self.params[
-                    'checkpoint']:
-                checkpoint_metric = metric_container[self.params['checkpoint']['metric']] #yapf:disable
-                trigger = self.params['checkpoint'].get(
-                    'trigger', lambda new, old: new > old)
-                if trigger(checkpoint_metric, self.best_checkpoint_metric):
-                    print(
-                        f'Best:{checkpoint_metric} > Last:{self.best_checkpoint_metric}'
-                    )
-                    self.best_checkpoint_metric = checkpoint_metric
-                    self._save_checkpoint()
-
-        return (history_container, metric_container)
+        return (history, metric_container)
 
     @hook(before='before_fit', after='after_fit')
     def fit(self, dataset, validation_dataset):
@@ -416,7 +414,7 @@ class BaseTrainer():
             if not self.params.get('resume', False):
                 self.epoch = 0
                 self.phase = 'validation'
-                history_container, metric_container = self._fit_one_epoch(
+                history, metric_container = self._fit_one_epoch(
                     loaders=validation_loaders,
                     epoch=self.epoch,
                     phase=self.phase)
@@ -426,30 +424,60 @@ class BaseTrainer():
 
                 for self.phase in ['training', 'validation']:
 
-                    history_container, metric_container = self._fit_one_epoch(
+                    history, metric_container = self._fit_one_epoch(
                         loaders=train_loaders
                         if self.phase == 'training' else validation_loaders,
                         epoch=self.epoch,
                         phase=self.phase)
 
-                    if self.params['stdout']['verbose']:
-                        n = self.params['stdout']['on_epoch']
-                        if n and (self.epoch) % n == 0:
-
+                    # Print stdout for every 'on_epoch'
+                    if self.params['stdout'].get('verbose', True):
+                        if self.epoch % self.params['stdout']['on_epoch'] == 0:
                             print('\t'.join([
                                 f"{self.phase}", f"Epoch: {self.epoch}",
-                                f"Loss: {metric_container['loss']:.6f}", *[
-                                    f"{metric_fn.__name__.lower()}: {metric_container[metric_fn.__name__.lower()]:.6f}"
+                                f"Loss: {metric_container.loss.item():.6f}",
+                                *[f"{metric_fn.__name__.lower()}: {metric_container[metric_fn.__name__.lower()].item():.6f}"
                                     for metric_fn in self.metrics
                                 ]
-                            ]))
+                            ])) #yapf:disable
 
+                    # Log loss and metrics
+                    for metric_name, metric_value in metric_container.items():
+                        self.logger.log_metric(metric_name=metric_name,
+                                               phase=self.phase,
+                                               epoch=self.epoch,
+                                               metric_value=metric_value)
+                    # Log history if requested
+                    if 'history' in self.params['log']:
+                        self.logger.log_history(
+                            phase=self.phase,
+                            epoch=self.epoch,
+                            history={
+                                key: tensor.numpy()
+                                for key, tensor in history.items()
+                            })
+
+                # Save checkpoint if the model is best
+                if 'checkpoint' in self.params:
+                    if 'metric' in self.params['checkpoint']:
+                        checkpoint_metric = metric_container[self.params['checkpoint']['metric']].item() #yapf:disable
+                        trigger = self.params['checkpoint'].get(
+                            'trigger', lambda new, old: new > old)
+                        if trigger(checkpoint_metric, self.best_checkpoint_metric): #yapf:disable
+                            print(
+                                f'Best:{checkpoint_metric} > Last:{self.best_checkpoint_metric}'
+                            )
+                            self.best_checkpoint_metric = checkpoint_metric
+                            self._save_checkpoint()
+
+                    if 'on_epoch' in self.params['checkpoint']:
+                        if (self.epoch %
+                                self.params['checkpoint']['on_epoch']) == 0:
+                            self._save_checkpoint()
+
+                # Save logs for every 'on_epoch'
                 if self.epoch % self.params['log']['on_epoch'] == 0:
                     self.logger.save()
-
-                if self.params.get('checkpoint', False) and \
-                    (self.epoch % self.params['checkpoint']['on_epoch']) == 0:
-                    self._save_checkpoint()
 
         except KeyboardInterrupt:
             print('Exiting from training early. Bye!')
