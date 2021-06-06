@@ -317,7 +317,7 @@ class BaseTrainer():
 
                 # calculate gradient with backpropagation
                 if self.criterion.reduction == 'none':
-                    loss.sum().backward()
+                    loss.mean().backward()
                 else:
                     loss.backward()
 
