@@ -129,6 +129,8 @@ class BaseTrainer():
 
         self._resume_or_not()
 
+        self.profiler = None
+
     def __str__(self):
         """
         Model prints with number of trainable parameters
@@ -339,7 +341,8 @@ class BaseTrainer():
         history = Container(keys=['_id', 'loss', 'output', 'target'])
 
         metric_container = Container(keys=[
-            'loss', *[metric.__name__.lower() for metric in self.metrics]
+            'loss',
+            *[metric.__class__.__name__.lower() for metric in self.metrics]
         ])
 
         self.model.train(phase == 'training')
@@ -385,8 +388,7 @@ class BaseTrainer():
 
         # Calculate metrics
         for metric_fn in self.metrics:
-            metric_container[metric_fn.__name__.lower()] = metric_fn()(
-                yhat=history.output, y=history.target)
+            metric_container[metric_fn.__class__.__name__.lower()] = metric_fn(history.output, history.target) # yapf:disable
 
         return (history, metric_container)
 
@@ -397,6 +399,7 @@ class BaseTrainer():
 
         # At any point you can hit Ctrl + C to break out of training early.
         try:
+
             self.dataset = dataset
             self.validation_dataset = validation_dataset
 
@@ -411,7 +414,9 @@ class BaseTrainer():
             ]
 
             # run 1 epoch before training to watch untrained model performance
-            if not self.params.get('resume', False):
+            if not self.params.get('disable_epoch_0',
+                                   True) and not self.params.get(
+                                       'resume', False):
                 self.epoch = 0
                 self.phase = 'validation'
                 history, metric_container = self._fit_one_epoch(
@@ -436,7 +441,7 @@ class BaseTrainer():
                             print('\t'.join([
                                 f"{self.phase}", f"Epoch: {self.epoch}",
                                 f"Loss: {metric_container.loss.item():.6f}",
-                                *[f"{metric_fn.__name__.lower()}: {metric_container[metric_fn.__name__.lower()].item():.6f}"
+                                *[f"{metric_fn.__class__.__name__.lower()}: {metric_container[metric_fn.__class__.__name__.lower()].item():.6f}"
                                     for metric_fn in self.metrics
                                 ]
                             ])) #yapf:disable
