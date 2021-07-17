@@ -289,16 +289,6 @@ class BaseTrainer():
     def _fit_one_batch(self, batch, train):
         """All training steps are implemented here. 
         This function is the core of handling model - actual training loop.
-
-        Args:
-            batch (dict): [description]
-            train (bool): [description]
-
-        Returns:
-            loss    (torch.Tensor): [description]
-            output  (torch.Tensor): [description]
-            data    (torch.Tensor): [description]
-            target  (torch.Tensor): [description]
         """
 
         self._set_grad_enabled(train)
@@ -390,6 +380,33 @@ class BaseTrainer():
         for metric_fn in self.metrics:
             metric_container[metric_fn.__class__.__name__.lower()] = metric_fn(history.output, history.target) # yapf:disable
 
+        # Print stdout for every 'on_epoch'
+        if self.params['stdout'].get('verbose', True):
+            if self.epoch % self.params['stdout']['on_epoch'] == 0:
+                print('\t'.join([
+                    f"{self.phase}", f"Epoch: {self.epoch}",
+                    f"Loss: {metric_container.loss.item():.6f}",
+                    *[f"{metric_fn.__class__.__name__.lower()}: {metric_container[metric_fn.__class__.__name__.lower()].item():.6f}"
+                        for metric_fn in self.metrics
+                    ]
+                ])) #yapf:disable
+
+        # Log loss and metrics
+        for metric_name, metric_value in metric_container.items():
+            self.logger.log_metric(metric_name=metric_name,
+                                   phase=self.phase,
+                                   epoch=self.epoch,
+                                   metric_value=metric_value)
+
+        # Log history if requested
+        if 'history' in self.params['log'] and self.params['log']['history']: # yapf:disable
+            self.logger.log_history(
+                phase=self.phase,
+                epoch=self.epoch,
+                history={
+                    key: tensor.numpy() for key, tensor in history.items()
+                })
+
         return (history, metric_container)
 
     @hook(before='before_fit', after='after_fit')
@@ -414,9 +431,9 @@ class BaseTrainer():
             ]
 
             # run 1 epoch before training to watch untrained model performance
-            if not self.params.get('disable_epoch_0',
-                                   True) and not self.params.get(
-                                       'resume', False):
+            if self.params.get('validate_epoch_0',
+                               False) and not self.params.get('resume', False):
+
                 self.epoch = 0
                 self.phase = 'validation'
                 history, metric_container = self._fit_one_epoch(
@@ -434,33 +451,6 @@ class BaseTrainer():
                         if self.phase == 'training' else validation_loaders,
                         epoch=self.epoch,
                         phase=self.phase)
-
-                    # Print stdout for every 'on_epoch'
-                    if self.params['stdout'].get('verbose', True):
-                        if self.epoch % self.params['stdout']['on_epoch'] == 0:
-                            print('\t'.join([
-                                f"{self.phase}", f"Epoch: {self.epoch}",
-                                f"Loss: {metric_container.loss.item():.6f}",
-                                *[f"{metric_fn.__class__.__name__.lower()}: {metric_container[metric_fn.__class__.__name__.lower()].item():.6f}"
-                                    for metric_fn in self.metrics
-                                ]
-                            ])) #yapf:disable
-
-                    # Log loss and metrics
-                    for metric_name, metric_value in metric_container.items():
-                        self.logger.log_metric(metric_name=metric_name,
-                                               phase=self.phase,
-                                               epoch=self.epoch,
-                                               metric_value=metric_value)
-                    # Log history if requested
-                    if 'history' in self.params['log']:
-                        self.logger.log_history(
-                            phase=self.phase,
-                            epoch=self.epoch,
-                            history={
-                                key: tensor.numpy()
-                                for key, tensor in history.items()
-                            })
 
                 # Save checkpoint if the model is best
                 if 'checkpoint' in self.params:

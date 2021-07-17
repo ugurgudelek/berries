@@ -25,7 +25,7 @@ class LSTMTrainer(BaseTrainer):
                  criterion=None,
                  logger=None):
         super().__init__(model, metrics, hyperparams, params, optimizer,
-                         criterion, logger)
+                         scheduler, criterion, logger)
 
 
 class CNNTrainer(BaseTrainer):
