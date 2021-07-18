@@ -212,7 +212,10 @@ class BaseTrainer():
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         self.start_epoch = checkpoint['epoch'] + 1
         self.epoch = epoch
-        self.best_checkpoint_metric = checkpoint['best_checkpoint_metric']
+        try: # to be able to backward compatible
+            self.best_checkpoint_metric = checkpoint['best_checkpoint_metric']
+        except:
+            pass
         # self.hyperparams = checkpoint['hyperparams']
         # self.params = checkpoint['params']
         # self.history = checkpoint['history']

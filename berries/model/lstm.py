@@ -65,6 +65,7 @@ class LSTM(BaseModel):
 
         # Define the output layer
         in_features = self.hidden_size * self.num_directions + self.scalar_input_size
+        
         self.classifier = nn.Sequential(
             nn.Linear(in_features=in_features, out_features=in_features // 2),
             nn.ReLU(),
@@ -76,6 +77,11 @@ class LSTM(BaseModel):
                 out_features=self.output_size,
                 # nn.Sigmoid(),   # ! be careful. with this setting, output cannot exceed 1.
             ))
+        
+        # first sequential toolwear tobb uses below linear layer
+        # self.classifier = nn.Sequential(
+        #     nn.Linear(in_features=in_features, out_features=self.output_size),
+        # )
 
         self.hidden = self._init_hidden()
         self._init_weights()
