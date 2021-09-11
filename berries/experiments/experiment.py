@@ -28,8 +28,14 @@ class Experiment(metaclass=Meta):
         np.random.seed(self.SEED)
 
     def __post_init__(self):
-        for attr in ('params', 'hyperparams', 'model', 'dataset', 'logger',
-                     'trainer'):
+        for attr in (
+                'params',
+                'hyperparams',
+                'model',
+                'dataset',
+                'trainer',
+                #  'logger',
+        ):
             if not hasattr(self, attr):
                 raise AttributeError(
                     f'{self.__class__.__name__}.{attr} is invalid.')

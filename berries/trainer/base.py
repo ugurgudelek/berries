@@ -2,6 +2,7 @@ __author__ = "Ugur Gudelek"
 __email__ = "ugurgudelek@gmail.com"
 
 import os
+from pathlib import Path
 from collections import defaultdict
 from typing import Iterable
 import functools
@@ -77,6 +78,9 @@ class Container:
 
     def items(self):
         return self._container.items()
+
+    def __str__(self) -> str:
+        return str(self._container)
 
 
 class BaseTrainer():
@@ -161,7 +165,7 @@ class BaseTrainer():
 
     def _resume_or_not(self):
         # Resume or not
-        if self.params['resume'] or self.params['pretrained']:
+        if self.params['resume']:
 
             cpt_path = self.experiment_fpath / 'checkpoints'
             if not cpt_path.exists():
@@ -173,6 +177,8 @@ class BaseTrainer():
             last_epoch = sorted(list(map(int, os.listdir(cpt_path))))[-1]
             self._load_checkpoint_from_epoch(epoch=last_epoch)
             print(f"Checkpoint is loaded from {last_epoch}")
+        elif self.params['pretrained']:
+            self._load_checkpoint_from_path(path=self.params['pretrained_path'])
         else:
             self.start_epoch = 1
             self.epoch = 1
@@ -198,21 +204,19 @@ class BaseTrainer():
                 'optimizer_state_dict': self.optimizer.state_dict()
             }, self.cpt_fpath / 'model-optim.pth')
 
-    def _load_checkpoint_from_epoch(self,
-                                    epoch):  # todo: move into generic model
+    def _load_checkpoint_from_path(self, path):
         # load model
         map_location = f"{self.device.type}:{self.device.index}"
         if self.device.type == 'cpu':
             map_location = self.device.type
 
-        checkpoint = torch.load(self.experiment_fpath / 'checkpoints' /
-                                str(epoch) / 'model-optim.pth',
-                                map_location=map_location)
+        checkpoint = torch.load(path, map_location=map_location)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         self.start_epoch = checkpoint['epoch'] + 1
-        self.epoch = epoch
-        try: # to be able to backward compatible
+        self.epoch = checkpoint['epoch']
+
+        try:  # to be able to backward compatible
             self.best_checkpoint_metric = checkpoint['best_checkpoint_metric']
         except:
             pass
@@ -225,6 +229,13 @@ class BaseTrainer():
                 for k, v in state.items():
                     if torch.is_tensor(v):
                         state[k] = v.cuda()
+
+    def _load_checkpoint_from_epoch(self,
+                                    epoch):  # todo: move into generic model
+
+        model_path = self.experiment_fpath / 'checkpoints' / str(
+            epoch) / 'model-optim.pth'
+        self._load_checkpoint_from_path(path=model_path)
 
     def handle_batch(self, batch):
         data = batch['data']
@@ -490,12 +501,25 @@ class BaseTrainer():
             loss, output, data, target = self._fit_one_batch(batch, train=False)
             if classification:
                 output = output.argmax(dim=1)
-            transformed.append(output)
-            targets.append(target)
+            transformed.append(output.detach())
+            targets.append(target.detach())
 
         transformed = torch.cat(transformed, axis=0)
         targets = torch.cat(targets, axis=0)
         return transformed, targets
+
+    def _transform_iter(self, dataset, batch_size, classification):
+        loader = self._to_loader(dataset, training=False, batch_size=batch_size)
+        for batch_ix, batch in enumerate(loader):
+            loss, output, data, target = self._fit_one_batch(batch, train=False)
+            if classification:
+                output = output.argmax(dim=1)
+            yield output.detach(), target.detach()
+
+    def transform_iter(self, dataset, batch_size=None, classification=True):
+        for transformed, targets in self._transform_iter(
+                dataset, batch_size, classification):
+            yield transformed.cpu().numpy(), targets.cpu().numpy()
 
     def transform(self, dataset, batch_size=None, classification=True):
         transformed, targets = self._transform(dataset, batch_size,
@@ -507,22 +531,35 @@ class BaseTrainer():
         self.fit(dataset=dataset)
         return self.transform(dataset=dataset, classification=classification)
 
-    def score(self, dataset):
-        raise NotImplementedError()
-        transformed = self._transform(dataset)
-        return transformed == dataset.get_targets()
+    def score(self, dataset, batch_size=None, classification=True):
+        transformed, targets = self._transform(dataset, batch_size,
+                                               classification)
 
-    def to_prediction_dataframe(self, dataset, classification=True, save=True):
+        metric_container = Container(keys=[
+            *[metric.__class__.__name__.lower() for metric in self.metrics]
+        ])
+
+        # Calculate metrics
+        for metric_fn in self.metrics:
+            metric_container[metric_fn.__class__.__name__.lower()] = metric_fn(transformed, targets) # yapf:disable
+
+        return metric_container, (transformed.cpu().detach().numpy(),
+                                  targets.cpu().detach().numpy())
+
+    def to_prediction_dataframe(self, dataset, classification=True, save=None):
         predictions, targets = self.transform(dataset=dataset,
                                               classification=classification)
         prediction_dataframe = pd.DataFrame({
             'prediction': predictions.squeeze(),
             'target': targets.squeeze()
         })
-        if save:
+
+        if save == True:
             prediction_dataframe.to_csv(self.experiment_fpath /
                                         'predictions.csv',
                                         index=False)
+        elif isinstance(save, Path) or isinstance(save, str):
+            prediction_dataframe.to_csv(save, index=False)
         return prediction_dataframe
 
     # Hook methods
