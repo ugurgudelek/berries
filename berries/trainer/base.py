@@ -20,9 +20,7 @@ import warnings
 
 
 def hook(before=None, after=None):
-
     def wrap(f):
-
         @functools.wraps(f)
         def wrapped_f(self, *args, **kwargs):
 
@@ -45,7 +43,6 @@ def hook(before=None, after=None):
 
 
 class NodeTensor(torch.Tensor):
-
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
         # print(f"func: {func.__name__}, args: {args!r}, kwargs: {kwargs!r}")
@@ -62,7 +59,6 @@ class NodeTensor(torch.Tensor):
 
 
 class Container:
-
     def __init__(self, keys):
         self.keys = keys
         self._container = {key: NodeTensor([]) for key in keys}
@@ -83,8 +79,7 @@ class Container:
         return str(self._container)
 
 
-class BaseTrainer():
-
+class BaseTrainer:
     def __init__(
         self,
         model,
@@ -100,18 +95,19 @@ class BaseTrainer():
         self.hyperparams = hyperparams
         self.params = params
         self.logger = logger
+        self.params["id"] = self.logger.run.name
 
-        self.device = torch.device('cuda:0' if self.params['device'] ==
-                                   'cuda' else 'cpu')
+        self.device = torch.device("cuda:0" if self.params["device"] == "cuda" else "cpu")
 
         self.model = model.to(self.device).float()
-        self.optimizer = optimizer or Adam(params=self.model.parameters(),
-                                           lr=self.hyperparams.get('lr', 0.001),
-                                           weight_decay=self.hyperparams.get(
-                                               'weight_decay', 0))
+        self.optimizer = optimizer or Adam(
+            params=self.model.parameters(),
+            lr=self.hyperparams.get("lr", 0.001),
+            weight_decay=self.hyperparams.get("weight_decay", 0),
+        )
 
         self.scheduler = scheduler
-        self.criterion = criterion or MSELoss(reduction='none')
+        self.criterion = criterion or MSELoss(reduction="none")
         # if self.criterion.reduction != 'none' and self.params.get(
         #         'log_history', False):
         #     warnings.warn("""
@@ -124,9 +120,8 @@ class BaseTrainer():
 
         self.metrics = metrics
 
-        self.batch_size = self.hyperparams.get('batch_size', 16)
-        self.validation_batch_size = self.hyperparams.get(
-            'validation_batch_size', 16)
+        self.batch_size = self.hyperparams.get("batch_size", 16)
+        self.validation_batch_size = self.hyperparams.get("validation_batch_size", 16)
 
         # Initialize plotter
         self.plotter = Plotter()
@@ -139,107 +134,113 @@ class BaseTrainer():
         """
         Model prints with number of trainable parameters
         """
-        model_parameters = filter(lambda p: p.requires_grad,
-                                  self.model.parameters())
+        model_parameters = filter(lambda p: p.requires_grad, self.model.parameters())
         params = sum([np.prod(p.size()) for p in model_parameters])
-        return super().__str__() + '\nTrainable parameters: {}'.format(params)
+        return super().__str__() + "\nTrainable parameters: {}".format(params)
 
     @property
     def experiment_fpath(self):
-        return self.params['root'] / 'projects' / self.params[
-            'project_name'] / self.params['experiment_name']
+        return self.params["root"] / "projects" / self.params["project"] / self.params["id"]
 
     @property
     def on_cuda(self):
-        return self.device.type == 'cuda'
+        return self.device.type == "cuda"
 
     def __repr__(self):
-        return f'BaseTrainer(model={self.model},\
+        return f"BaseTrainer(model={self.model},\
                  metrics={self.metrics},\
                  hyperparams={self.hyperparams},\
                  params={self.params},\
                  optimizer={self.optimizer},\
                  criterion={self.criterion},\
                  logger={self.logger},\
-                 scheduler={self.scheduler})'
+                 scheduler={self.scheduler})"
 
     def _resume_or_not(self):
         # Resume or not
-        if self.params['resume']:
+        if self.params["resume"]:
 
-            cpt_path = self.experiment_fpath / 'checkpoints'
+            cpt_path = self.experiment_fpath / "checkpoints"
             if not cpt_path.exists():
-                raise Exception(f"""
+                raise Exception(
+                    f"""
                     You do not have any checkpoint to resume.
                     If you want to start over, make sure --resume and --pretrained is False.
-                    """)
+                    """
+                )
             # todo: change with Path
             last_epoch = sorted(list(map(int, os.listdir(cpt_path))))[-1]
             self._load_checkpoint_from_epoch(epoch=last_epoch)
             print(f"Checkpoint is loaded from {last_epoch}")
-        elif self.params['pretrained']:
-            self._load_checkpoint_from_path(path=self.params['pretrained_path'])
+        elif self.params["pretrained"]:
+            self._load_checkpoint_from_path(path=self.params["pretrained_path"])
         else:
             self.start_epoch = 1
             self.epoch = 1
-            self.best_checkpoint_metric = 0.
+
+            _is_fitness = self.params["checkpoint"]["trigger"](1, 0)
+            self.best_checkpoint_metric = -np.inf if _is_fitness else np.inf
             print("Starting training from epoch 1")
 
     def _get_last_checkpoint_path(self):
-        cpt_path = self.experiment_fpath / 'checkpoints'
+        cpt_path = self.experiment_fpath / "checkpoints"
         last_epoch = sorted(list(map(int, os.listdir(cpt_path))))[-1]
-        path = self.experiment_fpath / f'checkpoints/{last_epoch}/model-optim.pth'
+        path = cpt_path / f"{last_epoch}/model-optim.pth"
         return path
 
-    def _save_checkpoint(self):  # todo: move into generic model
+    def _get_best_checkpoint_path(self):
+        return self.experiment_fpath / "checkpoints/best/model-optim.pth"
 
-        self.cpt_fpath = self.experiment_fpath / 'checkpoints' / str(self.epoch)
-        self.cpt_fpath.mkdir(parents=True, exist_ok=True)
+    def _save_checkpoint(self, path_posix=None):  # todo: move into generic model
+
+        path_posix = path_posix or str(self.epoch)
+        cpt_fpath = self.experiment_fpath / "checkpoints" / path_posix
+        cpt_fpath.mkdir(parents=True, exist_ok=True)
         # save model
         torch.save(
             {
-                'epoch': self.epoch,
-                'best_checkpoint_metric': self.best_checkpoint_metric,
-                'model_state_dict': self.model.state_dict(),
-                'optimizer_state_dict': self.optimizer.state_dict()
-            }, self.cpt_fpath / 'model-optim.pth')
+                "epoch": self.epoch,
+                "best_checkpoint_metric": self.best_checkpoint_metric,
+                "model_state_dict": self.model.state_dict(),
+                "optimizer_state_dict": self.optimizer.state_dict(),
+            },
+            cpt_fpath / "model-optim.pth",
+        )
 
     def _load_checkpoint_from_path(self, path):
         # load model
         map_location = f"{self.device.type}:{self.device.index}"
-        if self.device.type == 'cpu':
+        if self.device.type == "cpu":
             map_location = self.device.type
 
         checkpoint = torch.load(path, map_location=map_location)
-        self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        self.start_epoch = checkpoint['epoch'] + 1
-        self.epoch = checkpoint['epoch']
+        self.model.load_state_dict(checkpoint["model_state_dict"])
+        self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        self.start_epoch = checkpoint["epoch"] + 1
+        self.epoch = checkpoint["epoch"]
 
         try:  # to be able to backward compatible
-            self.best_checkpoint_metric = checkpoint['best_checkpoint_metric']
+            self.best_checkpoint_metric = checkpoint["best_checkpoint_metric"]
         except:
             pass
         # self.hyperparams = checkpoint['hyperparams']
         # self.params = checkpoint['params']
         # self.history = checkpoint['history']
 
-        if self.device.type == 'cuda':
+        if self.device.type == "cuda":
             for state in self.optimizer.state.values():
                 for k, v in state.items():
                     if torch.is_tensor(v):
                         state[k] = v.cuda()
 
-    def _load_checkpoint_from_epoch(self,
-                                    epoch):  # todo: move into generic model
+    def _load_checkpoint_from_epoch(self, epoch):  # todo: move into generic model
 
-        model_path = self.experiment_fpath / 'checkpoints' / str(
-            epoch) / 'model-optim.pth'
+        model_path = self.experiment_fpath / "checkpoints" / str(epoch) / "model-optim.pth"
         self._load_checkpoint_from_path(path=model_path)
 
     def handle_batch(self, batch):
-        data = batch['data']
-        target = batch['target']
+        data = batch["data"]
+        target = batch["target"]
 
         # cast data to a device
         data, target = data.to(self.device), target.to(self.device)
@@ -288,20 +289,20 @@ class BaseTrainer():
     def _to_loader(self, dataset, training, batch_size=None):
         return DataLoader(
             dataset=dataset,
-            batch_size=batch_size or
-            (self.batch_size if training else self.validation_batch_size),
-            shuffle=self.params.get('train_shuffle', training),
-            drop_last=self.params.get('drop_last', False),
+            batch_size=batch_size or (self.batch_size if training else self.validation_batch_size),
+            shuffle=self.params.get("train_shuffle", training),
+            drop_last=self.params.get("drop_last", False),
             num_workers=0,
-            pin_memory=self.on_cuda)
+            pin_memory=self.on_cuda,
+        )
 
     @staticmethod
     def _make_iterable_if_not(item):
         return item if isinstance(item, Iterable) else (item,)
 
-    @hook(before='before_fit_one_batch', after='after_fit_one_batch')
+    @hook(before="before_fit_one_batch", after="after_fit_one_batch")
     def _fit_one_batch(self, batch, train):
-        """All training steps are implemented here. 
+        """All training steps are implemented here.
         This function is the core of handling model - actual training loop.
         """
 
@@ -320,112 +321,152 @@ class BaseTrainer():
             if train:
 
                 # calculate gradient with backpropagation
-                if self.criterion.reduction == 'none':
+                if self.criterion.reduction == "none":
                     loss.mean().backward()
                 else:
                     loss.backward()
 
                 # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
-                if self.hyperparams.get('clip', None):  # if clip is given
-                    torch.nn.utils.clip_grad_norm_(
-                        self.model.parameters(),
-                        max_norm=self.hyperparams['clip'])
+                if self.hyperparams.get("clip", None):  # if clip is given
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.hyperparams["clip"])
 
                 # distribute gradients to update weights
                 self.optimizer.step()
 
         return loss, output, data, target
 
-    @hook(before='before_fit_one_epoch', after='after_fit_one_epoch')
+    @hook(before="before_fit_one_epoch", after="after_fit_one_epoch")
     def _fit_one_epoch(self, loaders, phase, epoch):
 
         if not isinstance(loaders, Iterable):
             raise Exception("loaders must be an iterable")
 
-        history = Container(keys=['_id', 'loss', 'output', 'target'])
+        # history = Container(keys=['_id', 'loss', 'output', 'target'])
 
-        metric_container = Container(keys=[
-            'loss',
-            *[metric.__class__.__name__.lower() for metric in self.metrics]
-        ])
+        metric_container = Container(
+            keys=[
+                "loss",
+                *[metric.__class__.__name__.lower() for metric in self.metrics],
+            ]
+        )
 
-        self.model.train(phase == 'training')
+        self.model.train(phase == "training")
 
         self.num_seen_sample = 0
         for loader_ix, loader in enumerate(loaders):
 
             for batch_ix, batch in enumerate(loader):
 
-                batch_loss, batch_output, batch_data, batch_target = self._fit_one_batch(
-                    batch, train=True if phase == 'training' else False)
+                (
+                    batch_loss,
+                    batch_output,
+                    batch_data,
+                    batch_target,
+                ) = self._fit_one_batch(batch, train=True if phase == "training" else False)
                 self.num_seen_sample += len(batch_target)
 
                 # Store
                 # generate new id if id attr is not available
-                _id = batch.get('id', torch.tensor(range(self.num_seen_sample - len(batch_target), self.num_seen_sample))) #yapf:disable
+                # _id = batch.get('id', torch.tensor(range(self.num_seen_sample - len(batch_target), self.num_seen_sample))) #yapf:disable
                 # if reduction != 'none' batch_loss has zero-dim, so expand dims if this is the case
-                _batch_loss = batch_loss if batch_loss.dim() != 0 else batch_loss.unsqueeze(dim=0) #yapf:disable
+                _batch_loss = batch_loss if batch_loss.dim() != 0 else batch_loss.unsqueeze(dim=0)  # yapf:disable
 
-                history._id.append(_id)
-                history.loss.append(_batch_loss)
-                history.output.append(batch_output)
-                history.target.append(batch_target)
+                self.logger.log(
+                    {
+                        "loss": _batch_loss.detach().mean().item(),
+                        "batch_ix": batch_ix,
+                        "epoch": epoch,
+                        "loader_ix": loader_ix,
+                        "phase": phase,
+                    }
+                )
 
-                if self.params['stdout'].get('verbose', True):
-                    if 'on_batch' in self.params['stdout']:
-                        if (batch_ix + 1) % self.params['stdout']['on_batch'] == 0: #yapf:disable
-                            dataset_len = sum(len(loader.dataset) for loader in loaders) #yapf:disable
+                # Update metrics
+                metric_container["loss"].append(_batch_loss.detach())
+                for metric_fn in self.metrics:
+                    name = metric_fn.__class__.__name__.lower()
+                    metric = metric_fn(batch_output.detach(), batch_target.detach())
+                    metric_container[name].append(metric.unsqueeze(dim=0))
+
+                # # Calculate metrics
+                # for metric_fn in self.metrics:
+                #     name = metric_fn.__class__.__name__.lower()
+                #     metric = metric_fn(batch_output.detach(), batch_target.detach())
+                #     self.logger.log(
+                #         {f"{phase}/{name}": metric, "loader_ix": loader_ix, "batch_ix": batch_ix}, commit=False
+                #     )
+                # self.logger.log(
+                #     {f"{phase}/loss": _batch_loss.mean(), "loader_ix": loader_ix, "batch_ix": batch_ix}, commit=True
+                # )
+
+                # history._id.append(_id)
+                # history.loss.append(_batch_loss)
+                # history.output.append(batch_output)
+                # history.target.append(batch_target)
+
+                if self.params["stdout"].get("verbose", True):
+                    if "on_batch" in self.params["stdout"]:
+                        if (batch_ix + 1) % self.params["stdout"]["on_batch"] == 0:  # yapf:disable
+                            dataset_len = sum(len(loader.dataset) for loader in loaders)  # yapf:disable
                             batch_loss = batch_loss.mean().item()
 
-                            print('\t'.join([
-                                f"{phase}",
-                                f"Epoch: {epoch} [{self.num_seen_sample:04}/{dataset_len:04} ({100. * self.num_seen_sample / dataset_len:.0f}%)]",
-                                f"Batch Loss: {batch_loss:.6f}",
-                            ]))
+                            print(
+                                "\t".join(
+                                    [
+                                        f"{phase}",
+                                        f"Epoch: {epoch} [{self.num_seen_sample:04}/{dataset_len:04} ({100. * self.num_seen_sample / dataset_len:.0f}%)]",
+                                        f"Batch Loss: {batch_loss:.6f}",
+                                    ]
+                                )
+                            )
 
-        if phase == 'training':
+        # Compute metrics
+        metric_container["loss"] = metric_container["loss"].mean()
+        for metric_fn in self.metrics:
+            metric_container[metric_fn.__class__.__name__.lower()] = metric_fn.compute()
+
+        # Log metrics
+        self.logger.log({f"{phase}/loss": metric_container["loss"], "epoch": epoch}, commit=False)
+        self.logger.log(
+            {f"{phase}/{key}": val.item() for key, val in metric_container.items()} | {"epoch": epoch}, commit=True
+        )
+
+        if phase == "training":
             if self.scheduler is not None:
                 self.scheduler.step()
 
-        # Add loss to metrics
-        metric_container['loss'] = history.loss.mean()
-
-        # Calculate metrics
-        for metric_fn in self.metrics:
-            metric_container[metric_fn.__class__.__name__.lower()] = metric_fn(history.output, history.target) # yapf:disable
-
         # Print stdout for every 'on_epoch'
-        if self.params['stdout'].get('verbose', True):
-            if self.epoch % self.params['stdout']['on_epoch'] == 0:
-                print('\t'.join([
-                    f"{self.phase}", f"Epoch: {self.epoch}",
-                    f"Loss: {metric_container.loss.item():.6f}",
-                    *[f"{metric_fn.__class__.__name__.lower()}: {metric_container[metric_fn.__class__.__name__.lower()].item():.6f}"
-                        for metric_fn in self.metrics
-                    ]
-                ])) #yapf:disable
-
-        # Log loss and metrics
-        for metric_name, metric_value in metric_container.items():
-            self.logger.log_metric(metric_name=metric_name,
-                                   phase=self.phase,
-                                   epoch=self.epoch,
-                                   metric_value=metric_value)
+        if self.params["stdout"].get("verbose", True):
+            if self.epoch % self.params["stdout"]["on_epoch"] == 0:
+                print(
+                    "\t".join(
+                        [
+                            f"{self.phase}",
+                            f"Epoch: {self.epoch}",
+                            f"Loss: {self.logger.run.summary[f'{phase}/loss']:.6f}",
+                            *[
+                                f"{metric_fn.__class__.__name__.lower()}: {self.logger.run.summary[f'{phase}/{metric_fn.__class__.__name__.lower()}']:.6f}"
+                                for metric_fn in self.metrics
+                            ],
+                        ]
+                    )
+                )  # yapf:disable
 
         # Log history if requested
-        if 'history' in self.params['log'] and self.params['log']['history']: # yapf:disable
-            self.logger.log_history(
-                phase=self.phase,
-                epoch=self.epoch,
-                history={
-                    key: tensor.numpy() for key, tensor in history.items()
-                })
+        # if (
+        #     "history" in self.params["log"] and self.params["log"]["history"]
+        # ):  # yapf:disable
+        #     self.logger.log_history(
+        #         phase=self.phase,
+        #         epoch=self.epoch,
+        #         history={key: tensor.numpy() for key, tensor in history.items()},
+        #     )
 
-        return (history, metric_container)
+        return metric_container
 
-    @hook(before='before_fit', after='after_fit')
+    @hook(before="before_fit", after="after_fit")
     def fit(self, dataset, validation_dataset):
-        if self.params['pretrained']:
+        if self.params["pretrained"]:
             raise Exception("You can not use fit with --pretrained=True")
 
         # At any point you can hit Ctrl + C to break out of training early.
@@ -435,61 +476,48 @@ class BaseTrainer():
             self.validation_dataset = validation_dataset
 
             # Support for list of datasets
-            train_loaders = [
-                self._to_loader(dataset=d, training=True)
-                for d in self._make_iterable_if_not(dataset)
-            ]
+            train_loaders = [self._to_loader(dataset=d, training=True) for d in self._make_iterable_if_not(dataset)]
             validation_loaders = [
-                self._to_loader(dataset=d, training=False)
-                for d in self._make_iterable_if_not(validation_dataset)
+                self._to_loader(dataset=d, training=False) for d in self._make_iterable_if_not(validation_dataset)
             ]
 
             # run 1 epoch before training to watch untrained model performance
-            if self.params.get('validate_epoch_0',
-                               False) and not self.params.get('resume', False):
+            if self.params.get("validate_epoch_0", False) and not self.params.get("resume", False):
 
                 self.epoch = 0
-                self.phase = 'validation'
-                history, metric_container = self._fit_one_epoch(
-                    loaders=validation_loaders,
-                    epoch=self.epoch,
-                    phase=self.phase)
+                self.phase = "validation"
+                metric_container = self._fit_one_epoch(loaders=validation_loaders, epoch=self.epoch, phase=self.phase)
 
-            for self.epoch in range(self.start_epoch,
-                                    self.hyperparams['epoch'] + 1):
+            for self.epoch in range(self.start_epoch, self.hyperparams["epoch"] + 1):
 
-                for self.phase in ['training', 'validation']:
+                for self.phase in ["training", "validation"]:
 
-                    history, metric_container = self._fit_one_epoch(
-                        loaders=train_loaders
-                        if self.phase == 'training' else validation_loaders,
+                    metric_container = self._fit_one_epoch(
+                        loaders=train_loaders if self.phase == "training" else validation_loaders,
                         epoch=self.epoch,
-                        phase=self.phase)
+                        phase=self.phase,
+                    )
 
                 # Save checkpoint if the model is best
-                if 'checkpoint' in self.params:
-                    if 'metric' in self.params['checkpoint']:
-                        checkpoint_metric = metric_container[self.params['checkpoint']['metric']].item() #yapf:disable
-                        trigger = self.params['checkpoint'].get(
-                            'trigger', lambda new, old: new > old)
-                        if trigger(checkpoint_metric, self.best_checkpoint_metric): #yapf:disable
-                            print(
-                                f'Best:{checkpoint_metric} > Last:{self.best_checkpoint_metric}'
-                            )
+                if "checkpoint" in self.params:
+                    if "metric" in self.params["checkpoint"]:
+                        checkpoint_metric = metric_container[self.params["checkpoint"]["metric"]].item()  # yapf:disable
+                        trigger = self.params["checkpoint"].get("trigger", lambda new, old: new > old)
+                        if trigger(checkpoint_metric, self.best_checkpoint_metric):  # yapf:disable
+                            print(f"Best:{checkpoint_metric} | Last:{self.best_checkpoint_metric}")
                             self.best_checkpoint_metric = checkpoint_metric
-                            self._save_checkpoint()
+                            self._save_checkpoint(path_posix="best")
 
-                    if 'on_epoch' in self.params['checkpoint']:
-                        if (self.epoch %
-                                self.params['checkpoint']['on_epoch']) == 0:
+                    if "on_epoch" in self.params["checkpoint"]:
+                        if (self.epoch % self.params["checkpoint"]["on_epoch"]) == 0:
                             self._save_checkpoint()
 
                 # Save logs for every 'on_epoch'
-                if self.epoch % self.params['log']['on_epoch'] == 0:
-                    self.logger.save()
+                # if self.epoch % self.params["log"]["on_epoch"] == 0:
+                #     self.logger.save()
 
         except KeyboardInterrupt:
-            print('Exiting from training early. Bye!')
+            print("Exiting from training early. Bye!")
             self.logger.stop()
 
     def _transform(self, dataset, batch_size, classification):
@@ -517,47 +545,37 @@ class BaseTrainer():
             yield output.detach(), target.detach()
 
     def transform_iter(self, dataset, batch_size=None, classification=True):
-        for transformed, targets in self._transform_iter(
-                dataset, batch_size, classification):
+        for transformed, targets in self._transform_iter(dataset, batch_size, classification):
             yield transformed.cpu().numpy(), targets.cpu().numpy()
 
     def transform(self, dataset, batch_size=None, classification=True):
-        transformed, targets = self._transform(dataset, batch_size,
-                                               classification)
-        return (transformed.cpu().detach().numpy(),
-                targets.cpu().detach().numpy())
+        transformed, targets = self._transform(dataset, batch_size, classification)
+        return (transformed.cpu().detach().numpy(), targets.cpu().detach().numpy())
 
     def fit_transform(self, dataset, classification=True):
         self.fit(dataset=dataset)
         return self.transform(dataset=dataset, classification=classification)
 
     def score(self, dataset, batch_size=None, classification=True):
-        transformed, targets = self._transform(dataset, batch_size,
-                                               classification)
+        transformed, targets = self._transform(dataset, batch_size, classification)
 
-        metric_container = Container(keys=[
-            *[metric.__class__.__name__.lower() for metric in self.metrics]
-        ])
+        metric_container = Container(keys=[*[metric.__class__.__name__.lower() for metric in self.metrics]])
 
         # Calculate metrics
         for metric_fn in self.metrics:
-            metric_container[metric_fn.__class__.__name__.lower()] = metric_fn(transformed, targets) # yapf:disable
+            metric_container[metric_fn.__class__.__name__.lower()] = metric_fn(transformed, targets)  # yapf:disable
 
-        return metric_container, (transformed.cpu().detach().numpy(),
-                                  targets.cpu().detach().numpy())
+        return metric_container, (
+            transformed.cpu().detach().numpy(),
+            targets.cpu().detach().numpy(),
+        )
 
     def to_prediction_dataframe(self, dataset, classification=True, save=None):
-        predictions, targets = self.transform(dataset=dataset,
-                                              classification=classification)
-        prediction_dataframe = pd.DataFrame({
-            'prediction': predictions.squeeze(),
-            'target': targets.squeeze()
-        })
+        predictions, targets = self.transform(dataset=dataset, classification=classification)
+        prediction_dataframe = pd.DataFrame({"prediction": predictions.squeeze(), "target": targets.squeeze()})
 
         if save == True:
-            prediction_dataframe.to_csv(self.experiment_fpath /
-                                        'predictions.csv',
-                                        index=False)
+            prediction_dataframe.to_csv(self.experiment_fpath / "predictions.csv", index=False)
         elif isinstance(save, Path) or isinstance(save, str):
             prediction_dataframe.to_csv(save, index=False)
         return prediction_dataframe
@@ -573,7 +591,7 @@ class BaseTrainer():
     def before_fit_one_epoch(self, loaders, phase, epoch):
         pass
 
-    def after_fit_one_epoch(self, history_container, metric_container):
+    def after_fit_one_epoch(self, metric_container):
         pass
 
     def before_fit_one_batch(self, batch, train):

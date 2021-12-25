@@ -14,68 +14,48 @@ from torch.utils.data import DataLoader
 
 
 class LSTMTrainer(BaseTrainer):
-
-    def __init__(self,
-                 model,
-                 metrics,
-                 hyperparams,
-                 params,
-                 optimizer=None,
-                 scheduler=None,
-                 criterion=None,
-                 logger=None):
-        super().__init__(model, metrics, hyperparams, params, optimizer,
-                         scheduler, criterion, logger)
+    def __init__(
+        self,
+        model,
+        metrics,
+        hyperparams,
+        params,
+        optimizer=None,
+        scheduler=None,
+        criterion=None,
+        logger=None,
+    ):
+        super().__init__(model, metrics, hyperparams, params, optimizer, scheduler, criterion, logger)
 
 
 class CNNTrainer(BaseTrainer):
-
-    def __init__(self,
-                 model,
-                 metrics,
-                 hyperparams,
-                 params,
-                 optimizer=None,
-                 scheduler=None,
-                 criterion=None,
-                 logger=None):
-        super().__init__(model, metrics, hyperparams, params, optimizer,
-                         scheduler, criterion, logger)
-
-    def after_fit_one_epoch(self, history_container, metric_container):
-        import matplotlib.pyplot as plt
-
-        samples = self.validation_dataset.get_random_sample(n=3)
-        predictions, targets = self.transform(dataset=samples,
-                                              classification=True)
-        for i in range(len(samples)):
-            data = samples[i]['data'].squeeze()
-            target = targets[i]
-            prediction = predictions[i]
-
-            fig = plt.figure()
-            plt.imshow(data)
-            plt.axis("off")
-            plt.suptitle(
-                f'Epoch:{self.epoch}    Target:{target}    Prediction:{prediction}'
-            )
-            self.logger.log_image(fig)
-            plt.close()
+    def __init__(
+        self,
+        model,
+        metrics,
+        hyperparams,
+        params,
+        optimizer=None,
+        scheduler=None,
+        criterion=None,
+        logger=None,
+    ):
+        super().__init__(model, metrics, hyperparams, params, optimizer, scheduler, criterion, logger)
 
 
 class AETrainer(BaseTrainer):
-
-    def __init__(self,
-                 model,
-                 metrics,
-                 hyperparams,
-                 params,
-                 optimizer=None,
-                 scheduler=None,
-                 criterion=None,
-                 logger=None):
-        super().__init__(model, metrics, hyperparams, params, optimizer,
-                         scheduler, criterion, logger)
+    def __init__(
+        self,
+        model,
+        metrics,
+        hyperparams,
+        params,
+        optimizer=None,
+        scheduler=None,
+        criterion=None,
+        logger=None,
+    ):
+        super().__init__(model, metrics, hyperparams, params, optimizer, scheduler, criterion, logger)
 
     def _encode(self, dataset):
         loader = self._to_loader(dataset, training=False)
@@ -94,25 +74,23 @@ class AETrainer(BaseTrainer):
 
 
 class VAETrainer(AETrainer):
-
-    def __init__(self,
-                 model,
-                 metrics,
-                 hyperparams,
-                 params,
-                 optimizer=None,
-                 scheduler=None,
-                 criterion=None,
-                 logger=None):
-        super().__init__(model, metrics, hyperparams, params, optimizer,
-                         scheduler, criterion, logger)
+    def __init__(
+        self,
+        model,
+        metrics,
+        hyperparams,
+        params,
+        optimizer=None,
+        scheduler=None,
+        criterion=None,
+        logger=None,
+    ):
+        super().__init__(model, metrics, hyperparams, params, optimizer, scheduler, criterion, logger)
 
     def compute_loss(self, output, targets):
         targets = targets.permute(1, 0, 2)
         output = output.permute(1, 0, 2)
-        joint_loss, recon_loss, kl_loss = self._rec(x_decoded=output,
-                                                    x=targets,
-                                                    loss_fn=self.criterion)
+        joint_loss, recon_loss, kl_loss = self._rec(x_decoded=output, x=targets, loss_fn=self.criterion)
         return joint_loss
 
     def _rec(self, x_decoded, x, loss_fn):
@@ -124,36 +102,37 @@ class VAETrainer(AETrainer):
         :param loss_fn: loss function specified
         :return: joint loss, reconstruction loss and kl-divergence loss
         """
-        latent_mean, latent_logvar = self.model.lmbd.latent_mean, self.model.lmbd.latent_logvar
+        latent_mean, latent_logvar = (
+            self.model.lmbd.latent_mean,
+            self.model.lmbd.latent_logvar,
+        )
 
-        kl_loss = -0.5 * \
-            torch.mean(1 + latent_logvar -
-                        latent_mean.pow(2) - latent_logvar.exp())
+        kl_loss = -0.5 * torch.mean(1 + latent_logvar - latent_mean.pow(2) - latent_logvar.exp())
         recon_loss = loss_fn(x_decoded, x)
 
         return kl_loss + recon_loss, recon_loss, kl_loss
 
 
 class PredictorFromCompressorTrainer(BaseTrainer):
-
-    def __init__(self,
-                 model,
-                 compressor,
-                 metrics,
-                 hyperparams,
-                 params,
-                 optimizer=None,
-                 scheduler=None,
-                 criterion=None,
-                 logger=None):
-        super().__init__(model, metrics, hyperparams, params, optimizer,
-                         scheduler, criterion, logger)
+    def __init__(
+        self,
+        model,
+        compressor,
+        metrics,
+        hyperparams,
+        params,
+        optimizer=None,
+        scheduler=None,
+        criterion=None,
+        logger=None,
+    ):
+        super().__init__(model, metrics, hyperparams, params, optimizer, scheduler, criterion, logger)
 
         self.compressor = compressor
 
     def handle_batch(self, batch):
-        data = batch['data']
-        target = batch['target'].squeeze()
+        data = batch["data"]
+        target = batch["target"].squeeze()
 
         # cast data to a device
         data, target = data.to(self.device), target.to(self.device)

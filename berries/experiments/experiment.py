@@ -11,7 +11,6 @@ from berries.logger.logger import LocalLogger as logger_backend
 
 
 class Meta(type):
-
     def __call__(cls, *args, **kwargs):
         instance = super().__call__(*args, **kwargs)
         instance.__post_init__()
@@ -29,23 +28,22 @@ class Experiment(metaclass=Meta):
 
     def __post_init__(self):
         for attr in (
-                'params',
-                'hyperparams',
-                'model',
-                'dataset',
-                'trainer',
-                #  'logger',
+            "params",
+            "hyperparams",
+            "model",
+            "dataset",
+            "trainer",
+            #  'logger',
         ):
             if not hasattr(self, attr):
-                raise AttributeError(
-                    f'{self.__class__.__name__}.{attr} is invalid.')
+                raise AttributeError(f"{self.__class__.__name__}.{attr} is invalid.")
 
-            _has_neptune_id = 'id' in self.params['neptune']
-            _resume = self.params['resume']
-            if (_has_neptune_id != _resume):
-                raise Exception(
-                    'if neptune["id"] is given, then resume should be True or vice versa'
-                )
+    #            _has_wandb_id = 'id' in self.params['wandb']
+    #            _resume = self.params['resume']
+    #            if (_has_wandb_id != _resume):
+    #                raise Exception(
+    #                    'if wandb["id"] is given, then resume should be True or vice versa'
+    #                )
 
     def __enter__(self):
         return self

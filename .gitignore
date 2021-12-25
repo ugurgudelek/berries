@@ -6,3 +6,6 @@ berries_ugurgudelek.egg-info
 projects
 input
 .neptune/
+wandb/
+
+UNKNOWN.egg-info/*

@@ -4,18 +4,20 @@
 # @Email  : ugurgudelek@gmail.com
 # @File   : logger.py
 
-from pathlib import Path
-import pandas as pd
-import yaml
+# from pathlib import Path
+# import pandas as pd
+# import yaml
 
 from abc import ABCMeta, abstractmethod
-from collections import defaultdict
+
+# from collections import defaultdict
+
+from typing import Any, Optional, Union, Sequence
+import wandb
 
 
 class GenericLogger(metaclass=ABCMeta):
-
-    def __init__(self, root, project_name, experiment_name, params,
-                 hyperparams):
+    def __init__(self, root, project_name, experiment_name, params, hyperparams):
         self.root = root
         self.project_name = project_name
         self.experiment_name = experiment_name
@@ -27,21 +29,11 @@ class GenericLogger(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def log_metric(self,
-                   metric_name,
-                   phase,
-                   epoch,
-                   metric_value,
-                   timestamp=None):
+    def log_metric(self, metric_name, phase, epoch, metric_value, timestamp=None):
         pass
 
     @abstractmethod
-    def log_image(self,
-                  img,
-                  image_name=None,
-                  description=None,
-                  timestamp=None,
-                  **kwargs):
+    def log_image(self, img, image_name=None, description=None, timestamp=None, **kwargs):
         raise NotImplementedError()
 
     @abstractmethod
@@ -63,16 +55,8 @@ class GenericLogger(metaclass=ABCMeta):
 
 
 class MultiLogger(GenericLogger):
-
-    def __init__(self,
-                 root,
-                 project_name,
-                 experiment_name,
-                 params,
-                 hyperparams,
-                 offline=False):
-        super(MultiLogger, self).__init__(root, project_name, experiment_name,
-                                          params, hyperparams)
+    def __init__(self, root, project_name, experiment_name, params, hyperparams, offline=False):
+        super(MultiLogger, self).__init__(root, project_name, experiment_name, params, hyperparams)
         self.project_name = project_name
         self.experiment_name = experiment_name
         self.params = params
@@ -80,34 +64,19 @@ class MultiLogger(GenericLogger):
         self.offline = offline
 
         self._loggers = {
-            'local':
-                LocalLogger(root, project_name, experiment_name, params,
-                            hyperparams),
+            "local": LocalLogger(root, project_name, experiment_name, params, hyperparams),
         }
         if not offline:
-            self._loggers['neptune'] = NeptuneLogger(root, project_name,
-                                                     experiment_name, params,
-                                                     hyperparams)
+            self._loggers["neptune"] = NeptuneLogger(root, project_name, experiment_name, params, hyperparams)
 
-    def log_metric(self,
-                   metric_name,
-                   phase,
-                   epoch,
-                   metric_value,
-                   timestamp=None):
+    def log_metric(self, metric_name, phase, epoch, metric_value, timestamp=None):
         for logger_name, logger in self._loggers.items():
-            logger.log_metric(metric_name, phase, epoch, metric_value,
-                              timestamp)
+            logger.log_metric(metric_name, phase, epoch, metric_value, timestamp)
 
     def log_history(self, phase, epoch, history):
         raise NotImplementedError()
 
-    def log_image(self,
-                  img,
-                  image_name=None,
-                  description=None,
-                  timestamp=None,
-                  **kwargs):
+    def log_image(self, img, image_name=None, description=None, timestamp=None, **kwargs):
         for logger_name, logger in self._loggers.items():
             logger.log_image(img, image_name, description, timestamp, **kwargs)
 
@@ -119,7 +88,7 @@ class MultiLogger(GenericLogger):
         for logger_name, logger in self._loggers.items():
             logger.log_dataframe(key, dataframe)
 
-    def log_model(self, path, name='model'):
+    def log_model(self, path, name="model"):
         for logger_name, logger in self._loggers.items():
             logger.log_model(path, name)
 
@@ -133,69 +102,42 @@ class MultiLogger(GenericLogger):
 
 
 class LocalLogger(GenericLogger):
+    def __init__(self, root, project_name, experiment_name, params, hyperparams):
+        super(LocalLogger, self).__init__(root, project_name, experiment_name, params, hyperparams)
 
-    def __init__(self, root, project_name, experiment_name, params,
-                 hyperparams):
-        super(LocalLogger, self).__init__(root, project_name, experiment_name,
-                                          params, hyperparams)
-
-        self.experiment_fpath = self.root.absolute() / 'projects' / \
-            project_name / experiment_name
+        self.experiment_fpath = self.root.absolute() / "projects" / project_name / experiment_name
 
         try:
             self.experiment_fpath.mkdir(parents=True)
         except FileExistsError:
-            if 'debug' == project_name:
+            if "debug" == project_name:
                 print("Logger running because of debug keyword.")
-            elif params['pretrained'] or params['resume']:
-                print(
-                    "Logger starting from existing directory because of pretrained or resume keyword."
-                )
+            elif params["pretrained"] or params["resume"]:
+                print("Logger starting from existing directory because of pretrained or resume keyword.")
             else:
-                raise FileExistsError(
-                    f"Did you change experiment name? : {self.experiment_fpath}"
-                )
+                raise FileExistsError(f"Did you change experiment name? : {self.experiment_fpath}")
 
         # save params and hyperparams
-        with open(self.experiment_fpath / 'params.yaml', 'w') as file:
+        with open(self.experiment_fpath / "params.yaml", "w") as file:
             pa = params.copy()
-            pa['root'] = str(pa['root'].absolute())
+            pa["root"] = str(pa["root"].absolute())
 
-            yaml.dump({
-                **pa,
-                **hyperparams
-            },
-                      file,
-                      default_flow_style=False,
-                      sort_keys=False)
+            yaml.dump({**pa, **hyperparams}, file, default_flow_style=False, sort_keys=False)
 
         self.container = {
-            'metric': defaultdict(lambda: defaultdict(list)),
-            'image': list(),
-            'text': list(),
-            'history': defaultdict(dict)
+            "metric": defaultdict(lambda: defaultdict(list)),
+            "image": list(),
+            "text": list(),
+            "history": defaultdict(dict),
         }
 
-    def log_metric(self,
-                   metric_name,
-                   phase,
-                   epoch,
-                   metric_value,
-                   timestamp=None):
-        self.container['metric'][phase][metric_name].append({
-            'epoch': epoch,
-            'value': metric_value
-        })
+    def log_metric(self, metric_name, phase, epoch, metric_value, timestamp=None):
+        self.container["metric"][phase][metric_name].append({"epoch": epoch, "value": metric_value})
 
     def log_history(self, phase, epoch, history):
-        self.container['history'][phase][epoch] = history
+        self.container["history"][phase][epoch] = history
 
-    def log_image(self,
-                  img,
-                  image_name=None,
-                  description=None,
-                  timestamp=None,
-                  **kwargs):
+    def log_image(self, img, image_name=None, description=None, timestamp=None, **kwargs):
         # self.container['image'].append({
         #     'img': img,
         #     'image_name': image_name,
@@ -205,18 +147,15 @@ class LocalLogger(GenericLogger):
         pass
 
     def log_text(self, text, timestamp=None, **kwargs):
-        self.container['text'].append({
-            'text': text,
-            **kwargs, 'timestamp': timestamp
-        })
+        self.container["text"].append({"text": text, **kwargs, "timestamp": timestamp})
 
     def save(self):
         for ckey, cval in self.container.items():
-            tpath = (self.experiment_fpath / ckey)
+            tpath = self.experiment_fpath / ckey
             if cval:
                 tpath.mkdir(parents=True, exist_ok=True)
 
-            if ckey == 'history':
+            if ckey == "history":
                 for phase, epoch_dict in cval.items():
                     for epoch, history_dict in epoch_dict.items():
                         # for each history_dict's key
@@ -225,106 +164,93 @@ class LocalLogger(GenericLogger):
                         d = dict()
                         for key, ndarr in history_dict.items():
                             if ndarr.ndim == 0:
-                                raise Exception(
-                                    'ndarr dim should be at least 1')
+                                raise Exception("ndarr dim should be at least 1")
                             elif ndarr.ndim == 1:
                                 d[key] = ndarr
                             elif ndarr.ndim == 2:
                                 for col_ix in range(ndarr.shape[1]):
-                                    d[f'{key}_{col_ix}'] = ndarr[:, col_ix]
+                                    d[f"{key}_{col_ix}"] = ndarr[:, col_ix]
 
-                        pd.DataFrame(d).to_csv(tpath /
-                                               f'{phase}-{epoch}-history.csv')
+                        pd.DataFrame(d).to_csv(tpath / f"{phase}-{epoch}-history.csv")
 
                 # reset container
-                self.container['history'] = defaultdict(dict)
+                self.container["history"] = defaultdict(dict)
 
-            if ckey == 'metric':  # cval: dict[phase]][metric_name]
-                for phase, metric_dict in cval.items(
-                ):  # metric_dict:  key: metric_name, val: [{'epoch', 'metric_Value'}]
+            if ckey == "metric":  # cval: dict[phase]][metric_name]
+                for (
+                    phase,
+                    metric_dict,
+                ) in cval.items():  # metric_dict:  key: metric_name, val: [{'epoch', 'metric_Value'}]
 
                     metrics = list()
                     for metric_name, metric_list in metric_dict.items():
-                        metric_df = pd.DataFrame(metric_list).set_index(
-                            'epoch').rename(columns={'value': metric_name})
+                        metric_df = pd.DataFrame(metric_list).set_index("epoch").rename(columns={"value": metric_name})
                         metrics.append(metric_df)
 
-                    write_path = tpath / f'{phase}-metric.csv'
-                    mode, header = ('a', False) if write_path.exists() else ('w', True) # yapf:disable
+                    write_path = tpath / f"{phase}-metric.csv"
+                    mode, header = ("a", False) if write_path.exists() else ("w", True)  # yapf:disable
 
-                    pd.concat(metrics, axis=1).to_csv(write_path,
-                                                      mode=mode,
-                                                      header=header)
+                    pd.concat(metrics, axis=1).to_csv(write_path, mode=mode, header=header)
 
                     # reset container
-                    self.container['metric'] = defaultdict(lambda: defaultdict(list)) # yapf:disable
+                    self.container["metric"] = defaultdict(lambda: defaultdict(list))  # yapf:disable
 
-            if ckey == 'image':
+            if ckey == "image":
                 for item_dict in cval:
-                    item_dict['img'].save(tpath /
-                                          f"{item_dict['image_name']}.png")
+                    item_dict["img"].save(tpath / f"{item_dict['image_name']}.png")
                 # drop image container after successful save operation
-                self.container['image'] = defaultdict(list)
-            if ckey == 'text':
+                self.container["image"] = defaultdict(list)
+            if ckey == "text":
                 if cval:  # if it has any element
                     pd.DataFrame(cval).to_csv(tpath / "text.csv", index=False)
+
+    def log_model(self, path, name="model"):
+        pass
+
+    def log_dataframe(self, key, dataframe):
+        return dataframe.to_csv(self.experiment_fpath / f"{key}.csv")
 
 
 class NeptuneLogger(GenericLogger):
 
     # todo: test log_metric, log_image and log_text methods
 
-    def __init__(self, root, project_name, experiment_name, params,
-                 hyperparams):
-        super(NeptuneLogger, self).__init__(root, project_name, experiment_name,
-                                            params, hyperparams)
+    def __init__(self, root, project_name, experiment_name, params, hyperparams):
+        super(NeptuneLogger, self).__init__(root, project_name, experiment_name, params, hyperparams)
         import neptune.new as neptune
         from neptune.new.types import File
 
         self._File = File
 
-        neptune_params = params['neptune']
-        workspace = neptune_params['workspace']
-        project = neptune_params['project']
-        source_files = neptune_params['source_files']
+        neptune_params = params["neptune"]
+        workspace = neptune_params["workspace"]
+        project = neptune_params["project"]
+        source_files = neptune_params["source_files"]
 
-        run_id = neptune_params.get('id', False)
+        run_id = neptune_params.get("id", False)
         if run_id:
-            self.run = neptune.init(project=f'{workspace}/{project}',
-                                    run=run_id,
-                                    source_files=source_files)
+            self.run = neptune.init(project=f"{workspace}/{project}", run=run_id, source_files=source_files)
         else:
-            self.run = neptune.init(project=f'{workspace}/{project}',
-                                    source_files=source_files)
+            self.run = neptune.init(project=f"{workspace}/{project}", source_files=source_files)
 
-        self.run['sys/tags'].add(neptune_params['tags'])
+        self.run["sys/tags"].add(neptune_params["tags"])
 
-        self.run['parameters'] = params
-        self.run['hyperparameters'] = hyperparams
+        self.run["parameters"] = params
+        self.run["hyperparameters"] = hyperparams
 
-    def log_metric(self,
-                   metric_name,
-                   phase,
-                   epoch,
-                   metric_value,
-                   timestamp=None):
+    def log_metric(self, metric_name, phase, epoch, metric_value, timestamp=None):
 
-        self.run[f'{phase}/{metric_name}'].log(metric_value, step=epoch)
+        self.run[f"{phase}/{metric_name}"].log(metric_value, step=epoch)
 
     def log_history(self, phase, epoch, history):
         raise NotImplementedError()
 
-    def log_image(self,
-                  img,
-                  image_name=None,
-                  description=None,
-                  timestamp=None,
-                  **kwargs):
+    def log_image(self, img, image_name=None, description=None, timestamp=None, **kwargs):
 
         self.run["image_preds"].log(self._File.as_image(img))
 
     def log_text(self, text, timestamp=None, **kwargs):
-        log_name = 'text'
+        log_name = "text"
         x = None
         y = text
         self.experiment.log_text(log_name, x, y, timestamp)
@@ -332,7 +258,7 @@ class NeptuneLogger(GenericLogger):
     def log_dataframe(self, key, dataframe):
         self.run[key].upload(self._File.as_html(dataframe))
 
-    def log_model(self, path, name='model'):
+    def log_model(self, path, name="model"):
         self.run[name].upload(str(path))
 
     def save(self):
@@ -342,9 +268,90 @@ class NeptuneLogger(GenericLogger):
         self.run.stop()
 
 
-class WandBLogger(GenericLogger):
-    pass
-    # todo: add wandblogger
+class WandBLogger:
+    def __init__(
+        self,
+        job_type: Optional[str] = None,
+        dir=None,
+        config: Union[dict, str, None] = None,
+        project: Optional[str] = None,
+        entity: Optional[str] = None,
+        reinit: bool = None,
+        tags: Optional[Sequence] = None,
+        group: Optional[str] = None,
+        name: Optional[str] = None,
+        notes: Optional[str] = None,
+        magic: Union[dict, str, bool] = None,
+        config_exclude_keys=None,
+        config_include_keys=None,
+        anonymous: Optional[str] = None,
+        mode: Optional[str] = None,
+        allow_val_change: Optional[bool] = None,
+        resume: Optional[Union[bool, str]] = None,
+        force: Optional[bool] = None,
+        tensorboard=None,
+        sync_tensorboard=None,
+        monitor_gym=None,
+        save_code=None,
+        id=None,
+        settings=None,
+    ):
+        self.run = wandb.init(
+            job_type,
+            dir,
+            config,
+            project,
+            entity,
+            reinit,
+            tags,
+            group,
+            name,
+            notes,
+            magic,
+            config_exclude_keys,
+            config_include_keys,
+            anonymous,
+            mode,
+            allow_val_change,
+            resume,
+            force,
+            tensorboard,
+            sync_tensorboard,
+            monitor_gym,
+            save_code,
+            id,
+            settings,
+        )
+
+    def log(
+        self,
+        data: dict[str, Any],
+        step: int = None,
+        commit: bool = None,
+        sync: bool = None,
+    ):
+
+        wandb.log(data, step=step, commit=commit, sync=sync)
+
+    def watch(
+        self,
+        models,
+        criterion=None,
+        log="gradients",
+        log_freq=1000,
+        idx=None,
+        log_graph=(False),
+    ):
+        wandb.watch(models, criterion, log, log_freq, idx, log_graph)
+
+    def log_model(self, path, name="model"):
+        artifact = wandb.Artifact("model", type="model")
+        artifact.add_file(path)
+        self.run.log_artifact(artifact)
+        self.run.join()
+
+    def stop(self, exit_code: int = None, quiet: bool = None) -> None:
+        wandb.finish(exit_code=exit_code, quiet=quiet)
 
 
 if __name__ == "__main__":
@@ -352,25 +359,21 @@ if __name__ == "__main__":
 
     logger = MultiLogger(
         root=Path("C:/Users/ugur/Documents/GitHub/ai-framework"),
-        project_name='machining',
-        experiment_name='test2',
-        params={
-            'param1': 1,
-            'param2': 2
-        },
-        hyperparams={
-            'hyperparam1': '1t',
-            'hyperparam2': '2t'
-        },
+        project_name="machining",
+        experiment_name="test2",
+        params={"param1": 1, "param2": 2},
+        hyperparams={"hyperparam1": "1t", "hyperparam2": "2t"},
     )
     for epoch in range(10):
-        logger.log_metric(log_name='training_loss', x=epoch, y=epoch + 1)
-        logger.log_metric(log_name='validation_loss', x=epoch, y=epoch + 3)
-        logger.log_image(log_name='img',
-                         x=epoch,
-                         y=Image.open(Path('../../dereotu.jpeg')),
-                         image_name=f"image-{epoch}")
-        logger.log_text(log_name='text', x=epoch, y=f'{epoch} - Some Text')
+        logger.log_metric(log_name="training_loss", x=epoch, y=epoch + 1)
+        logger.log_metric(log_name="validation_loss", x=epoch, y=epoch + 3)
+        logger.log_image(
+            log_name="img",
+            x=epoch,
+            y=Image.open(Path("../../dereotu.jpeg")),
+            image_name=f"image-{epoch}",
+        )
+        logger.log_text(log_name="text", x=epoch, y=f"{epoch} - Some Text")
         logger.save()
 
     logger.stop()

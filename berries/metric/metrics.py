@@ -6,21 +6,33 @@
 
 import torch
 from torch import nn
+from torch.nn import functional as F
 
 
-class MSE(nn.Module):
+from torchmetrics import Metric
 
-    def __init__(self):
-        super().__init__()
-        self.mse = nn.MSELoss()
 
-    def forward(self, yhat, y):
-        loss = self.mse(yhat, y)
-        return loss.item()
+class MSE(Metric):
+    def __init__(self, compute_on_step=True, dist_sync_on_step=False):
+        super().__init__(compute_on_step=compute_on_step, dist_sync_on_step=dist_sync_on_step)
+
+        self.add_state("sum_squared_error", default=torch.tensor(0.0), dist_reduce_fx="sum")
+        self.add_state("nobs", default=torch.tensor(0), dist_reduce_fx="sum")
+
+    def update(self, preds: torch.Tensor, target: torch.Tensor):
+        assert preds.shape == target.shape
+
+        sum_squared_error = ((preds - target) ** 2).sum()
+        nobs = target.numel()  # number of observations
+
+        self.sum_squared_error += sum_squared_error
+        self.nobs += nobs
+
+    def compute(self):
+        return self.sum_squared_error / self.nobs
 
 
 class RMSE(nn.Module):
-
     def __init__(self, eps=1e-6):
         super().__init__()
         self.mse = nn.MSELoss()
@@ -32,7 +44,6 @@ class RMSE(nn.Module):
 
 
 class MAE(nn.Module):
-
     def __init__(self):
         super().__init__()
         self.mae = nn.L1Loss()
@@ -43,7 +54,6 @@ class MAE(nn.Module):
 
 
 class MAPE(nn.Module):
-
     def __init__(self, eps=1e-6):
         super().__init__()
         self.mae = nn.L1Loss()
@@ -55,7 +65,6 @@ class MAPE(nn.Module):
 
 
 class Accuracy(nn.Module):
-
     def __init__(self):
         super().__init__()
 
@@ -64,17 +73,14 @@ class Accuracy(nn.Module):
 
 
 class AccuracyBar(nn.Module):
-
     def __init__(self):
         super().__init__()
 
     def forward(self, yhat, y):
-        return (100 * (1 - torch.mean(torch.abs(yhat - y)) / torch.mean(y)))\
-            .item()
+        return (100 * (1 - torch.mean(torch.abs(yhat - y)) / torch.mean(y))).item()
 
 
 class R2(nn.Module):
-
     def __init__(self):
         super().__init__()
 
@@ -89,5 +95,5 @@ class R2(nn.Module):
 if __name__ == "__main__":
     print(
         0.9729,
-        R2().forward(yhat=torch.FloatTensor([2, 8, 10, 13, 18, 20]),
-                     y=torch.FloatTensor([3, 8, 10, 17, 24, 27])))
+        R2().forward(yhat=torch.FloatTensor([2, 8, 10, 13, 18, 20]), y=torch.FloatTensor([3, 8, 10, 17, 24, 27])),
+    )
