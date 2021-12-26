@@ -324,23 +324,13 @@ class WandBLogger:
         )
 
     def log(
-        self,
-        data: dict[str, Any],
-        step: int = None,
-        commit: bool = None,
-        sync: bool = None,
+        self, data: dict[str, Any], step: int = None, commit: bool = None, sync: bool = None,
     ):
 
         wandb.log(data, step=step, commit=commit, sync=sync)
 
     def watch(
-        self,
-        models,
-        criterion=None,
-        log="gradients",
-        log_freq=1000,
-        idx=None,
-        log_graph=(False),
+        self, models, criterion=None, log="gradients", log_freq=1000, idx=None, log_graph=(False),
     ):
         wandb.watch(models, criterion, log, log_freq, idx, log_graph)
 
@@ -348,7 +338,6 @@ class WandBLogger:
         artifact = wandb.Artifact("model", type="model")
         artifact.add_file(path)
         self.run.log_artifact(artifact)
-        self.run.join()
 
     def stop(self, exit_code: int = None, quiet: bool = None) -> None:
         wandb.finish(exit_code=exit_code, quiet=quiet)
@@ -368,10 +357,7 @@ if __name__ == "__main__":
         logger.log_metric(log_name="training_loss", x=epoch, y=epoch + 1)
         logger.log_metric(log_name="validation_loss", x=epoch, y=epoch + 3)
         logger.log_image(
-            log_name="img",
-            x=epoch,
-            y=Image.open(Path("../../dereotu.jpeg")),
-            image_name=f"image-{epoch}",
+            log_name="img", x=epoch, y=Image.open(Path("../../dereotu.jpeg")), image_name=f"image-{epoch}",
         )
         logger.log_text(log_name="text", x=epoch, y=f"{epoch} - Some Text")
         logger.save()
