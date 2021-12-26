@@ -80,24 +80,14 @@ class Container:
 
 
 class BaseTrainer:
-    def __init__(
-        self,
-        model,
-        metrics,
-        hyperparams,
-        params,
-        optimizer,
-        scheduler,
-        criterion,
-        logger,
-    ) -> None:
+    def __init__(self, model, metrics, hyperparams, params, optimizer, scheduler, criterion, logger,) -> None:
 
         self.hyperparams = hyperparams
         self.params = params
         self.logger = logger
         self.params["id"] = self.logger.run.name
 
-        self.device = torch.device("cuda:0" if self.params["device"] == "cuda" else "cpu")
+        self.device = self.params["device"]
 
         self.model = model.to(self.device).float()
         self.optimizer = optimizer or Adam(
@@ -119,6 +109,8 @@ class BaseTrainer:
         #     self.params['log_history'] = False
 
         self.metrics = metrics
+        for metric_fn in self.metrics:
+            metric_fn.to(self.device)
 
         self.batch_size = self.hyperparams.get("batch_size", 16)
         self.validation_batch_size = self.hyperparams.get("validation_batch_size", 16)
@@ -343,12 +335,7 @@ class BaseTrainer:
 
         # history = Container(keys=['_id', 'loss', 'output', 'target'])
 
-        metric_container = Container(
-            keys=[
-                "loss",
-                *[metric.__class__.__name__.lower() for metric in self.metrics],
-            ]
-        )
+        metric_container = Container(keys=["loss", *[metric.__class__.__name__.lower() for metric in self.metrics],])
 
         self.model.train(phase == "training")
 
@@ -357,12 +344,9 @@ class BaseTrainer:
 
             for batch_ix, batch in enumerate(loader):
 
-                (
-                    batch_loss,
-                    batch_output,
-                    batch_data,
-                    batch_target,
-                ) = self._fit_one_batch(batch, train=True if phase == "training" else False)
+                (batch_loss, batch_output, batch_data, batch_target,) = self._fit_one_batch(
+                    batch, train=True if phase == "training" else False
+                )
                 self.num_seen_sample += len(batch_target)
 
                 # Store
@@ -507,6 +491,7 @@ class BaseTrainer:
                             print(f"Best:{checkpoint_metric} | Last:{self.best_checkpoint_metric}")
                             self.best_checkpoint_metric = checkpoint_metric
                             self._save_checkpoint(path_posix="best")
+                            # self.logger.log_model(path=self._get_best_checkpoint_path())
 
                     if "on_epoch" in self.params["checkpoint"]:
                         if (self.epoch % self.params["checkpoint"]["on_epoch"]) == 0:
@@ -565,10 +550,7 @@ class BaseTrainer:
         for metric_fn in self.metrics:
             metric_container[metric_fn.__class__.__name__.lower()] = metric_fn(transformed, targets)  # yapf:disable
 
-        return metric_container, (
-            transformed.cpu().detach().numpy(),
-            targets.cpu().detach().numpy(),
-        )
+        return metric_container, (transformed.cpu().detach().numpy(), targets.cpu().detach().numpy(),)
 
     def to_prediction_dataframe(self, dataset, classification=True, save=None):
         predictions, targets = self.transform(dataset=dataset, classification=classification)
