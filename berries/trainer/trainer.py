@@ -15,21 +15,45 @@ from torch.utils.data import DataLoader
 
 class LSTMTrainer(BaseTrainer):
     def __init__(
-        self, model, metrics, hyperparams, params, optimizer=None, scheduler=None, criterion=None, logger=None,
+        self,
+        model,
+        metrics,
+        hyperparams,
+        params,
+        optimizer=None,
+        scheduler=None,
+        criterion=None,
+        logger=None,
     ):
         super().__init__(model, metrics, hyperparams, params, optimizer, scheduler, criterion, logger)
 
 
 class CNNTrainer(BaseTrainer):
     def __init__(
-        self, model, metrics, hyperparams, params, optimizer=None, scheduler=None, criterion=None, logger=None,
+        self,
+        model,
+        metrics,
+        hyperparams,
+        params,
+        optimizer=None,
+        scheduler=None,
+        criterion=None,
+        logger=None,
     ):
         super().__init__(model, metrics, hyperparams, params, optimizer, scheduler, criterion, logger)
 
 
 class AETrainer(BaseTrainer):
     def __init__(
-        self, model, metrics, hyperparams, params, optimizer=None, scheduler=None, criterion=None, logger=None,
+        self,
+        model,
+        metrics,
+        hyperparams,
+        params,
+        optimizer=None,
+        scheduler=None,
+        criterion=None,
+        logger=None,
     ):
         super().__init__(model, metrics, hyperparams, params, optimizer, scheduler, criterion, logger)
 
@@ -51,7 +75,15 @@ class AETrainer(BaseTrainer):
 
 class VAETrainer(AETrainer):
     def __init__(
-        self, model, metrics, hyperparams, params, optimizer=None, scheduler=None, criterion=None, logger=None,
+        self,
+        model,
+        metrics,
+        hyperparams,
+        params,
+        optimizer=None,
+        scheduler=None,
+        criterion=None,
+        logger=None,
     ):
         super().__init__(model, metrics, hyperparams, params, optimizer, scheduler, criterion, logger)
 
