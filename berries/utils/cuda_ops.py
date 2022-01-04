@@ -25,7 +25,7 @@ def get_free_gpu():
         ["nvidia-smi", "--format=csv,nounits,noheader", f"--query-gpu={','.join(QUERY_GPU)}",]
     )
     gpu_df = pd.read_csv(StringIO(gpu_stats.decode("utf-8")), names=QUERY_GPU, index_col=0)
-    idx = gpu_df["memory.free"].idxmax()
+    idx = gpu_df["utilization.gpu"].idxmin()
     print(gpu_df)
-    print(f"Returning GPU {idx} with {gpu_df.iloc[idx]['memory.free']} free MiB")
+    print(f"Returning GPU {idx} with {gpu_df.iloc[idx]['utilization.gpu']} utilization")
     return idx
