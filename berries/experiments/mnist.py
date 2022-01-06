@@ -18,6 +18,7 @@ from berries.model.cnn import CNN
 from berries.datasets.mnist import MNIST
 from berries.metric import metrics
 from berries.logger import WandBLogger as logger
+from berries.utils import cuda_ops
 
 import torchmetrics
 
@@ -30,7 +31,7 @@ class MNISTExperiment(Experiment):
             "project": "sample-project",
             "experiment": "mnist",
             "seed": 42,
-            "device": "cuda" if torch.cuda.is_available() else "cpu",
+            "device": torch.device("cpu") if not torch.cuda.is_available() else torch.device(type="cuda", index=cuda_ops.get_free_gpu()),
             "resume": False,
             "pretrained": False,
             "checkpoint": {"metric": metrics.Accuracy.__name__.lower(), "trigger": lambda new, old: new > old},
@@ -38,14 +39,15 @@ class MNISTExperiment(Experiment):
                 "on_epoch": 1,
             },
             "stdout": {"verbose": True, "on_epoch": 1, "on_batch": 10},
+            "validate_epoch_0": True,
             "root": Path("./"),
         }
 
         self.hyperparams = {
             "lr": 0.001,
-            "batch_size": 100,
-            "validation_batch_size": 100,
-            "epoch": 3,
+            "batch_size": 1000,
+            "validation_batch_size": 1000,
+            "epoch": 50,
         }
 
         self.dataset = MNIST(
@@ -63,6 +65,9 @@ class MNISTExperiment(Experiment):
                 ]
             ),
         )
+
+        # self.dataset.trainset = self.dataset.trainset.get_first_n_sample(200)
+        # self.dataset.testset = self.dataset.testset.get_first_n_sample(100)
 
         self.model = CNN(in_channels=1, out_channels=10, input_dim=(1, 28, 28))
 
@@ -95,17 +100,20 @@ class MNISTExperiment(Experiment):
         )
 
     def run(self):
-        self.trainer.fit(dataset=self.dataset.trainset, validation_dataset=self.dataset.testset)
+        self.trainer.fit(self.dataset.trainset, validation_dataset=self.dataset.testset)
 
         # Log final model
         self.logger.log_model(path=self.trainer._get_best_checkpoint_path())
 
         # Log prediction dataframe
-        prediction_dataframe = self.trainer.to_prediction_dataframe(
-            dataset=self.dataset.testset, classification=True, save=True
-        )  # yapf:disable
+        # prediction_dataframe = self.trainer.to_prediction_dataframe(dataset=self.dataset.testset, classification=True, save=True)  # yapf:disable
 
         # self.logger.log_dataframe(key="prediction/validation", dataframe=prediction_dataframe)
+        import wandb
+
+        samples = self.dataset.testset.get_random_sample(20)
+        predictions, targets = self.trainer.transform(dataset=samples, batch_size=len(samples))
+        self.logger.log({"samples": [wandb.Image(sample["data"]) for sample in samples]})
 
         # Log image
         # Example can be found at trainer.py

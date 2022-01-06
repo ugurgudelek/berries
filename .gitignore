@@ -9,3 +9,6 @@ input
 wandb/
 
 UNKNOWN.egg-info/*
+*.txt
+berries.egg-info/PKG-INFO
+setup.cfg

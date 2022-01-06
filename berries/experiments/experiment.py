@@ -29,7 +29,6 @@ class Experiment(metaclass=Meta):
     def __post_init__(self):
         for attr in (
             "params",
-            "hyperparams",
             "model",
             "dataset",
             "trainer",

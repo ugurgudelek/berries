@@ -80,47 +80,33 @@ class Container:
 
 
 class BaseTrainer:
-    def __init__(self, model, metrics, hyperparams, params, optimizer, scheduler, criterion, logger,) -> None:
+    def __init__(self, model, metrics, params, optimizer, scheduler, criterion, logger, device) -> None:
 
-        self.hyperparams = hyperparams
         self.params = params
         self.logger = logger
-        self.params["id"] = self.logger.run.name
+        if self.params["id"] is None and self.logger is not None:
+            self.params["id"] = self.logger.run.name
 
-        self.device = self.params["device"]
+        self.device = device
 
         self.model = model.to(self.device).float()
         self.optimizer = optimizer or Adam(
             params=self.model.parameters(),
-            lr=self.hyperparams.get("lr", 0.001),
-            weight_decay=self.hyperparams.get("weight_decay", 0),
+            lr=self.params.get("lr", 0.001),
+            weight_decay=self.params.get("weight_decay", 0),
         )
 
         self.scheduler = scheduler
         self.criterion = criterion or MSELoss(reduction="none")
-        # if self.criterion.reduction != 'none' and self.params.get(
-        #         'log_history', False):
-        #     warnings.warn("""
-        #                   'reduction' parameter of the criterion is not 'none' and
-        #                   'log_history' parameters of the self.params is True
-        #                   In this configuration history_container has invalid shape for loss attibute.
-        #                   Therefore to be able to run experiment. log_history is set to False.
-        #                   """)
-        #     self.params['log_history'] = False
 
         self.metrics = metrics
         for metric_fn in self.metrics:
             metric_fn.to(self.device)
 
-        self.batch_size = self.hyperparams.get("batch_size", 16)
-        self.validation_batch_size = self.hyperparams.get("validation_batch_size", 16)
-
-        # Initialize plotter
-        self.plotter = Plotter()
+        self.batch_size = self.params.get("batch_size", 16)
+        self.validation_batch_size = self.params.get("validation_batch_size", 16)
 
         self._resume_or_not()
-
-        self.profiler = None
 
     def __str__(self):
         """
@@ -132,7 +118,7 @@ class BaseTrainer:
 
     @property
     def experiment_fpath(self):
-        return self.params["root"] / "projects" / self.params["project"] / self.params["id"]
+        return Path(self.params["root"]) / "projects" / self.params["project"] / self.params["id"]
 
     @property
     def on_cuda(self):
@@ -141,7 +127,6 @@ class BaseTrainer:
     def __repr__(self):
         return f"BaseTrainer(model={self.model},\
                  metrics={self.metrics},\
-                 hyperparams={self.hyperparams},\
                  params={self.params},\
                  optimizer={self.optimizer},\
                  criterion={self.criterion},\
@@ -170,9 +155,7 @@ class BaseTrainer:
             self.start_epoch = 1
             self.epoch = 1
 
-            _is_fitness = self.params["checkpoint"]["trigger"](1, 0)
-            self.best_checkpoint_metric = -np.inf if _is_fitness else np.inf
-            print("Starting training from epoch 1")
+            self.best_checkpoint_metric = -np.inf if self.params["checkpoint_trigger"] == "increase" else np.inf
 
     def _get_last_checkpoint_path(self):
         cpt_path = self.experiment_fpath / "checkpoints"
@@ -215,7 +198,7 @@ class BaseTrainer:
             self.best_checkpoint_metric = checkpoint["best_checkpoint_metric"]
         except:
             pass
-        # self.hyperparams = checkpoint['hyperparams']
+        # self.params = checkpoint['params']
         # self.params = checkpoint['params']
         # self.history = checkpoint['history']
 
@@ -319,8 +302,8 @@ class BaseTrainer:
                     loss.backward()
 
                 # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
-                if self.hyperparams.get("clip", None):  # if clip is given
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.hyperparams["clip"])
+                if self.params.get("clip", None):  # if clip is given
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.params["clip"])
 
                 # distribute gradients to update weights
                 self.optimizer.step()
@@ -335,7 +318,12 @@ class BaseTrainer:
 
         # history = Container(keys=['_id', 'loss', 'output', 'target'])
 
-        metric_container = Container(keys=["loss", *[metric.__class__.__name__.lower() for metric in self.metrics],])
+        metric_container = Container(
+            keys=[
+                "loss",
+                *[metric.__class__.__name__.lower() for metric in self.metrics],
+            ]
+        )
 
         self.model.train(phase == "training")
 
@@ -344,9 +332,12 @@ class BaseTrainer:
 
             for batch_ix, batch in enumerate(loader):
 
-                (batch_loss, batch_output, batch_data, batch_target,) = self._fit_one_batch(
-                    batch, train=True if phase == "training" else False
-                )
+                (
+                    batch_loss,
+                    batch_output,
+                    batch_data,
+                    batch_target,
+                ) = self._fit_one_batch(batch, train=True if phase == "training" else False)
                 self.num_seen_sample += len(batch_target)
 
                 # Store
@@ -388,9 +379,9 @@ class BaseTrainer:
                 # history.output.append(batch_output)
                 # history.target.append(batch_target)
 
-                if self.params["stdout"].get("verbose", True):
-                    if "on_batch" in self.params["stdout"]:
-                        if (batch_ix + 1) % self.params["stdout"]["on_batch"] == 0:  # yapf:disable
+                if self.params.get("stdout_verbose", True):
+                    if "stdout_on_batch" in self.params:
+                        if (batch_ix + 1) % self.params["stdout_on_batch"] == 0:  # yapf:disable
                             dataset_len = sum(len(loader.dataset) for loader in loaders)  # yapf:disable
                             batch_loss = batch_loss.mean().item()
 
@@ -411,27 +402,22 @@ class BaseTrainer:
 
         # Log metrics
         self.logger.log({f"{phase}/loss": metric_container["loss"], "epoch": epoch}, commit=False)
-        self.logger.log(
-            {f"{phase}/{key}": val.item() for key, val in metric_container.items()} | {"epoch": epoch}, commit=True
-        )
+        self.logger.log({f"{phase}/{key}": val.item() for key, val in metric_container.items()} | {"epoch": epoch}, commit=True)
 
         if phase == "training":
             if self.scheduler is not None:
                 self.scheduler.step()
 
         # Print stdout for every 'on_epoch'
-        if self.params["stdout"].get("verbose", True):
-            if self.epoch % self.params["stdout"]["on_epoch"] == 0:
+        if self.params.get("stdout_verbose", True):
+            if self.epoch % self.params["stdout_on_epoch"] == 0:
                 print(
                     "\t".join(
                         [
                             f"{self.phase}",
                             f"Epoch: {self.epoch}",
                             f"Loss: {self.logger.run.summary[f'{phase}/loss']:.6f}",
-                            *[
-                                f"{metric_fn.__class__.__name__.lower()}: {self.logger.run.summary[f'{phase}/{metric_fn.__class__.__name__.lower()}']:.6f}"
-                                for metric_fn in self.metrics
-                            ],
+                            *[f"{metric_fn.__class__.__name__.lower()}: {self.logger.run.summary[f'{phase}/{metric_fn.__class__.__name__.lower()}']:.6f}" for metric_fn in self.metrics],
                         ]
                     )
                 )  # yapf:disable
@@ -449,21 +435,19 @@ class BaseTrainer:
         return metric_container
 
     @hook(before="before_fit", after="after_fit")
-    def fit(self, dataset, validation_dataset):
+    def fit(self, training_dataset, validation_dataset):
         if self.params["pretrained"]:
             raise Exception("You can not use fit with --pretrained=True")
 
         # At any point you can hit Ctrl + C to break out of training early.
         try:
 
-            self.dataset = dataset
+            self.training_dataset = training_dataset
             self.validation_dataset = validation_dataset
 
             # Support for list of datasets
-            train_loaders = [self._to_loader(dataset=d, training=True) for d in self._make_iterable_if_not(dataset)]
-            validation_loaders = [
-                self._to_loader(dataset=d, training=False) for d in self._make_iterable_if_not(validation_dataset)
-            ]
+            train_loaders = [self._to_loader(dataset=d, training=True) for d in self._make_iterable_if_not(training_dataset)]
+            validation_loaders = [self._to_loader(dataset=d, training=False) for d in self._make_iterable_if_not(validation_dataset)]
 
             # run 1 epoch before training to watch untrained model performance
             if self.params.get("validate_epoch_0", False) and not self.params.get("resume", False):
@@ -472,7 +456,7 @@ class BaseTrainer:
                 self.phase = "validation"
                 metric_container = self._fit_one_epoch(loaders=validation_loaders, epoch=self.epoch, phase=self.phase)
 
-            for self.epoch in range(self.start_epoch, self.hyperparams["epoch"] + 1):
+            for self.epoch in range(self.start_epoch, self.params["epoch"] + 1):
 
                 for self.phase in ["training", "validation"]:
 
@@ -483,19 +467,19 @@ class BaseTrainer:
                     )
 
                 # Save checkpoint if the model is best
-                if "checkpoint" in self.params:
-                    if "metric" in self.params["checkpoint"]:
-                        checkpoint_metric = metric_container[self.params["checkpoint"]["metric"]].item()  # yapf:disable
-                        trigger = self.params["checkpoint"].get("trigger", lambda new, old: new > old)
-                        if trigger(checkpoint_metric, self.best_checkpoint_metric):  # yapf:disable
-                            print(f"Best:{checkpoint_metric} | Last:{self.best_checkpoint_metric}")
-                            self.best_checkpoint_metric = checkpoint_metric
-                            self._save_checkpoint(path_posix="best")
-                            self.logger.log_model(path=self._get_best_checkpoint_path())
+                if "checkpoint_metric" in self.params:
+                    checkpoint_metric = metric_container[self.params["checkpoint_metric"]].item()  # yapf:disable
 
-                    if "on_epoch" in self.params["checkpoint"]:
-                        if (self.epoch % self.params["checkpoint"]["on_epoch"]) == 0:
-                            self._save_checkpoint()
+                    trigger = self.params.get("checkpoint_trigger", "increase") == "increase"
+                    if trigger == (checkpoint_metric > self.best_checkpoint_metric):  # yapf:disable
+                        print(f"Best:{checkpoint_metric} | Last:{self.best_checkpoint_metric}")
+                        self.best_checkpoint_metric = checkpoint_metric
+                        self._save_checkpoint(path_posix="best")
+                        self.logger.log_model(path=self._get_best_checkpoint_path())
+
+                if "checkpoint_on_epoch" in self.params:
+                    if (self.epoch % self.params["checkpoint_on_epoch"]) == 0:
+                        self._save_checkpoint()
 
                 # Save logs for every 'on_epoch'
                 # if self.epoch % self.params["log"]["on_epoch"] == 0:
@@ -505,21 +489,24 @@ class BaseTrainer:
             print("Exiting from training early. Bye!")
             self.logger.stop()
 
-    def _transform(self, dataset, batch_size, classification):
+    @torch.no_grad()
+    def transform(self, dataset, batch_size=None):
         loader = self._to_loader(dataset, training=False, batch_size=batch_size)
 
         transformed = []
         targets = []
         for batch_ix, batch in enumerate(loader):
             loss, output, data, target = self._fit_one_batch(batch, train=False)
-            if classification:
-                output = output.argmax(dim=1)
             transformed.append(output.detach())
             targets.append(target.detach())
 
         transformed = torch.cat(transformed, axis=0)
         targets = torch.cat(targets, axis=0)
         return transformed, targets
+
+    def fit_transform(self, dataset, classification=True):
+        self.fit(dataset=dataset)
+        return self.transform(dataset=dataset, classification=classification)
 
     def _transform_iter(self, dataset, batch_size, classification):
         loader = self._to_loader(dataset, training=False, batch_size=batch_size)
@@ -533,14 +520,6 @@ class BaseTrainer:
         for transformed, targets in self._transform_iter(dataset, batch_size, classification):
             yield transformed.cpu().numpy(), targets.cpu().numpy()
 
-    def transform(self, dataset, batch_size=None, classification=True):
-        transformed, targets = self._transform(dataset, batch_size, classification)
-        return (transformed.cpu().detach().numpy(), targets.cpu().detach().numpy())
-
-    def fit_transform(self, dataset, classification=True):
-        self.fit(dataset=dataset)
-        return self.transform(dataset=dataset, classification=classification)
-
     def score(self, dataset, batch_size=None, classification=True):
         transformed, targets = self._transform(dataset, batch_size, classification)
 
@@ -550,7 +529,10 @@ class BaseTrainer:
         for metric_fn in self.metrics:
             metric_container[metric_fn.__class__.__name__.lower()] = metric_fn(transformed, targets)  # yapf:disable
 
-        return metric_container, (transformed.cpu().detach().numpy(), targets.cpu().detach().numpy(),)
+        return metric_container, (
+            transformed.cpu().detach().numpy(),
+            targets.cpu().detach().numpy(),
+        )
 
     def to_prediction_dataframe(self, dataset, classification=True, save=None):
         predictions, targets = self.transform(dataset=dataset, classification=classification)
@@ -564,7 +546,7 @@ class BaseTrainer:
 
     # Hook methods
 
-    def before_fit(self, dataset, validation_dataset):
+    def before_fit(self, training_dataset, validation_dataset):
         pass
 
     def after_fit(self):
