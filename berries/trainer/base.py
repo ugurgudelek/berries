@@ -475,7 +475,7 @@ class BaseTrainer:
                         print(f"Best:{checkpoint_metric} | Last:{self.best_checkpoint_metric}")
                         self.best_checkpoint_metric = checkpoint_metric
                         self._save_checkpoint(path_posix="best")
-                        self.logger.log_model(path=self._get_best_checkpoint_path())
+                        self.logger.log_model(path=self._get_best_checkpoint_path(), name=f"model_best")
 
                 if "checkpoint_on_epoch" in self.params:
                     if (self.epoch % self.params["checkpoint_on_epoch"]) == 0:
