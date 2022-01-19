@@ -9,7 +9,7 @@ from io import StringIO
 import pandas as pd
 
 
-def get_free_gpu():
+def get_free_gpu(n=1, by="power.draw"):
     QUERY_GPU = [
         "index",
         "gpu_name",
@@ -21,11 +21,16 @@ def get_free_gpu():
         "power.draw",
     ]
 
-    gpu_stats = subprocess.check_output(
-        ["nvidia-smi", "--format=csv,nounits,noheader", f"--query-gpu={','.join(QUERY_GPU)}",]
-    )
+    gpu_stats = subprocess.check_output(["nvidia-smi", "--format=csv,nounits,noheader", f"--query-gpu={','.join(QUERY_GPU)}",])
     gpu_df = pd.read_csv(StringIO(gpu_stats.decode("utf-8")), names=QUERY_GPU, index_col=0)
-    idx = gpu_df["utilization.gpu"].idxmin()
+    gpu_df = gpu_df[:4]
+
+    gpu_df["id"] = gpu_df.index
+
+    gpu_df = gpu_df.sort_values(by)
+
+    gpu_ids = list(gpu_df["id"].values[:n])
+
     print(gpu_df)
-    print(f"Returning GPU {idx} with {gpu_df.iloc[idx]['utilization.gpu']} utilization")
-    return idx
+    # print(f"Returning GPU {gpu_ids} with {gpu_df.loc[gpu_df['id'] in gpu_ids, by]} {by}")
+    return gpu_ids
